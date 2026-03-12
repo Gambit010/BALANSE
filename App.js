@@ -7,6 +7,7 @@ import { auth } from './firebase';
 import LandingScreen from './src/screens/LandingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen'; 
 import HomeScreen from './src/screens/HomeScreen';
 
 const Stack = createStackNavigator();
@@ -23,15 +24,16 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  if (loading) {
-    return null;
-  }
+  if (loading) return null;
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <>
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="Home" component={HomeScreen} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Landing" component={LandingScreen} />
