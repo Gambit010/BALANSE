@@ -121,8 +121,8 @@ export default function SignupScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Alisin ko muna, hindi pa to sure
-            Terms Checkbox 
+            
+            {/*Terms Checkbox*/}
             <TouchableOpacity style={styles.termsRow} onPress={() => setAgreed(!agreed)}>
               <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
                 {agreed && <Text style={styles.checkmark}>✓</Text>}
@@ -133,9 +133,9 @@ export default function SignupScreen({ navigation }) {
                 I agree to the <Text style={styles.termsBold}>Terms of Service</Text> and{' '}
                 <Text style={styles.termsBold}>Privacy Policy</Text>
               </Text>
-            </TouchableOpacity>/*}
-            {/* Create Account Button */}
+            </TouchableOpacity>
 
+            {/* Create Account Button */}
             <TouchableOpacity 
               style={[styles.createButton, isLoading && styles.buttonDisabled]}
               onPress={handleSignup}
