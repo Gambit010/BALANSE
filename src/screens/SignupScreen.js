@@ -79,10 +79,10 @@ export default function SignupScreen({ navigation }) {
             {/* Full Name */}
             <Text style={styles.label}>Full Name</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
+              {/*<Text style={styles.inputIcon}>👤</Text>*/} {/*Comment ko muna ito, hinahanap ko kung saan yung icon e*/}
               <TextInput
                 style={styles.input}
-                placeholder="Alex Chen"
+                placeholder="Enter your name"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 value={fullName}
                 onChangeText={setFullName}
@@ -92,10 +92,10 @@ export default function SignupScreen({ navigation }) {
             {/* Email */}
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>✉</Text>
+              {/*<Text style={styles.inputIcon}>✉</Text>*/} {/*Comment ko muna ito, hinahanap ko kung saan yung icon e*/}
               <TextInput
                 style={styles.input}
-                placeholder="your.email@university.edu"
+                placeholder="Enter your email"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 value={email}
                 onChangeText={setEmail}
@@ -107,7 +107,7 @@ export default function SignupScreen({ navigation }) {
             {/* Password */}
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔒</Text>
+              {/*<Text style={styles.inputIcon}>🔒</Text>*/}
               <TextInput
                 style={styles.input}
                 placeholder="Create a strong password"
@@ -121,18 +121,21 @@ export default function SignupScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Terms Checkbox */}
+            {/* Alisin ko muna, hindi pa to sure
+            Terms Checkbox 
             <TouchableOpacity style={styles.termsRow} onPress={() => setAgreed(!agreed)}>
               <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
                 {agreed && <Text style={styles.checkmark}>✓</Text>}
               </View>
+              
+               
               <Text style={styles.termsText}>
                 I agree to the <Text style={styles.termsBold}>Terms of Service</Text> and{' '}
                 <Text style={styles.termsBold}>Privacy Policy</Text>
               </Text>
-            </TouchableOpacity>
-
+            </TouchableOpacity>/*}
             {/* Create Account Button */}
+
             <TouchableOpacity 
               style={[styles.createButton, isLoading && styles.buttonDisabled]}
               onPress={handleSignup}
