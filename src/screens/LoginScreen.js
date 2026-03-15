@@ -69,10 +69,10 @@ export default function LoginScreen({ navigation }) {
             {/* Email */}
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>✉</Text>
+              {/*<Text style={styles.inputIcon}>✉</Text>*/} {/*Comment ko muna ito, hinahanap ko kung saan yung icon e*/}
               <TextInput
                 style={styles.input}
-                placeholder="your.email@university.edu"
+                placeholder="Enter your email"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 value={email}
                 onChangeText={setEmail}
@@ -84,7 +84,7 @@ export default function LoginScreen({ navigation }) {
             {/* Password */}
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔒</Text>
+              {/*<Text style={styles.inputIcon}>🔒</Text>*/} {/*Comment ko muna ito, hinahanap ko kung saan yung icon e*/}
               <TextInput
                 style={styles.input}
                 placeholder="Enter your password"
