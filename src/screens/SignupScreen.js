@@ -21,7 +21,6 @@ export default function SignupScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -36,10 +35,6 @@ export default function SignupScreen({ navigation }) {
   const handleSignup = async () => {
     if (!fullName || !email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    if (!agreed) {
-      Alert.alert('Error', 'Please agree to Terms of Service');
       return;
     }
     if (password.length < 6) {
@@ -79,10 +74,9 @@ export default function SignupScreen({ navigation }) {
             {/* Full Name */}
             <Text style={styles.label}>Full Name</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Alex Chen"
+                placeholder="Enter your name"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 value={fullName}
                 onChangeText={setFullName}
@@ -92,10 +86,9 @@ export default function SignupScreen({ navigation }) {
             {/* Email */}
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>✉</Text>
               <TextInput
                 style={styles.input}
-                placeholder="your.email@university.edu"
+                placeholder="Enter your email"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 value={email}
                 onChangeText={setEmail}
@@ -107,7 +100,6 @@ export default function SignupScreen({ navigation }) {
             {/* Password */}
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Create a strong password"
@@ -120,17 +112,6 @@ export default function SignupScreen({ navigation }) {
                 <Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Terms Checkbox */}
-            <TouchableOpacity style={styles.termsRow} onPress={() => setAgreed(!agreed)}>
-              <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
-                {agreed && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.termsText}>
-                I agree to the <Text style={styles.termsBold}>Terms of Service</Text> and{' '}
-                <Text style={styles.termsBold}>Privacy Policy</Text>
-              </Text>
-            </TouchableOpacity>
 
             {/* Create Account Button */}
             <TouchableOpacity 
@@ -244,45 +225,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#ffffff',
     fontWeight: '500',
-  },
-  showText: {
-    fontSize: 16,
-    opacity: 0.7,
-  },
-  termsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 4,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    backgroundColor: 'rgba(88, 28, 135, 0.4)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  checkboxChecked: {
-    backgroundColor: '#ffffff',
-  },
-  checkmark: {
-    color: '#7c3aed',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  termsText: {
-    flex: 1,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  termsBold: {
-    color: '#ffffff',
-    fontWeight: '600',
   },
   createButton: {
     backgroundColor: '#ffffff',
