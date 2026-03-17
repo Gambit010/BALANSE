@@ -36,11 +36,17 @@ export default function LoginScreen({ navigation }) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
+
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      Alert.alert('Login Failed', error.message);
+      let message = 'Something went wrong. Please try again.';
+      //if (error.code === 'auth/user-not-found') message = 'No user found with this email.';
+      //if (error.code === 'auth/wrong-password') message = 'Incorrect password. Please try again.';
+      if (error.code === 'auth/invalid-credential') message = 'Invalid email or password.';
+      if (error.code === 'auth/too-many-requests') message = 'Too many attempts. Please try again later.';
+      Alert.alert('Login Failed', message);
     } finally {
       setIsLoading(false);
     }
