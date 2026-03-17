@@ -37,10 +37,34 @@ export default function SignupScreen({ navigation }) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
+
+    // Full name validation
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!nameRegex.test(fullName)) {
+      Alert.alert('Error', 'Full name should only contain letters');
+      return;
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    // Allowed domains
+    const allowedDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'sti.edu.ph'];
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    if (!allowedDomains.includes(emailDomain)) {
+      Alert.alert('Error', 'Please use a Gmail, Yahoo, Outlook, or STI email');
+      return;
+    }
+
     if (password.length < 6) {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
+
     setIsLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
