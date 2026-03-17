@@ -39,12 +39,12 @@ export default function OnboardingScreen({ navigation }) {
     if (currentIndex < slides.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      navigation.navigate('Home'); // or 'Dashboard'
+      navigation.navigate('MainApp'); // or 'Dashboard'
     }
   };
 
   const handleSkip = () => {
-    navigation.navigate('Home');
+    navigation.navigate('MainApp');
   };
 
   const currentSlide = slides[currentIndex];
