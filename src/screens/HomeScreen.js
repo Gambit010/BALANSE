@@ -1,69 +1,122 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 
-export default function HomeScreen({ navigation }) {
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+// Dummy data - will replace this with real firestore data later
+const dummyData = [
+  { id : '1', title: 'Submit balanse docu', category: 'Academic', priority: 'High', deadline: 'March 27', progress: 30, assignments: ['A'] },
+  { id : '2', title: 'GameProg TP', category: 'Academic', priority: 'Medium', deadline: 'March 30', progress: 0, assignments: ['G', 'M'] },
+  { id : '3', title: 'CompOrg TP', category: 'Academic', priority: 'Medium', deadline: 'March 31', progress: 0, assignments: ['A', 'C'] },
+  { id : '4', title: 'Thesis track progress/defense', category: 'Academic', priority: 'High', deadline: 'March 27', progress: 30, assignments: ['S', 'C', 'K', 'E'] },
+];
 
+export default function HomeScreen({ navigation }) {
+  const [tasks, setTasks] = useState(dummyData);
+
+  // Computed stats from tasks array
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(task => task.progress === 100).length;
+  const highPriorityTasks = tasks.filter(task => task.priority === 'High').length;
+  const inProgressTasks = tasks.filter(task => task.progress > 0 && task.progress < 100).length;
+  const dueTodayTasks = tasks.filter(task => task.deadline === 'Feb 18').length;
+  const overallProgress = totalTasks > 0 
+    ? Math.round((completedTasks / totalTasks) * 100) 
+    : 0;
+
+  // Get current user from Firebase Auth
+  const currentUser = auth.currentUser;
+  const userName = currentUser?.displayName || 'Student';
+  
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to Balanse!</Text>
-      <Text style={styles.subtitle}>You're logged in</Text>
-      
-      <TouchableOpacity 
-        style={styles.button} 
-        onPress={() => navigation.navigate('AddTask')}
+    <SafeAreaView style={styles.container}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.buttonText}>Add Task</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity style={[styles.button, styles.logoutButton]} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Logout</Text>
-      </TouchableOpacity>
-    </View>
+        
+        {/* HEADER */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Hey, {userName} 👋</Text>
+            <Text style={styles.date}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="notifications-outline" size={24} color="#ffffff" />
+            </TouchableOpacity>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {userName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
+  const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0f0f23',
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 20,
+    marginBottom: 24,
+  },
+  greeting: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  date: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f8fafc',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#4F46E5',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    marginBottom: 30,
-  },
-  button: {
-    backgroundColor: '#4F46E5',
-    padding: 15,
-    borderRadius: 10,
-    width: '100%',
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#7c3aed',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  logoutButton: {
-    backgroundColor: '#ef4444',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
+  avatarText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

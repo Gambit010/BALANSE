@@ -12,7 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
 
 export default function SignupScreen({ navigation }) {
@@ -67,7 +67,11 @@ export default function SignupScreen({ navigation }) {
 
     setIsLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      // await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, {
+        displayName: fullName,
+      });
     } catch (error) {
       Alert.alert('Signup Failed', error.message);
     } finally {
