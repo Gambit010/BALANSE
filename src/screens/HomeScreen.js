@@ -171,12 +171,18 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* PRIORITY TASKS SECTION */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Priority Tasks</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View All</Text>
-          </TouchableOpacity>
-        </View>
+        {/* ADD TASK BUTTON */}
+        <SafeAreaView style={styles.container}>
+           <ScrollView/>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('AddTask')}
+      >
+        <Ionicons name="add" size={28} color="#ffffff" />
+      </TouchableOpacity>
+    </SafeAreaView>
+       
+      
 
         {/* TASK CARDS */}
         {tasks.slice(0, 3).map((task) => (
@@ -532,6 +538,19 @@ export default function HomeScreen({ navigation }) {
     color: 'rgba(255,255,255,0.5)',
     marginTop: 12,
     fontSize: 14,
+  },
+  //add task button attributes
+  addButton: {
+    position: 'absolute',
+    bottom: -5,
+    right: 10,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#7c3aed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
   },
 
 
