@@ -160,6 +160,57 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {/* TASK CARDS */}
+        {tasks.slice(0, 3).map((task) => (
+          <View key={task.id} style={styles.taskCard}>
+            
+            {/* Task Title and Priority Badge */}
+            <View style={styles.taskTopRow}>
+              <Text style={styles.taskTitle} numberOfLines={1}>
+                {task.title}
+              </Text>
+              <View style={[
+                styles.priorityBadge,
+                task.priority === 'High' && styles.priorityHigh,
+                task.priority === 'Medium' && styles.priorityMedium,
+                task.priority === 'Low' && styles.priorityLow,
+              ]}>
+                <Text style={styles.priorityText}>{task.priority}</Text>
+              </View>
+            </View>
+
+            {/* Category and Deadline */}
+            <View style={styles.taskMidRow}>
+              <Text style={styles.taskCategory}>{task.category}</Text>
+              <View style={styles.taskDeadline}>
+                <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
+                <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={styles.taskProgressBg}>
+              <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
+            </View>
+
+            {/* Bottom Row - Assignees and Progress % */}
+            <View style={styles.taskBottomRow}>
+              <View style={styles.assigneeRow}>
+                {task.assignments.slice(0, 3).map((initial, index) => (
+                  <View
+                    key={index}
+                    style={[styles.assigneeAvatar, { marginLeft: index === 0 ? 0 : -8 }]}
+                  >
+                    <Text style={styles.assigneeInitial}>{initial}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.taskProgressText}>{task.progress}%</Text>
+            </View>
+
+          </View>
+        ))}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -353,4 +404,104 @@ export default function HomeScreen({ navigation }) {
     color: '#a78bfa',
     fontWeight: '600',
   },
+  taskCard: {
+    backgroundColor: '#1a1a3e',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  taskTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  taskTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    flex: 1,
+    marginRight: 8,
+  },
+  priorityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  priorityHigh: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  priorityMedium: {
+    backgroundColor: 'rgba(251, 146, 60, 0.2)',
+  },
+  priorityLow: {
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+  },
+  priorityText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  taskMidRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  taskCategory: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  taskDeadline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  taskDeadlineText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  taskProgressBg: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 2,
+    marginBottom: 10,
+  },
+  taskProgressFill: {
+    height: 4,
+    backgroundColor: '#a78bfa',
+    borderRadius: 2,
+  },
+  taskBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  assigneeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  assigneeAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#7c3aed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#1a1a3e',
+  },
+  assigneeInitial: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  taskProgressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+  },
+
 });
