@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import TasksScreen from '../screens/TasksScreen';
 import CalendarScreen from '../screens/CalendarScreen';
-import AIScreen from '../screens/AIScreen';
+import WellnessScreen from '../screens/WellnessScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -30,8 +30,8 @@ export default function AppNavigator() {
             iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === 'Calendar') {
             iconName = focused ? 'calendar' : 'calendar-outline';
-          } else if (route.name === 'AI') {
-            iconName = focused ? 'sparkles' : 'sparkles-outline';
+          } else if (route.name === 'Wellness') {
+            iconName = focused ? 'heart' : 'heart-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -43,7 +43,7 @@ export default function AppNavigator() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Tasks" component={TasksScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
-      <Tab.Screen name="AI" component={AIScreen} />
+      <Tab.Screen name="Wellness" component={WellnessScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
