@@ -152,6 +152,14 @@ export default function HomeScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
 
+        {/* PRIORITY TASKS SECTION */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Priority Tasks</Text>
+          <TouchableOpacity>
+            <Text style={styles.viewAll}>View All</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -161,6 +169,8 @@ export default function HomeScreen({ navigation }) {
     flex: 1,
     backgroundColor: '#0f0f23',
   },
+
+  // homescreen header attributes
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 30,
@@ -207,9 +217,9 @@ export default function HomeScreen({ navigation }) {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
-  },
+  }, //end of homescreen header
 
-
+//progress/stats card attributes
   progressCard: {
     backgroundColor: '#1a1a3e',
     borderRadius: 20,
@@ -274,9 +284,9 @@ export default function HomeScreen({ navigation }) {
     fontSize: 11,
     color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
-  },
+  }, // end of progress/stats card attributes
   
-
+// your task section attribute
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -335,5 +345,12 @@ export default function HomeScreen({ navigation }) {
     fontSize: 20,
     fontWeight: '700',
     color: '#a78bfa',
+  }, // end of your task section attributes
+
+  // priority tasks section attributes
+  viewAll: {
+    fontSize: 13,
+    color: '#a78bfa',
+    fontWeight: '600',
   },
 });
