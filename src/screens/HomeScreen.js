@@ -98,6 +98,60 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
+
+          {/* TASKS SECTION */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your Tasks</Text>
+        </View>
+
+        {/* Academic */}
+        <TouchableOpacity style={styles.categoryCard}>
+          <View style={[styles.categoryIcon, { backgroundColor: '#3b5bdb' }]}>
+            <Ionicons name="book-outline" size={20} color="#ffffff" />
+          </View>
+          <View style={styles.categoryInfo}>
+            <Text style={styles.categoryName}>Academic</Text>
+            <Text style={styles.categoryCount}>
+              {tasks.filter(t => t.category === 'Academic').length} active tasks
+            </Text>
+          </View>
+          <Text style={styles.categoryNumber}>
+            {tasks.filter(t => t.category === 'Academic').length}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Organization */}
+        <TouchableOpacity style={styles.categoryCard}>
+          <View style={[styles.categoryIcon, { backgroundColor: '#9c36b5' }]}>
+            <Ionicons name="people-outline" size={20} color="#ffffff" />
+          </View>
+          <View style={styles.categoryInfo}>
+            <Text style={styles.categoryName}>Organization</Text>
+            <Text style={styles.categoryCount}>
+              {tasks.filter(t => t.category === 'Organization').length} active tasks
+            </Text>
+          </View>
+          <Text style={styles.categoryNumber}>
+            {tasks.filter(t => t.category === 'Organization').length}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Personal */}
+        <TouchableOpacity style={styles.categoryCard}>
+          <View style={[styles.categoryIcon, { backgroundColor: '#0ca678' }]}>
+            <Ionicons name="heart-outline" size={20} color="#ffffff" />
+          </View>
+          <View style={styles.categoryInfo}>
+            <Text style={styles.categoryName}>Personal</Text>
+            <Text style={styles.categoryCount}>
+              {tasks.filter(t => t.category === 'Personal').length} active tasks
+            </Text>
+          </View>
+          <Text style={styles.categoryNumber}>
+            {tasks.filter(t => t.category === 'Personal').length}
+          </Text>
+        </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -154,6 +208,7 @@ export default function HomeScreen({ navigation }) {
     fontSize: 16,
     fontWeight: '700',
   },
+
 
   progressCard: {
     backgroundColor: '#1a1a3e',
@@ -219,5 +274,66 @@ export default function HomeScreen({ navigation }) {
     fontSize: 11,
     color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
+  },
+  
+
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  categoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a3e',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  categoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 3,
+  },
+  categoryCount: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  categoryNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#a78bfa',
   },
 });
