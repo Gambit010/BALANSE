@@ -1,52 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { useTasks } from '../hooks/useTasks';
 
 // Dummy data - will replace this with real firestore data later
-const dummyData = [
-  { id : '1', title: 'Submit balanse docu', category: 'Academic', priority: 'High', deadline: 'March 27', progress: 30, assignments: ['A'] },
-  { id : '2', title: 'GameProg TP', category: 'Academic', priority: 'Medium', deadline: 'March 30', progress: 0, assignments: ['G', 'M'] },
-  { id : '3', title: 'CompOrg TP', category: 'Academic', priority: 'Medium', deadline: 'March 31', progress: 0, assignments: ['A', 'C'] },
-  { id : '4', title: 'Thesis track progress/defense', category: 'Academic', priority: 'High', deadline: 'March 27', progress: 30, assignments: ['S', 'C', 'K', 'E'] },
-];
-
 export default function HomeScreen({ navigation }) {
-  const [tasks, setTasks] = useState(dummyData);
+  const { tasks, loading, error, refetch } = useTasks();
+  const [userName, setUserName] = useState('Student');
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        console.log('User display name:', user.displayName);
+        console.log('User email:', user.email);
+        setUserName(user.displayName || 'Student');
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   // Computed stats from tasks array
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(task => task.progress === 100).length;
-  const highPriorityTasks = tasks.filter(task => task.priority === 'High').length;
+  const highPriorityTasks = tasks.filter(task => task.priorityLabel === 'High').length;
   const inProgressTasks = tasks.filter(task => task.progress > 0 && task.progress < 100).length;
-  const dueTodayTasks = tasks.filter(task => task.deadline === 'Feb 18').length;
-  const overallProgress = totalTasks > 0 
-    ? Math.round((completedTasks / totalTasks) * 100) 
-    : 0;
-
-  // Get current user from Firebase Auth
-  const currentUser = auth.currentUser;
-  const userName = currentUser?.displayName || 'Student';
   
+  const today = new Date().toDateString();
+  const dueTodayTasks = tasks.filter(task => 
+    new Date(task.deadline).toDateString() === today
+  ).length;
+
+  const overallProgress = totalTasks > 0
+    ? Math.round((completedTasks / totalTasks) * 100)
+    : 0;
+  
+
+    if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#a78bfa" />
+          <Text style={styles.loadingText}>Loading your tasks...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        
         {/* HEADER */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Hey, {userName} 👋</Text>
+          <View style={{ flex: 1, marginRight: 12, justifyContent: 'center' }}>
+            <Text style={styles.greeting} numberOfLines={1}>Hey, {userName} 👋</Text>
             <Text style={styles.date}>
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
@@ -237,7 +255,8 @@ export default function HomeScreen({ navigation }) {
     fontSize: 22,
     fontWeight: '700',
     color: '#ffffff',
-  },
+    marginBottom: 2,
+  },  
   date: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
@@ -503,5 +522,17 @@ export default function HomeScreen({ navigation }) {
     fontWeight: '600',
     color: 'rgba(255,255,255,0.5)',
   },
+  //loading state attributes
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 12,
+    fontSize: 14,
+  },
+
 
 });
