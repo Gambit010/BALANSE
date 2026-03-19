@@ -63,6 +63,41 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
+         {/* OVERALL PROGRESS CARD */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressLabel}>Overall Progress</Text>
+            <Text style={styles.progressFraction}>
+              {completedTasks}/{totalTasks} tasks done
+            </Text>
+          </View>
+
+          <Text style={styles.progressPercent}>{overallProgress}%</Text>
+
+          {/* Progress Bar */}
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
+          </View>
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{highPriorityTasks}</Text>
+              <Text style={styles.statLabel}>High Priority</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{inProgressTasks}</Text>
+              <Text style={styles.statLabel}>In Progress</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{dueTodayTasks}</Text>
+              <Text style={styles.statLabel}>Due Today</Text>
+            </View>
+          </View>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -118,5 +153,71 @@ export default function HomeScreen({ navigation }) {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+
+  progressCard: {
+    backgroundColor: '#1a1a3e',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.2)',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
+  progressFraction: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  progressPercent: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginBottom: 12,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    marginBottom: 20,
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: '#a78bfa',
+    borderRadius: 3,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
   },
 });
