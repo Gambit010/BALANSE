@@ -171,18 +171,13 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* PRIORITY TASKS SECTION */}
-        {/* ADD TASK BUTTON */}
-        <SafeAreaView style={styles.container}>
-           <ScrollView/>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('AddTask')}
-      >
-        <Ionicons name="add" size={28} color="#ffffff" />
-      </TouchableOpacity>
-    </SafeAreaView>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Priority Tasks</Text>
+          <TouchableOpacity>
+            <Text style={styles.viewAll}>View All</Text>
+          </TouchableOpacity>
+        </View>
        
-      
 
         {/* TASK CARDS */}
         {tasks.slice(0, 3).map((task) => (
@@ -236,6 +231,15 @@ export default function HomeScreen({ navigation }) {
         ))}
 
       </ScrollView>
+
+      {/* ADD TASK BUTTON */}
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => navigation.navigate('AddTask')}
+      >
+        <Ionicons name="add" size={28} color="#ffffff" />
+      </TouchableOpacity>
+      
     </SafeAreaView>
   );
 }
@@ -363,18 +367,6 @@ export default function HomeScreen({ navigation }) {
   }, // end of progress/stats card attributes
   
 // your task section attribute
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -542,8 +534,8 @@ export default function HomeScreen({ navigation }) {
   //add task button attributes
   addButton: {
     position: 'absolute',
-    bottom: -5,
-    right: 10,
+    bottom: 90,
+    right: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -552,6 +544,4 @@ export default function HomeScreen({ navigation }) {
     alignItems: 'center',
     elevation: 8,
   },
-
-
 });

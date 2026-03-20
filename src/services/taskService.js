@@ -7,7 +7,6 @@ import {
   doc, 
   query, 
   where,
-  orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -17,8 +16,7 @@ export const getUserTasks = async (userId) => {
   try {
     const q = query(
       collection(db, 'tasks'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
@@ -26,8 +24,8 @@ export const getUserTasks = async (userId) => {
       ...doc.data()
     }));
   } catch (error) {
-    console.error('Error fetching tasks:', error);
-    return [];
+      console.error('Error fetching tasks:', error);
+      return [];
   }
 };
 
