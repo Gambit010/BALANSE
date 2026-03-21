@@ -10,6 +10,8 @@ import SignupScreen from './src/screens/SignupScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AppNavigator from './src/navigation/AppNavigator';
 import AddTaskScreen from './src/screens/AddTasksScreen';
+import EditTaskScreen from './src/screens/EditTaskScreen';
+
 
 const Stack = createStackNavigator();
 
@@ -35,6 +37,8 @@ export default function App() {
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="MainApp" component={AppNavigator} />
             <Stack.Screen name="AddTask" component={AddTaskScreen} />
+            <Stack.Screen name="EditTask" component={EditTaskScreen} />
+
           </>
         ) : (
           <>
