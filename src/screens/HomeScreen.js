@@ -14,7 +14,7 @@ import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { CommonActions } from '@react-navigation/native';
 
-// Dummy data - will replace this with real firestore data later
+
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
   const [userName, setUserName] = useState('Student');
@@ -363,18 +363,6 @@ export default function HomeScreen({ navigation }) {
   }, // end of progress/stats card attributes
   
 // your task section attribute
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
