@@ -6,11 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
+import { CommonActions } from '@react-navigation/native';
 
 // Dummy data - will replace this with real firestore data later
 export default function HomeScreen({ navigation }) {
@@ -223,14 +225,18 @@ export default function HomeScreen({ navigation }) {
           </View>
         ))}
 
-      </ScrollView>
+            </ScrollView>
       <TouchableOpacity
         style={styles.addButton}
+        
         onPress={() => navigation.getParent()?.navigate('AddTask')}
+
+
       >
         <Ionicons name="add" size={28} color="#ffffff" />
       </TouchableOpacity>
     </SafeAreaView>
+
   );
 }
   const styles = StyleSheet.create({
