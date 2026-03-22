@@ -175,8 +175,8 @@ export default function HomeScreen({ navigation }) {
         {/* PRIORITY TASKS SECTION */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Priority Tasks</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View All</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
+            < Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
         </View>
        
