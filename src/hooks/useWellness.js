@@ -31,7 +31,7 @@ const useWellness = () => {
         const scoreData = {
             responses,
             rawScore,
-            percentageScore,
+            percentage: percentageScore,
             status: status.label,
             interventions,
         };

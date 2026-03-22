@@ -116,14 +116,14 @@ export const getInterventions = (percentage, taskCount = 0, conflictCount = 0) =
         icon: 'chatbubble-ellipses-outline',
         title: 'Talk to Someone',
         text: 'If you\'re struggling, reach out to a friend, family member, or counselor.',
+        });
+        interventions.push({
+        icon: 'moon-outline',
+        title: 'Prioritize Sleep',
+        text: 'Poor sleep strongly affects well-being. Aim for 7-9 hours tonight.',
         })
        
     }
-    interventions.push({
-       icon: 'moon-outline',
-       title: 'Prioritize Sleep',
-       text: 'Poor sleep strongly affects well-being. Aim for 7-9 hours tonight.',
-       })
     if(taskCount > 5){
         interventions.push({
         icon: 'list-outline',
