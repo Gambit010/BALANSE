@@ -14,7 +14,7 @@ import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { CommonActions } from '@react-navigation/native';
 
-// Dummy data - will replace this with real firestore data later
+
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
   const [userName, setUserName] = useState('Student');
