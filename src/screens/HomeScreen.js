@@ -1,4 +1,4 @@
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
+import { useFocusEffect } from '@react-navigation/native';
 import { CommonActions } from '@react-navigation/native';
 
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
   const [userName, setUserName] = useState('Student');
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [])
+  );
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
