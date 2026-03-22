@@ -183,62 +183,78 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Priority Tasks</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
-            < Text style={styles.viewAll}>View All</Text>
+            <Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
         </View>
        
 
-        {/* TASK CARDS */}
-        {tasks.slice(0, 3).map((task) => (
-          <View key={task.id} style={styles.taskCard}>
-            
-            {/* Task Title and Priority Badge */}
-            <View style={styles.taskTopRow}>
-              <Text style={styles.taskTitle} numberOfLines={1}>
-                {task.title}
-              </Text>
-              <View style={[
-                styles.priorityBadge,
-                task.priority === 'High' && styles.priorityHigh,
-                task.priority === 'Medium' && styles.priorityMedium,
-                task.priority === 'Low' && styles.priorityLow,
-              ]}>
-                <Text style={styles.priorityText}>{task.priority}</Text>
-              </View>
-            </View>
-
-            {/* Category and Deadline */}
-            <View style={styles.taskMidRow}>
-              <Text style={styles.taskCategory}>{task.category}</Text>
-              <View style={styles.taskDeadline}>
-                <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
-                <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
-              </View>
-            </View>
-
-            {/* Progress Bar */}
-            <View style={styles.taskProgressBg}>
-              <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
-            </View>
-
-            {/* Bottom Row - Assignees and Progress % */}
-            <View style={styles.taskBottomRow}>
-              <View style={styles.assigneeRow}>
-                {task.assignments.slice(0, 3).map((initial, index) => (
-                  <View
-                    key={index}
-                    style={[styles.assigneeAvatar, { marginLeft: index === 0 ? 0 : -8 }]}
-                  >
-                    <Text style={styles.assigneeInitial}>{initial}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.taskProgressText}>{task.progress}%</Text>
-            </View>
-
+         {/* TASK CARDS */}
+        {tasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="checkmark-circle-outline" size={56} color="rgba(255,255,255,0.15)" />
+            <Text style={styles.emptyTitle}>No tasks yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap the + button to add your first task
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={() => navigation.navigate('AddTask')}
+            >
+              <Text style={styles.emptyButtonText}>Add your first task</Text>
+            </TouchableOpacity>
           </View>
-        ))}
+        ) : (
+          tasks.slice(0, 3).map((task) => (
+            <View key={task.id} style={styles.taskCard}>
+              
+              {/* Task Title and Priority Badge */}
+              <View style={styles.taskTopRow}>
+                <Text style={styles.taskTitle} numberOfLines={1}>
+                  {task.title}
+                </Text>
+                <View style={[
+                  styles.priorityBadge,
+                  task.priority === 'High' && styles.priorityHigh,
+                  task.priority === 'Medium' && styles.priorityMedium,
+                  task.priority === 'Low' && styles.priorityLow,
+                ]}>
+                  <Text style={styles.priorityText}>{task.priorityLabel}</Text>
+                </View>
+              </View>
 
+              {/* Category and Deadline */}
+              <View style={styles.taskMidRow}>
+                <Text style={styles.taskCategory}>{task.category}</Text>
+                <View style={styles.taskDeadline}>
+                  <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
+                  <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
+                </View>
+              </View>
+
+              {/* Progress Bar */}
+              <View style={styles.taskProgressBg}>
+                <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
+              </View>
+
+              {/* Bottom Row */}
+              <View style={styles.taskBottomRow}>
+                <View style={styles.assigneeRow}>
+                  {task.assignments && task.assignments.slice(0, 3).map((initial, index) => (
+                    <View
+                      key={index}
+                      style={[styles.assigneeAvatar, { marginLeft: index === 0 ? 0 : -8 }]}
+                    >
+                      <Text style={styles.assigneeInitial}>{initial}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.taskProgressText}>{task.progress}%</Text>
+              </View>
+
+            </View>
+          ))
+        )}
+          
             </ScrollView>
       <TouchableOpacity
         style={styles.addButton}
@@ -553,5 +569,37 @@ export default function HomeScreen({ navigation }) {
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
+  },
+  // empty state attributes
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.25)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  emptyButton: {
+    backgroundColor: 'rgba(167,139,250,0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.4)',
+  },
+  emptyButtonText: {
+    color: '#a78bfa',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
