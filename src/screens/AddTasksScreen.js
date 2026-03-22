@@ -310,7 +310,7 @@ export default function TasksScreen({ navigation }) {
       {/* Floating Add Button */}
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => navigation.navigate('AddTask')}
+        onPress={() => navigation.getParent()?.navigate('AddTask')}
       >
         <Ionicons name="add" size={28} color="#ffffff" />
       </TouchableOpacity>
