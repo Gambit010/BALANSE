@@ -171,7 +171,6 @@ export default function HomeScreen({ navigation }) {
             {tasks.filter(t => t.category === 'Personal').length}
           </Text>
         </TouchableOpacity>
-<<<<<<< HEAD
 
         {/* PRIORITY TASKS SECTION */}
         <View style={styles.sectionHeader}>
@@ -180,8 +179,6 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
         </View>
-=======
->>>>>>> origin/master
        
 
         {/* TASK CARDS */}
@@ -235,18 +232,6 @@ export default function HomeScreen({ navigation }) {
           </View>
         ))}
 
-<<<<<<< HEAD
-      </ScrollView>
-
-      {/* ADD TASK BUTTON */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('AddTask')}
-      >
-        <Ionicons name="add" size={28} color="#ffffff" />
-      </TouchableOpacity>
-      
-=======
             </ScrollView>
       <TouchableOpacity
         style={styles.addButton}
@@ -257,7 +242,6 @@ export default function HomeScreen({ navigation }) {
       >
         <Ionicons name="add" size={28} color="#ffffff" />
       </TouchableOpacity>
->>>>>>> origin/master
     </SafeAreaView>
 
   );
@@ -553,11 +537,7 @@ export default function HomeScreen({ navigation }) {
   //add task button attributes
   addButton: {
     position: 'absolute',
-<<<<<<< HEAD
-    bottom: 90,
-=======
     bottom: 20,
->>>>>>> origin/master
     right: 20,
     width: 56,
     height: 56,
