@@ -78,8 +78,12 @@ export default function HomeScreen({ navigation }) {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
+
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Notifications')}
+            >
               <Ionicons name="notifications-outline" size={24} color="#ffffff" />
             </TouchableOpacity>
             <View style={styles.avatar}>
@@ -87,6 +91,7 @@ export default function HomeScreen({ navigation }) {
                 {userName.charAt(0).toUpperCase()}
               </Text>
             </View>
+
           </View>
         </View>
 
