@@ -15,9 +15,10 @@ import { db } from '../../firebase';
 export const getUserTasks = async (userId) => {
   try {
     const q = query(
-      collection(db, 'tasks'),
-      where('userId', '==', userId)
-    );
+
+  collection(db, 'tasks'),
+  where('userId', '==', userId)
+);
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -59,6 +60,19 @@ export const updateTaskProgress = async (taskId, progress) => {
     return false;
   }
 };
+
+// Update task fields (for editing)
+export const updateTask = async (taskId, taskData) => {
+  try {
+    const taskRef = doc(db, 'tasks', taskId);
+    await updateDoc(taskRef, taskData);
+    return true;
+  } catch (error) {
+    console.error('Error updating task:', error);
+    return false;
+  }
+};
+
 
 // Delete a task
 export const deleteTask = async (taskId) => {
