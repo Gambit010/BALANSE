@@ -38,7 +38,7 @@ export const LIKERT_OPTIONS = [
 ];
 
 // TIMEFRAME
-export const TIMEFRAME_TEXT = 'Over the last week....';
+export const TIMEFRAME_TEXT = 'Over the last 2 weeks....';
 
 export const getRawScore = (answers) => {
     return Object.values(answers).reduce((sum, val) => sum + val, 0);

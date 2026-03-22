@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from './useAuth';
+import { auth } from '../../firebase'
 import { saveWellnessScore, getWellnessHistory } from "../services/taskService";
 import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline } from "../constants/wellness";
 
 const useWellness = () => {
-    const { user } = useAuth();
+    const user = auth.currentUser;
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -12,8 +12,13 @@ const useWellness = () => {
     const fetchHistory = useCallback(async () => {
         if (!user) return;
         setLoading(true);
-        const data = await getWellnessHistory(user.uid);
-        setHistory(data);
+        const raw = await getWellnessHistory(user.uid);
+        const parsed = raw.map(entry => ({
+          ...entry,
+        percentage: entry.percentage ?? (entry.rawScore ? entry.rawScore * 4 : 0),
+        date: entry.createdAt?.toDate?.() ?? new Date(entry.createdAt),
+        }));
+        setHistory(parsed);
         setLoading(false);
     }, [user]);
 
@@ -39,7 +44,7 @@ const useWellness = () => {
         setSubmitting(false);
         if (docId) {
             await fetchHistory();
-            return { id: docId, ...scoreData };
+            return { id: docId, rawScore, percentage: percentageScore, status };
         }
         return null;
     };
@@ -53,7 +58,7 @@ const useWellness = () => {
         : [];
     const activeTaskCount = 0; // TODO: wire up from useTasks if needed
 
-    return {
+       return {
         history,
         loading,
         latestScore,
@@ -64,6 +69,7 @@ const useWellness = () => {
         submitAssessment,
         refetch: fetchHistory,
     };
+
 };
 
-export default useWellness;
+export { useWellness };

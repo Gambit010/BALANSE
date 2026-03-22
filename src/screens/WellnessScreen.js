@@ -34,6 +34,8 @@ export default function WellnessScreen() {
     decline,
     interventions,
     activeTaskCount,
+    canTakeAssessment,
+    nextAssessmentDate,
     submitAssessment,
     refetch,
   } = useWellness();
@@ -240,12 +242,18 @@ export default function WellnessScreen() {
         )}
 
         {/* Take Assessment Button */}
-        <TouchableOpacity style={styles.assessButton} onPress={startAssessment}>
-          <Ionicons name="clipboard-outline" size={20} color="#fff" />
-          <Text style={styles.assessButtonText}>
-            {latestScore ? 'New Check-in' : 'Take WHO-5 Assessment'}
-          </Text>
-        </TouchableOpacity>
+        <TouchableOpacity
+            style={[styles.assessButton, !canTakeAssessment && { opacity: 0.5 }]}
+            onPress={startAssessment}
+            disabled={!canTakeAssessment}
+>
+        <Ionicons name="clipboard-outline" size={20} color="#fff" />
+        <Text style={styles.assessButtonText}>
+        {!canTakeAssessment
+            ? `Next check-in: ${nextAssessmentDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            : latestScore ? 'New Check-in' : 'Take WHO-5 Assessment'}
+    </Text>
+</TouchableOpacity>
 
         {/* Score History Chart */}
         {renderChart()}
