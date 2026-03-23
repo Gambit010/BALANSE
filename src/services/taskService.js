@@ -84,3 +84,38 @@ export const deleteTask = async (taskId) => {
     return false;
   }
 };
+
+// Save WHO-5 score 
+export const saveWellnessScore = async (userId, scoreData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'wellness'),{
+      userId,
+      ...scoreData,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  }
+  catch (error) {
+    console.error('Error saving welness score', error);
+    return null;
+  }
+};
+
+// Retreive WHO-5 History
+export const getWellnessHistory = async (userId) => {
+  try {
+    const q = query(
+      collection(db, 'wellness'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching wellness history:', error);
+    return [];
+  }
+};
