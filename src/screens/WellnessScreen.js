@@ -252,8 +252,8 @@ export default function WellnessScreen() {
         {!canTakeAssessment
             ? `Next check-in: ${nextAssessmentDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
             : latestScore ? 'New Check-in' : 'Take WHO-5 Assessment'}
-    </Text>
-</TouchableOpacity>
+         </Text>
+         </TouchableOpacity>
 
         {/* Score History Chart */}
         {renderChart()}

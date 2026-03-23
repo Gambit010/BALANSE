@@ -58,6 +58,23 @@ const useWellness = () => {
         : [];
     const activeTaskCount = 0; // TODO: wire up from useTasks if needed
 
+    // Check if 14 days have passed since last assessment
+    const canTakeAssessment = (() => {
+          if (!latestScore || !latestScore.date) return true;
+             const now = new Date();
+             const lastDate = latestScore.date instanceof Date ? latestScore.date : new Date(latestScore.date);
+             const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
+                 return diffDays >= 14;
+             })();
+
+    const nextAssessmentDate = (() => {
+         if (!latestScore || !latestScore.date) return null;
+            const lastDate = latestScore.date instanceof Date ? latestScore.date : new Date(latestScore.date);
+            const next = new Date(lastDate);
+            next.setDate(next.getDate() + 14);
+             return next;
+                })();
+
        return {
         history,
         loading,
@@ -66,6 +83,8 @@ const useWellness = () => {
         decline,
         interventions,
         activeTaskCount,
+        canTakeAssessment,      
+        nextAssessmentDate, 
         submitAssessment,
         refetch: fetchHistory,
     };
