@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTasks } from '../hooks/useTasks';
+import { getPriorityBreakdown } from '../constants/scoring';
 import { deleteTask, updateTaskProgress } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -19,6 +20,7 @@ export default function TasksScreen({ navigation }) {
   const { tasks, loading, refetch } = useTasks();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
 
   // Refetch tasks when screen comes into focus
@@ -222,89 +224,132 @@ export default function TasksScreen({ navigation }) {
         )}
 
         {/* TASK LIST */}
-        {filteredTasks.map((task) => (
-          <TouchableOpacity
-            key={task.id}
-            style={styles.taskCard}
-            onPress={() => navigation.navigate('EditTask', { task })}
-            activeOpacity={0.7}
-          >
-            {/* Top Row - Title + Priority */}
-            <View style={styles.taskTopRow}>
-              <Text style={styles.taskTitle} numberOfLines={1}>
-                {task.title}
-              </Text>
-              <View style={[
-                styles.priorityBadge,
-                { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
-              ]}>
-                <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
-                  {task.priorityLabel}
-                </Text>
+        {filteredTasks.map((task) => {
+  const isExpanded = expandedTaskId === task.id;
+  const breakdown = isExpanded ? getPriorityBreakdown(task) : null;
+
+  return (
+    <TouchableOpacity
+      key={task.id}
+      style={styles.taskCard}
+      onPress={() => navigation.navigate('EditTask', { task })}
+      activeOpacity={0.7}
+    >
+      {/* Top Row - Title + Priority */}
+      <View style={styles.taskTopRow}>
+        <Text style={styles.taskTitle} numberOfLines={1}>
+          {task.title}
+        </Text>
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation?.();
+            setExpandedTaskId(isExpanded ? null : task.id);
+          }}
+          style={[
+            styles.priorityBadge,
+            { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
+          ]}
+          activeOpacity={0.6}
+        >
+          <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
+            {task.priorityLabel} ({task.priorityScore})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Priority Score Breakdown (collapsible) */}
+      {isExpanded && breakdown && (
+        <View style={styles.breakdownContainer}>
+          <Text style={styles.breakdownTitle}>Priority Score Breakdown</Text>
+          {breakdown.factors.map((factor) => (
+            <View key={factor.label} style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <Text style={styles.breakdownLabel}>{factor.label}</Text>
+                <Text style={styles.breakdownReason}>{factor.reason}</Text>
               </View>
-            </View>
-
-            {/* Description */}
-            {task.description ? (
-              <Text style={styles.taskDescription} numberOfLines={2}>
-                {task.description}
-              </Text>
-            ) : null}
-
-            {/* Mid Row - Category, Status, Deadline */}
-            <View style={styles.taskMidRow}>
-              <View style={styles.taskMeta}>
-                <View style={styles.metaChip}>
-                  <Ionicons name="folder-outline" size={11} color="rgba(255,255,255,0.5)" />
-                  <Text style={styles.metaText}>{task.category}</Text>
-                </View>
-                <View style={[styles.metaChip, { borderColor: `${getStatusColor(task.progress)}40` }]}>
-                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.progress) }]} />
-                  <Text style={styles.metaText}>{getStatusLabel(task.progress)}</Text>
-                </View>
-              </View>
-              <View style={styles.taskDeadline}>
-                <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
-                <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
-              </View>
-            </View>
-
-            {/* Progress Bar */}
-            <View style={styles.taskProgressBg}>
-              <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
-            </View>
-
-            {/* Bottom Row - Actions */}
-            <View style={styles.taskBottomRow}>
-              <TouchableOpacity
-                style={styles.progressButton}
-                onPress={() => handleProgressUpdate(task.id, task.progress)}
-              >
-                <Ionicons
-                  name={task.progress === 100 ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                  size={20}
-                  color={task.progress === 100 ? '#34d399' : 'rgba(255,255,255,0.4)'}
+              <View style={styles.breakdownBarBg}>
+                <View
+                  style={[
+                    styles.breakdownBarFill,
+                    { width: `${(factor.score / factor.maxScore) * 100}%` },
+                  ]}
                 />
-                <Text style={styles.taskProgressText}>{task.progress}%</Text>
-              </TouchableOpacity>
-
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => navigation.navigate('EditTask', { task })}
-                >
-                  <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.5)" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleDelete(task.id, task.title)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                </TouchableOpacity>
               </View>
+              <Text style={styles.breakdownScore}>
+                {factor.score}/{factor.maxScore}
+              </Text>
             </View>
+          ))}
+          <View style={styles.breakdownTotalRow}>
+            <Text style={styles.breakdownTotalLabel}>Total</Text>
+            <Text style={styles.breakdownTotalScore}>{breakdown.total}/100</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Description */}
+      {task.description ? (
+        <Text style={styles.taskDescription} numberOfLines={2}>
+          {task.description}
+        </Text>
+      ) : null}
+
+      {/* Mid Row - Category, Status, Deadline */}
+      <View style={styles.taskMidRow}>
+        <View style={styles.taskMeta}>
+          <View style={styles.metaChip}>
+            <Ionicons name="folder-outline" size={11} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.metaText}>{task.category}</Text>
+          </View>
+          <View style={[styles.metaChip, { borderColor: `${getStatusColor(task.progress)}40` }]}>
+            <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.progress) }]} />
+            <Text style={styles.metaText}>{getStatusLabel(task.progress)}</Text>
+          </View>
+        </View>
+        <View style={styles.taskDeadline}>
+          <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
+          <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
+        </View>
+      </View>
+
+      {/* Progress Bar */}
+      <View style={styles.taskProgressBg}>
+        <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
+      </View>
+
+      {/* Bottom Row - Actions */}
+      <View style={styles.taskBottomRow}>
+        <TouchableOpacity
+          style={styles.progressButton}
+          onPress={() => handleProgressUpdate(task.id, task.progress)}
+        >
+          <Ionicons
+            name={task.progress === 100 ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={20}
+            color={task.progress === 100 ? '#34d399' : 'rgba(255,255,255,0.4)'}
+          />
+          <Text style={styles.taskProgressText}>{task.progress}%</Text>
+        </TouchableOpacity>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('EditTask', { task })}
+          >
+            <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.5)" />
           </TouchableOpacity>
-        ))}
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDelete(task.id, task.title)}
+          >
+            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+})}
+
       </ScrollView>
 
       {/* Floating Add Button */}
@@ -566,4 +611,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
+
+    // Priority breakdown styles
+  breakdownContainer: {
+    backgroundColor: 'rgba(167,139,250,0.08)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.15)',
+  },
+  breakdownTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#a78bfa',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  breakdownRow: {
+    marginBottom: 8,
+  },
+  breakdownLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  breakdownReason: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  breakdownBarBg: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    marginBottom: 2,
+  },
+  breakdownBarFill: {
+    height: 6,
+    backgroundColor: '#a78bfa',
+    borderRadius: 3,
+  },
+  breakdownScore: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'right',
+  },
+  breakdownTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  breakdownTotalLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  breakdownTotalScore: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#a78bfa',
+  },
+
 });
