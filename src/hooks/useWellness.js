@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { auth } from '../../firebase'
 import { saveWellnessScore, getWellnessHistory } from "../services/taskService";
 import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline } from "../constants/wellness";
+import { getUserTasks } from '../services/taskService';
+
 
 const useWellness = () => {
     const user = auth.currentUser;
@@ -54,9 +56,21 @@ const useWellness = () => {
     const latestStatus = latestScore ? getWellnessStatus(latestScore.percentage) : null;
     const decline = detectDecline(history);
     const interventions = latestScore
-        ? getInterventions(latestScore.percentage)
+        ? getInterventions(latestScore.percentage, activeTaskCount)
         : [];
-    const activeTaskCount = 0; // TODO: wire up from useTasks if needed
+
+    const [activeTaskCount, setActiveTaskCount] = useState(0);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchTaskCount = async () => {
+            const tasks = await getUserTasks(user.uid);
+            const active = tasks.filter(t => t.progress < 100).length;
+        setActiveTaskCount(active);
+        };
+        fetchTaskCount();
+    }, [user]);
+
 
     // Check if 14 days have passed since last assessment
     const canTakeAssessment = (() => {
