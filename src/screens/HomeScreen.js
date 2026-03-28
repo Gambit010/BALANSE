@@ -186,9 +186,14 @@ export default function HomeScreen({ navigation }) {
                       <View style={styles.focusDeadlineTag}>
                         <Ionicons name="time-outline" size={11} color={urgency.color} />
                         <Text style={[styles.focusDeadlineText, { color: urgency.color }]}>
-                          {urgency.text}
+                            {urgency.text}
+                            {task.deadline && task.deadline.includes('T')
+                            ? ` at ${new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+                            : ''}
                         </Text>
                       </View>
+
+
                     </View>
 
                     <Text style={styles.focusReason}>
@@ -255,7 +260,8 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Academic */}
-        <TouchableOpacity style={styles.categoryCard}>
+        <TouchableOpacity style={styles.categoryCard}
+        onPress={() => navigation.navigate('Tasks', { filterCategory: 'Academic' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#3b5bdb' }]}>
             <Ionicons name="book-outline" size={20} color="#ffffff" />
           </View>
@@ -271,7 +277,8 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Organization */}
-        <TouchableOpacity style={styles.categoryCard}>
+        <TouchableOpacity style={styles.categoryCard}
+        onPress={() => navigation.navigate('Tasks', { filterCategory: 'Organization' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#9c36b5' }]}>
             <Ionicons name="people-outline" size={20} color="#ffffff" />
           </View>
@@ -287,7 +294,8 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Personal */}
-        <TouchableOpacity style={styles.categoryCard}>
+        <TouchableOpacity style={styles.categoryCard}
+        onPress={() => navigation.navigate('Tasks', { filterCategory: 'Personal' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#0ca678' }]}>
             <Ionicons name="heart-outline" size={20} color="#ffffff" />
           </View>
