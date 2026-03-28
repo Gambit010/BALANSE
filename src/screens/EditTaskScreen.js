@@ -27,7 +27,11 @@ export default function EditTaskScreen({ route, navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const progressOptions = [0, 25, 50, 75, 100];
+  const progressOptions = [
+    { value: 0, label: 'To Do' },
+    { value: 50, label: 'In Progress' },
+    { value: 100, label: 'Done' },
+  ];
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -195,27 +199,28 @@ export default function EditTaskScreen({ route, navigation }) {
           />
         )}
 
-        {/* PROGRESS SELECTOR */}
-        <Text style={styles.label}>Progress</Text>
+                {/* STATUS SELECTOR */}
+        <Text style={styles.label}>Status</Text>
         <View style={styles.progressRow}>
-          {progressOptions.map((val) => (
+          {progressOptions.map((opt) => (
             <TouchableOpacity
-              key={val}
+              key={opt.value}
               style={[
                 styles.progressChip,
-                progress === val && styles.progressChipActive,
+                progress === opt.value && styles.progressChipActive,
               ]}
-              onPress={() => setProgress(val)}
+              onPress={() => setProgress(opt.value)}
             >
               <Text style={[
                 styles.progressChipText,
-                progress === val && styles.progressChipTextActive,
+                progress === opt.value && styles.progressChipTextActive,
               ]}>
-                {val}%
+                {opt.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
+
 
         {/* Progress Bar Preview */}
         <View style={styles.progressBarBg}>
