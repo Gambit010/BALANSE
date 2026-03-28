@@ -26,6 +26,9 @@ export default function EditTaskScreen({ route, navigation }) {
   const [progress, setProgress] = useState(task.progress || 0);
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [hasTime, setHasTime] = useState(task.deadline && task.deadline.includes('T'));
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
 
   const progressOptions = [
     { value: 0, label: 'To Do' },
@@ -50,7 +53,7 @@ export default function EditTaskScreen({ route, navigation }) {
         description: description.trim(),
         category,
         priority,
-        deadline: deadline.toISOString().split('T')[0],
+        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
         progress,
         isCompleted: progress === 100,
       };
@@ -181,11 +184,12 @@ export default function EditTaskScreen({ route, navigation }) {
               month: 'long',
               day: 'numeric',
             })}
+            {hasTime ? ` at ${deadline.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
           </Text>
           <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
         </TouchableOpacity>
 
-        {showDatePicker && (
+                {showDatePicker && (
           <DateTimePicker
             value={deadline}
             mode="date"
@@ -195,6 +199,49 @@ export default function EditTaskScreen({ route, navigation }) {
               if (selectedDate) {
                 setDeadline(selectedDate);
               }
+            }}
+          />
+        )}
+
+        {/* TIME TOGGLE */}
+        <TouchableOpacity
+          style={styles.timeToggleRow}
+          onPress={() => setHasTime(!hasTime)}
+        >
+          <View style={styles.timeToggleLeft}>
+            <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.timeToggleText}>Set specific time</Text>
+          </View>
+          <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
+            <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
+          </View>
+        </TouchableOpacity>
+
+        {hasTime && (
+          <TouchableOpacity
+            style={styles.timeRow}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Ionicons name="time-outline" size={18} color="#a78bfa" />
+            <Text style={styles.timeText}>
+              {deadline.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </Text>
+            <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+        )}
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={deadline}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(event, selectedDate) => {
+              setShowTimePicker(false);
+              if (selectedDate) setDeadline(selectedDate);
             }}
           />
         )}
@@ -388,4 +435,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+
+  timeToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  timeToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeToggleText: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
+  toggleTrack: { width: 44, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', paddingHorizontal: 2 },
+  toggleTrackActive: { backgroundColor: 'rgba(167,139,250,0.4)' },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)' },
+  toggleThumbActive: { backgroundColor: '#a78bfa', alignSelf: 'flex-end' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 28, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
+  timeText: { color: '#a78bfa', fontSize: 16, fontWeight: '600', flex: 1 },
+
 });
