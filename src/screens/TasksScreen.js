@@ -16,10 +16,10 @@ import { getPriorityBreakdown } from '../constants/scoring';
 import { deleteTask, updateTaskProgress } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 
-export default function TasksScreen({ navigation }) {
+export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
 
@@ -311,8 +311,14 @@ export default function TasksScreen({ navigation }) {
         </View>
         <View style={styles.taskDeadline}>
           <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
-          <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
+          <Text style={styles.taskDeadlineText}>
+              {task.deadline && task.deadline.includes('T')
+              ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+              : task.deadline}
+          </Text>
         </View>
+
       </View>
 
       {/* Progress Bar */}
