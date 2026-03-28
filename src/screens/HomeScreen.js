@@ -371,7 +371,10 @@ export default function HomeScreen({ navigation }) {
                     </View>
                   ))}
                 </View>
-                <Text style={styles.taskProgressText}>{task.progress}%</Text>
+                <Text style={styles.taskProgressText}>
+                      {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
+                </Text>
+
               </View>
 
             </View>
