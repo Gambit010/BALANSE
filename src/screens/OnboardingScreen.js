@@ -14,7 +14,8 @@ const { width } = Dimensions.get('window');
 const slides = [
   {
     id: '1',
-    icon: '⊞', 
+    icon: '⊞',
+    title: 'Task Management',
     description: 'Manage academic, organization, and personal tasks in one smart dashboard.',
   },
   {
@@ -28,6 +29,12 @@ const slides = [
     icon: '⚡', 
     title: 'Conflict Detection',
     description: 'Never miss a deadline with smart scheduling alerts.',
+  },
+  {
+    id: '4',
+    icon: '💚',
+    title: 'Well-being Check-ins',
+    description: 'Track your mental health with WHO-5 assessments and get personalized recommendations.',
   },
 ];
 

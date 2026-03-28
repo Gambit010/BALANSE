@@ -11,9 +11,17 @@ const useWellness = () => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
+    const fetchTaskCount = useCallback(async () => {
+        if (!user) return;
+        const tasks = await getUserTasks(user.uid);
+        const active = tasks.filter(t => t.progress < 100).length;
+        setActiveTaskCount(active);
+    }, [user]);
+
     const fetchHistory = useCallback(async () => {
         if (!user) return;
         setLoading(true);
+        await fetchTaskCount();
         const raw = await getWellnessHistory(user.uid);
         const parsed = raw.map(entry => ({
           ...entry,
@@ -60,17 +68,6 @@ const useWellness = () => {
         : [];
 
     const [activeTaskCount, setActiveTaskCount] = useState(0);
-
-    useEffect(() => {
-        if (!user) return;
-        const fetchTaskCount = async () => {
-            const tasks = await getUserTasks(user.uid);
-            const active = tasks.filter(t => t.progress < 100).length;
-        setActiveTaskCount(active);
-        };
-        fetchTaskCount();
-    }, [user]);
-
 
     // Check if 14 days have passed since last assessment
     const canTakeAssessment = (() => {

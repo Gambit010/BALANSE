@@ -349,7 +349,7 @@ export default function HomeScreen({ navigation }) {
                   task.priority === 'Medium' && styles.priorityMedium,
                   task.priority === 'Low' && styles.priorityLow,
                 ]}>
-                  <Text style={styles.priorityText}>{task.priorityLabel}</Text>
+                  <Text style={styles.priorityText}>{task.priorityLabel} ({task.priorityScore})</Text>
                 </View>
               </View>
 
