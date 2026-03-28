@@ -94,7 +94,10 @@ export default function TasksScreen({ navigation }) {
   };
 
   const handleProgressUpdate = async (taskId, currentProgress) => {
-    const newProgress = currentProgress >= 100 ? 0 : currentProgress + 25;
+    let newProgress;
+    if (currentProgress === 0) newProgress = 50;
+    else if (currentProgress < 100) newProgress = 100;
+    else newProgress = 0;
     const success = await updateTaskProgress(taskId, newProgress);
     if (success) {
       refetch();
@@ -328,7 +331,9 @@ export default function TasksScreen({ navigation }) {
             size={20}
             color={task.progress === 100 ? '#34d399' : 'rgba(255,255,255,0.4)'}
           />
-          <Text style={styles.taskProgressText}>{task.progress}%</Text>
+          <Text style={styles.taskProgressText}>
+                 {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.actionRow}>
