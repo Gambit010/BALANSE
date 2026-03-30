@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTasks } from '../hooks/useTasks';
+import { useAllConflicts } from '../hooks/useConflicts';
 import { useFocusEffect } from '@react-navigation/native';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -20,6 +21,7 @@ const MONTHS = [
 
 export default function CalendarScreen({ navigation }) {
   const { tasks, loading, refetch } = useTasks();
+  const { hasConflictsOnDate, getConflictsForDate } = useAllConflicts(tasks);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -76,6 +78,12 @@ export default function CalendarScreen({ navigation }) {
   };
 
   const getTaskCountForDate = (date) => getTasksForDate(date).length;
+    const getDateKey = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
 
   const hasHighPriority = (date) => {
     return getTasksForDate(date).some((t) => t.priorityLabel === 'High');
@@ -240,6 +248,7 @@ export default function CalendarScreen({ navigation }) {
             const isSelected = isSameDay(item.date, selectedDate);
             const isTodayDate = isToday(item.date);
             const highPriority = hasHighPriority(item.date);
+            const dateHasConflict = hasConflictsOnDate(getDateKey(item.date));
 
             return (
               <TouchableOpacity
@@ -261,10 +270,13 @@ export default function CalendarScreen({ navigation }) {
                   {item.day}
                 </Text>
 
-                {/* Task dots */}
+                {/* Task dots + conflict indicator */}
                 {taskCount > 0 && (
                   <View style={styles.dotRow}>
-                    {taskCount >= 1 && (
+                    {dateHasConflict && (
+                      <View style={[styles.dot, { backgroundColor: '#ef4444', width: 6, height: 6, borderRadius: 3 }]} />
+                    )}
+                    {taskCount >= 1 && !dateHasConflict && (
                       <View style={[
                         styles.dot,
                         { backgroundColor: highPriority ? '#ef4444' : '#a78bfa' },
@@ -274,6 +286,7 @@ export default function CalendarScreen({ navigation }) {
                     {taskCount >= 3 && <View style={[styles.dot, { backgroundColor: '#34d399' }]} />}
                   </View>
                 )}
+
               </TouchableOpacity>
             );
           })}
@@ -287,6 +300,16 @@ export default function CalendarScreen({ navigation }) {
               {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
             </Text>
           </View>
+
+          {/* Conflict banner for selected date */}
+          {hasConflictsOnDate(getDateKey(selectedDate)) && (
+            <View style={styles.conflictBanner}>
+              <Ionicons name="alert-circle" size={16} color="#ef4444" />
+              <Text style={styles.conflictBannerText}>
+                Scheduling conflicts detected on this day
+              </Text>
+            </View>
+          )}
 
           {selectedTasks.length === 0 ? (
             <View style={styles.emptyDay}>
@@ -528,6 +551,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   timeText: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
+    // Conflict banner
+  conflictBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.2)',
+  },
+  conflictBannerText: {
+    fontSize: 13,
+    color: '#f87171',
+    fontWeight: '600',
+    flex: 1,
+  },
 
   // Urgency banner
   urgencyBanner: {
