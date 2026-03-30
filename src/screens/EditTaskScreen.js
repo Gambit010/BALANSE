@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  Platform,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { updateTask } from '../services/taskService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { checkAndNotifyConflicts } from '../services/conflictService';
+import { useTaskConflicts } from '../hooks/useConflicts';
+import { useTasks } from '../hooks/useTasks';
+import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
 
 export default function EditTaskScreen({ route, navigation }) {
   const { task } = route.params;
@@ -29,6 +27,20 @@ export default function EditTaskScreen({ route, navigation }) {
   const [hasTime, setHasTime] = useState(task.deadline && task.deadline.includes('T'));
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  const { tasks: existingTasks } = useTasks();
+
+  // Build a temporary task object for live conflict checking
+  const pendingTask = useMemo(() => ({
+    id: task.id,
+    title: title.trim(),
+    category,
+    priority,
+    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+  }), [category, priority, deadline, hasTime]);
+
+  const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
+
+
 
   const progressOptions = [
     { value: 0, label: 'To Do' },
@@ -36,16 +48,7 @@ export default function EditTaskScreen({ route, navigation }) {
     { value: 100, label: 'Done' },
   ];
 
-  const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a task title');
-      return;
-    }
-    if (!description.trim()) {
-      Alert.alert('Error', 'Please enter a task description');
-      return;
-    }
-
+    const saveChanges = async () => {
     setIsLoading(true);
     try {
       const updatedData = {
@@ -58,7 +61,6 @@ export default function EditTaskScreen({ route, navigation }) {
         isCompleted: progress === 100,
       };
 
-      // Recompute priority score
       const score = computePriorityScore(updatedData);
       updatedData.priorityScore = score;
       updatedData.priorityLabel = getPriorityLabel(score);
@@ -66,6 +68,10 @@ export default function EditTaskScreen({ route, navigation }) {
       const success = await updateTask(task.id, updatedData);
 
       if (success) {
+        updatedData.id = task.id;
+        updatedData.userId = task.userId;
+        await checkAndNotifyConflicts(task.userId, updatedData, existingTasks);
+
         Alert.alert(
           'Task Updated',
           `"${title}" has been updated. Priority score: ${score}`,
@@ -80,6 +86,32 @@ export default function EditTaskScreen({ route, navigation }) {
       setIsLoading(false);
     }
   };
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a task title');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Error', 'Please enter a task description');
+      return;
+    }
+
+    if (hasHighConflicts) {
+      Alert.alert(
+        'Schedule Conflict Detected',
+        'This task overlaps with an existing schedule. Do you still want to save?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save Anyway', style: 'destructive', onPress: saveChanges },
+        ]
+      );
+      return;
+    }
+
+    await saveChanges();
+  };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -273,6 +305,9 @@ export default function EditTaskScreen({ route, navigation }) {
         <View style={styles.progressBarBg}>
           <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
         </View>
+
+                {/* CONFLICT ALERTS */}
+        <ConflictAlert conflicts={conflicts} />
 
         {/* SAVE BUTTON */}
         <TouchableOpacity
