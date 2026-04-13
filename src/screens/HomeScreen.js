@@ -13,10 +13,13 @@ import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown } from '../constants/scoring';
 import { useFocusEffect } from '@react-navigation/native';
+import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
   const [userName, setUserName] = useState('Student');
+  const [breakdownTask, setBreakdownTask] = useState(null);
+
 
   useFocusEffect(
     useCallback(() => {
@@ -165,16 +168,30 @@ export default function HomeScreen({ navigation }) {
                   </View>
 
                   <View style={styles.focusContent}>
-                    <View style={styles.focusTitleContainer}>
+                                       <View style={styles.focusTitleContainer}>
                       <Text style={styles.focusTaskTitle} numberOfLines={1}>
                         {task.title}
                       </Text>
-                      <View style={[styles.focusPrioBadge, { backgroundColor: `${prioColor}20` }]}>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          setBreakdownTask(task);
+                        }}
+                        style={[styles.focusPrioBadge, { backgroundColor: `${prioColor}20` }]}
+                        activeOpacity={0.6}
+                      >
                         <Text style={[styles.focusPrioText, { color: prioColor }]}>
                           {task.priorityLabel}
                         </Text>
-                      </View>
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={11}
+                          color={prioColor}
+                          style={{ marginLeft: 3 }}
+                        />
+                      </TouchableOpacity>
                     </View>
+
 
                     <View style={styles.focusTagsRow}>
                       <View style={[styles.focusCategoryTag, { backgroundColor: `${catColor}20` }]}>
@@ -802,6 +819,8 @@ export default function HomeScreen({ navigation }) {
     marginRight: 8,
   },
   focusPrioBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,

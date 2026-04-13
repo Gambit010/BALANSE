@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown } from '../constants/scoring';
+import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import { deleteTask, updateTaskProgress } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -20,7 +21,7 @@ export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
-  const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [breakdownTask, setBreakdownTask] = useState(null);
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
 
   // Refetch tasks when screen comes into focus
@@ -228,9 +229,6 @@ export default function TasksScreen({ navigation, route }) {
 
         {/* TASK LIST */}
         {filteredTasks.map((task) => {
-  const isExpanded = expandedTaskId === task.id;
-  const breakdown = isExpanded ? getPriorityBreakdown(task) : null;
-
   return (
     <TouchableOpacity
       key={task.id}
@@ -246,7 +244,7 @@ export default function TasksScreen({ navigation, route }) {
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation?.();
-            setExpandedTaskId(isExpanded ? null : task.id);
+            setBreakdownTask(task);
           }}
           style={[
             styles.priorityBadge,
@@ -259,36 +257,6 @@ export default function TasksScreen({ navigation, route }) {
           </Text>
         </TouchableOpacity>
       </View>
-
-      {/* Priority Score Breakdown (collapsible) */}
-      {isExpanded && breakdown && (
-        <View style={styles.breakdownContainer}>
-          <Text style={styles.breakdownTitle}>Priority Score Breakdown</Text>
-          {breakdown.factors.map((factor) => (
-            <View key={factor.label} style={styles.breakdownRow}>
-              <View style={styles.breakdownLabelRow}>
-                <Text style={styles.breakdownLabel}>{factor.label}</Text>
-                <Text style={styles.breakdownReason}>{factor.reason}</Text>
-              </View>
-              <View style={styles.breakdownBarBg}>
-                <View
-                  style={[
-                    styles.breakdownBarFill,
-                    { width: `${(factor.score / factor.maxScore) * 100}%` },
-                  ]}
-                />
-              </View>
-              <Text style={styles.breakdownScore}>
-                {factor.score}/{factor.maxScore}
-              </Text>
-            </View>
-          ))}
-          <View style={styles.breakdownTotalRow}>
-            <Text style={styles.breakdownTotalLabel}>Total</Text>
-            <Text style={styles.breakdownTotalScore}>{breakdown.total}/100</Text>
-          </View>
-        </View>
-      )}
 
       {/* Description */}
       {task.description ? (
@@ -362,6 +330,13 @@ export default function TasksScreen({ navigation, route }) {
 })}
 
       </ScrollView>
+
+      {/* Priority Breakdown Modal */}
+      <PriorityBreakdownModal
+        visible={!!breakdownTask}
+        task={breakdownTask}
+        onClose={() => setBreakdownTask(null)}
+      />
 
       {/* Floating Add Button */}
       <TouchableOpacity
