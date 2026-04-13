@@ -301,15 +301,32 @@ export default function CalendarScreen({ navigation }) {
             </Text>
           </View>
 
-          {/* Conflict banner for selected date */}
-          {hasConflictsOnDate(getDateKey(selectedDate)) && (
-            <View style={styles.conflictBanner}>
-              <Ionicons name="alert-circle" size={16} color="#ef4444" />
-              <Text style={styles.conflictBannerText}>
-                Scheduling conflicts detected on this day
-              </Text>
-            </View>
-          )}
+                    {/* Conflict banner for selected date */}
+          {(() => {
+            const dateConflicts = getConflictsForDate(getDateKey(selectedDate));
+            if (dateConflicts.length === 0) return null;
+
+            const totalConflicts = dateConflicts.reduce(
+              (sum, entry) => sum + entry.conflicts.length,
+              0
+            );
+            const firstTaskTitle = dateConflicts[0]?.task?.title || 'a task';
+
+            return (
+              <View style={styles.conflictBanner}>
+                <Ionicons name="alert-circle" size={16} color="#ef4444" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.conflictBannerText}>
+                    {totalConflicts} conflict{totalConflicts !== 1 ? 's' : ''} on this day
+                  </Text>
+                  <Text style={styles.conflictBannerSubtext} numberOfLines={1}>
+                    Starting with "{firstTaskTitle}" — tap a task below to review
+                  </Text>
+                </View>
+              </View>
+            );
+          })()}
+
 
           {selectedTasks.length === 0 ? (
             <View style={styles.emptyDay}>
@@ -569,6 +586,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+    conflictBannerSubtext: {
+    fontSize: 11,
+    color: 'rgba(248,113,113,0.7)',
+    marginTop: 2,
+  },
+
 
   // Urgency banner
   urgencyBanner: {

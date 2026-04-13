@@ -73,3 +73,28 @@ export const getUnreadCount = async (userId) => {
     return 0;
   }
 };
+
+// Check if a notification with the same message already exists recently (24h window)
+export const hasRecentNotification = async (userId, message) => {
+  try {
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', userId),
+      where('message', '==', message)
+    );
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) return false;
+
+    // Check if any of the matches were created within the last 24 hours
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return snapshot.docs.some((doc) => {
+      const data = doc.data();
+      if (!data.createdAt || !data.createdAt.toMillis) return false;
+      return data.createdAt.toMillis() > dayAgo;
+    });
+  } catch (error) {
+    console.error('Error checking recent notifications:', error);
+    return false; // Fail open — don't block notification creation on error
+  }
+};
