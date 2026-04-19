@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform,
 } from 'react-native';
@@ -7,7 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { addTask } from '../services/taskService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { checkAndNotifyConflicts } from '../services/conflictService';
+import { useTaskConflicts } from '../hooks/useConflicts';
+import { useTasks } from '../hooks/useTasks';
+import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
 
 export default function AddTaskScreen({ navigation }) {
   const [title, setTitle] = useState('');
@@ -17,11 +22,24 @@ export default function AddTaskScreen({ navigation }) {
   const [deadline, setDeadline] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [hasTime, setHasTime] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!title.trim()) { Alert.alert('Error', 'Please enter a task title'); return; }
-    if (!description.trim()) { Alert.alert('Error', 'Please enter a task description'); return; }
+  const { tasks: existingTasks } = useTasks();
 
+  // Build a temporary task object for live conflict checking
+  const pendingTask = useMemo(() => ({
+    title: title.trim(),
+    category,
+    priority,
+    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+  }), [category, priority, deadline, hasTime]);
+
+  const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
+
+
+
+    const saveTask = async () => {
     setIsLoading(true);
     try {
       const currentUser = auth.currentUser;
@@ -31,7 +49,7 @@ export default function AddTaskScreen({ navigation }) {
         description: description.trim(),
         category: category,
         priority: priority,
-        deadline: deadline.toISOString().split('T')[0],
+        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
         priorityScore: 0,
         assignments: [],
       };
@@ -41,6 +59,10 @@ export default function AddTaskScreen({ navigation }) {
 
       const taskId = await addTask(taskData);
       if (taskId) {
+        // Check conflicts and create notifications for high-severity ones
+        taskData.id = taskId;
+        await checkAndNotifyConflicts(currentUser.uid, taskData, existingTasks);
+
         Alert.alert('Task Added', `"${title}" has been added with a priority score of ${score}`,
           [{ text: 'OK', onPress: () => navigation.goBack() }]);
       } else {
@@ -51,7 +73,28 @@ export default function AddTaskScreen({ navigation }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) { Alert.alert('Error', 'Please enter a task title'); return; }
+    if (!description.trim()) { Alert.alert('Error', 'Please enter a task description'); return; }
+
+    // Warn user about high-severity conflicts before saving
+    if (hasHighConflicts) {
+      Alert.alert(
+        'Schedule Conflict Detected',
+        'This task overlaps with an existing schedule. Do you still want to add it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Add Anyway', style: 'destructive', onPress: saveTask },
+        ]
+      );
+      return;
+    }
+
+    await saveTask();
   }
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -108,6 +151,7 @@ export default function AddTaskScreen({ navigation }) {
             {deadline.toLocaleDateString('en-US', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
             })}
+            {hasTime ? ` at ${deadline.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
           </Text>
           <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
         </TouchableOpacity>
@@ -121,6 +165,53 @@ export default function AddTaskScreen({ navigation }) {
               if (selectedDate) setDeadline(selectedDate);
             }} />
         )}
+
+        {/* TIME TOGGLE */}
+        <TouchableOpacity
+          style={styles.timeToggleRow}
+          onPress={() => setHasTime(!hasTime)}
+        >
+          <View style={styles.timeToggleLeft}>
+            <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.timeToggleText}>Set specific time</Text>
+          </View>
+          <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
+            <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
+          </View>
+        </TouchableOpacity>
+
+        {/* TIME DISPLAY & PICKER */}
+        {hasTime && (
+          <TouchableOpacity
+            style={styles.timeRow}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Ionicons name="time-outline" size={18} color="#a78bfa" />
+            <Text style={styles.timeText}>
+              {deadline.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </Text>
+            <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+        )}
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={deadline}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(event, selectedDate) => {
+              setShowTimePicker(false);
+              if (selectedDate) setDeadline(selectedDate);
+            }}
+          />
+        )}
+
+                {/* CONFLICT ALERTS */}
+        <ConflictAlert conflicts={conflicts} />
 
         <TouchableOpacity
           style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
@@ -151,4 +242,15 @@ const styles = StyleSheet.create({
   submitButton: { backgroundColor: '#7c3aed', paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+
+  timeToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  timeToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeToggleText: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
+  toggleTrack: { width: 44, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', paddingHorizontal: 2 },
+  toggleTrackActive: { backgroundColor: 'rgba(167,139,250,0.4)' },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)' },
+  toggleThumbActive: { backgroundColor: '#a78bfa', alignSelf: 'flex-end' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 28, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
+  timeText: { color: '#a78bfa', fontSize: 16, fontWeight: '600', flex: 1 },
+
 });

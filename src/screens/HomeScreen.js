@@ -6,19 +6,20 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
+import { getPriorityBreakdown } from '../constants/scoring';
 import { useFocusEffect } from '@react-navigation/native';
-import { CommonActions } from '@react-navigation/native';
-
+import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
   const [userName, setUserName] = useState('Student');
+  const [breakdownTask, setBreakdownTask] = useState(null);
+
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +52,47 @@ export default function HomeScreen({ navigation }) {
   const overallProgress = totalTasks > 0
     ? Math.round((completedTasks / totalTasks) * 100)
     : 0;
+
+      // Today's Focus — top 5 incomplete tasks, auto-selected by the priority engine
+  const todaysFocus = tasks
+    .filter(task => task.progress < 100)
+    .slice(0, 5);
+
+  const getDaysUntilDeadline = (deadline) => {
+    const now = new Date();
+    const dl = new Date(deadline);
+    now.setHours(0, 0, 0, 0);
+    dl.setHours(0, 0, 0, 0);
+    return Math.ceil((dl - now) / (1000 * 60 * 60 * 24));
+  };
+
+  const getDeadlineUrgency = (deadline) => {
+    const days = getDaysUntilDeadline(deadline);
+    if (days < 0) return { text: `${Math.abs(days)}d overdue`, color: '#f87171' };
+    if (days === 0) return { text: 'Due today', color: '#f87171' };
+    if (days === 1) return { text: 'Due tomorrow', color: '#fbbf24' };
+    if (days <= 3) return { text: `${days} days left`, color: '#fbbf24' };
+    return { text: `${days} days left`, color: 'rgba(255,255,255,0.4)' };
+  };
+
+  const getCategoryColor = (category) => {
+    switch (category) {
+      case 'Academic': return '#3b5bdb';
+      case 'Organization': return '#9c36b5';
+      case 'Personal': return '#0ca678';
+      default: return '#a78bfa';
+    }
+  };
+
+  const getPriorityColor = (label) => {
+    switch (label) {
+      case 'High': return '#ef4444';
+      case 'Medium': return '#fb923c';
+      case 'Low': return '#34d399';
+      default: return '#a78bfa';
+    }
+  };
+
   
 
     if (loading) {
@@ -95,6 +137,104 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
+                {/* TODAY'S FOCUS */}
+        {todaysFocus.length > 0 && (
+          <View style={styles.focusSection}>
+            <View style={styles.focusSectionHeader}>
+              <View style={styles.focusTitleRow}>
+                <Ionicons name="flash" size={20} color="#fbbf24" />
+                <Text style={styles.focusSectionTitle}>Today's Focus</Text>
+              </View>
+              <Text style={styles.focusSubtitle}>
+                {todaysFocus.length} task{todaysFocus.length !== 1 ? 's' : ''} to focus on
+              </Text>
+            </View>
+
+            {todaysFocus.map((task, index) => {
+              const urgency = getDeadlineUrgency(task.deadline);
+              const catColor = getCategoryColor(task.category);
+              const prioColor = getPriorityColor(task.priorityLabel);
+              const breakdown = getPriorityBreakdown(task);
+
+              return (
+                <TouchableOpacity
+                  key={task.id}
+                  style={styles.focusCard}
+                  onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.focusRank}>
+                    <Text style={styles.focusRankText}>{index + 1}</Text>
+                  </View>
+
+                  <View style={styles.focusContent}>
+                                       <View style={styles.focusTitleContainer}>
+                      <Text style={styles.focusTaskTitle} numberOfLines={1}>
+                        {task.title}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          setBreakdownTask(task);
+                        }}
+                        style={[styles.focusPrioBadge, { backgroundColor: `${prioColor}20` }]}
+                        activeOpacity={0.6}
+                      >
+                        <Text style={[styles.focusPrioText, { color: prioColor }]}>
+                          {task.priorityLabel}
+                        </Text>
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={11}
+                          color={prioColor}
+                          style={{ marginLeft: 3 }}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+
+                    <View style={styles.focusTagsRow}>
+                      <View style={[styles.focusCategoryTag, { backgroundColor: `${catColor}20` }]}>
+                        <View style={[styles.focusCategoryDot, { backgroundColor: catColor }]} />
+                        <Text style={[styles.focusCategoryText, { color: catColor }]}>
+                          {task.category}
+                        </Text>
+                      </View>
+                      <View style={styles.focusDeadlineTag}>
+                        <Ionicons name="time-outline" size={11} color={urgency.color} />
+                        <Text style={[styles.focusDeadlineText, { color: urgency.color }]}>
+                            {urgency.text}
+                            {task.deadline && task.deadline.includes('T')
+                            ? ` at ${new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+                            : ''}
+                        </Text>
+                      </View>
+
+
+                    </View>
+
+                    <Text style={styles.focusReason}>
+                      {breakdown.factors
+                        .sort((a, b) => b.score - a.score)
+                        .slice(0, 2)
+                        .map(f => `${f.label}: ${f.reason} (${f.score}pts)`)
+                        .join('  ·  ')}
+                    </Text>
+
+                    <View style={styles.focusProgressRow}>
+                      <View style={styles.focusProgressBg}>
+                        <View style={[styles.focusProgressFill, { width: `${task.progress}%` }]} />
+                      </View>
+                      <Text style={styles.focusProgressText}>{task.progress}%</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+
          {/* OVERALL PROGRESS CARD */}
         <View style={styles.progressCard}>
           <View style={styles.progressHeader}>
@@ -137,7 +277,8 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Academic */}
-        <TouchableOpacity style={styles.categoryCard}>
+        <TouchableOpacity style={styles.categoryCard}
+        onPress={() => navigation.navigate('Tasks', { filterCategory: 'Academic' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#3b5bdb' }]}>
             <Ionicons name="book-outline" size={20} color="#ffffff" />
           </View>
@@ -153,7 +294,8 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Organization */}
-        <TouchableOpacity style={styles.categoryCard}>
+        <TouchableOpacity style={styles.categoryCard}
+        onPress={() => navigation.navigate('Tasks', { filterCategory: 'Organization' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#9c36b5' }]}>
             <Ionicons name="people-outline" size={20} color="#ffffff" />
           </View>
@@ -169,7 +311,8 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Personal */}
-        <TouchableOpacity style={styles.categoryCard}>
+        <TouchableOpacity style={styles.categoryCard}
+        onPress={() => navigation.navigate('Tasks', { filterCategory: 'Personal' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#0ca678' }]}>
             <Ionicons name="heart-outline" size={20} color="#ffffff" />
           </View>
@@ -223,7 +366,7 @@ export default function HomeScreen({ navigation }) {
                   task.priority === 'Medium' && styles.priorityMedium,
                   task.priority === 'Low' && styles.priorityLow,
                 ]}>
-                  <Text style={styles.priorityText}>{task.priorityLabel}</Text>
+                  <Text style={styles.priorityText}>{task.priorityLabel} ({task.priorityScore})</Text>
                 </View>
               </View>
 
@@ -253,7 +396,10 @@ export default function HomeScreen({ navigation }) {
                     </View>
                   ))}
                 </View>
-                <Text style={styles.taskProgressText}>{task.progress}%</Text>
+                <Text style={styles.taskProgressText}>
+                      {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
+                </Text>
+
               </View>
 
             </View>
@@ -607,4 +753,142 @@ export default function HomeScreen({ navigation }) {
     fontSize: 14,
     fontWeight: '600',
   },
+
+    // Today's Focus styles
+  focusSection: {
+    marginBottom: 24,
+  },
+  focusSectionHeader: {
+    marginBottom: 14,
+  },
+  focusTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  focusSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  focusSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 4,
+    marginLeft: 28,
+  },
+  focusCard: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a3e',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.15)',
+    alignItems: 'flex-start',
+  },
+  focusRank: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  focusRankText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#a78bfa',
+  },
+  focusContent: {
+    flex: 1,
+  },
+  focusTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  focusTaskTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    flex: 1,
+    marginRight: 8,
+  },
+  focusPrioBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  focusPrioText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  focusTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  focusCategoryTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 5,
+  },
+  focusCategoryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  focusCategoryText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  focusDeadlineTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  focusDeadlineText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  focusReason: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  focusProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  focusProgressBg: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 2,
+  },
+  focusProgressFill: {
+    height: 4,
+    backgroundColor: '#a78bfa',
+    borderRadius: 2,
+  },
+  focusProgressText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.4)',
+    width: 30,
+    textAlign: 'right',
+  },
+
 });

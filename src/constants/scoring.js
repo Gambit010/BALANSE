@@ -52,5 +52,32 @@ export const getPriorityLabel = (score) => {
   return 'Low';
 };
 
+// Returns a detailed breakdown of how the score was computed
+export const getPriorityBreakdown = (task) => {
+  const A = getDeadlineScore(task.deadline);
+  const B = getPriorityScore(task.priority);
+  const C = getCategoryScore(task.category);
+  const total = Math.min(A + B + C, 100);
+
+  // Human-readable deadline proximity label
+  const today = new Date();
+  const deadlineDate = new Date(task.deadline);
+  const daysUntil = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
+  let deadlineReason;
+  if (daysUntil <= 0) deadlineReason = 'Overdue / Due today';
+  else if (daysUntil <= 2) deadlineReason = `Due in ${daysUntil} day${daysUntil > 1 ? 's' : ''}`;
+  else if (daysUntil <= 5) deadlineReason = `Due in ${daysUntil} days`;
+  else deadlineReason = `Due in ${daysUntil} days`;
+
+  return {
+    total,
+    factors: [
+      { label: 'Deadline', score: A, maxScore: 40, reason: deadlineReason },
+      { label: 'Priority', score: B, maxScore: 40, reason: `${task.priority} priority` },
+      { label: 'Category', score: C, maxScore: 20, reason: `${task.category}` },
+    ],
+  };
+};
+
 
 

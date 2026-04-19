@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  Platform,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { updateTask } from '../services/taskService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { checkAndNotifyConflicts } from '../services/conflictService';
+import { useTaskConflicts } from '../hooks/useConflicts';
+import { useTasks } from '../hooks/useTasks';
+import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
 
 export default function EditTaskScreen({ route, navigation }) {
   const { task } = route.params;
@@ -26,19 +24,31 @@ export default function EditTaskScreen({ route, navigation }) {
   const [progress, setProgress] = useState(task.progress || 0);
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [hasTime, setHasTime] = useState(task.deadline && task.deadline.includes('T'));
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const progressOptions = [0, 25, 50, 75, 100];
+  const { tasks: existingTasks } = useTasks();
 
-  const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert('Error', 'Please enter a task title');
-      return;
-    }
-    if (!description.trim()) {
-      Alert.alert('Error', 'Please enter a task description');
-      return;
-    }
+  // Build a temporary task object for live conflict checking
+  const pendingTask = useMemo(() => ({
+    id: task.id,
+    title: title.trim(),
+    category,
+    priority,
+    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+  }), [category, priority, deadline, hasTime]);
 
+  const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
+
+
+
+  const progressOptions = [
+    { value: 0, label: 'To Do' },
+    { value: 50, label: 'In Progress' },
+    { value: 100, label: 'Done' },
+  ];
+
+    const saveChanges = async () => {
     setIsLoading(true);
     try {
       const updatedData = {
@@ -46,12 +56,11 @@ export default function EditTaskScreen({ route, navigation }) {
         description: description.trim(),
         category,
         priority,
-        deadline: deadline.toISOString().split('T')[0],
+        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
         progress,
         isCompleted: progress === 100,
       };
 
-      // Recompute priority score
       const score = computePriorityScore(updatedData);
       updatedData.priorityScore = score;
       updatedData.priorityLabel = getPriorityLabel(score);
@@ -59,6 +68,10 @@ export default function EditTaskScreen({ route, navigation }) {
       const success = await updateTask(task.id, updatedData);
 
       if (success) {
+        updatedData.id = task.id;
+        updatedData.userId = task.userId;
+        await checkAndNotifyConflicts(task.userId, updatedData, existingTasks);
+
         Alert.alert(
           'Task Updated',
           `"${title}" has been updated. Priority score: ${score}`,
@@ -73,6 +86,32 @@ export default function EditTaskScreen({ route, navigation }) {
       setIsLoading(false);
     }
   };
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a task title');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Error', 'Please enter a task description');
+      return;
+    }
+
+    if (hasHighConflicts) {
+      Alert.alert(
+        'Schedule Conflict Detected',
+        'This task overlaps with an existing schedule. Do you still want to save?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save Anyway', style: 'destructive', onPress: saveChanges },
+        ]
+      );
+      return;
+    }
+
+    await saveChanges();
+  };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -177,11 +216,12 @@ export default function EditTaskScreen({ route, navigation }) {
               month: 'long',
               day: 'numeric',
             })}
+            {hasTime ? ` at ${deadline.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
           </Text>
           <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
         </TouchableOpacity>
 
-        {showDatePicker && (
+                {showDatePicker && (
           <DateTimePicker
             value={deadline}
             mode="date"
@@ -195,32 +235,79 @@ export default function EditTaskScreen({ route, navigation }) {
           />
         )}
 
-        {/* PROGRESS SELECTOR */}
-        <Text style={styles.label}>Progress</Text>
+        {/* TIME TOGGLE */}
+        <TouchableOpacity
+          style={styles.timeToggleRow}
+          onPress={() => setHasTime(!hasTime)}
+        >
+          <View style={styles.timeToggleLeft}>
+            <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.timeToggleText}>Set specific time</Text>
+          </View>
+          <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
+            <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
+          </View>
+        </TouchableOpacity>
+
+        {hasTime && (
+          <TouchableOpacity
+            style={styles.timeRow}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Ionicons name="time-outline" size={18} color="#a78bfa" />
+            <Text style={styles.timeText}>
+              {deadline.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </Text>
+            <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+        )}
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={deadline}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(event, selectedDate) => {
+              setShowTimePicker(false);
+              if (selectedDate) setDeadline(selectedDate);
+            }}
+          />
+        )}
+
+                {/* STATUS SELECTOR */}
+        <Text style={styles.label}>Status</Text>
         <View style={styles.progressRow}>
-          {progressOptions.map((val) => (
+          {progressOptions.map((opt) => (
             <TouchableOpacity
-              key={val}
+              key={opt.value}
               style={[
                 styles.progressChip,
-                progress === val && styles.progressChipActive,
+                progress === opt.value && styles.progressChipActive,
               ]}
-              onPress={() => setProgress(val)}
+              onPress={() => setProgress(opt.value)}
             >
               <Text style={[
                 styles.progressChipText,
-                progress === val && styles.progressChipTextActive,
+                progress === opt.value && styles.progressChipTextActive,
               ]}>
-                {val}%
+                {opt.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
+
         {/* Progress Bar Preview */}
         <View style={styles.progressBarBg}>
           <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
         </View>
+
+                {/* CONFLICT ALERTS */}
+        <ConflictAlert conflicts={conflicts} />
 
         {/* SAVE BUTTON */}
         <TouchableOpacity
@@ -383,4 +470,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+
+  timeToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  timeToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeToggleText: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
+  toggleTrack: { width: 44, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', paddingHorizontal: 2 },
+  toggleTrackActive: { backgroundColor: 'rgba(167,139,250,0.4)' },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)' },
+  toggleThumbActive: { backgroundColor: '#a78bfa', alignSelf: 'flex-end' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 28, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
+  timeText: { color: '#a78bfa', fontSize: 16, fontWeight: '600', flex: 1 },
+
 });
