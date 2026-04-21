@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SignupScreen({ navigation }) {
   const [firstName, setFirstName] = useState('');
@@ -95,7 +96,8 @@ export default function SignupScreen({ navigation }) {
 
       Alert.alert(
         'Account Created',
-        `Welcome, ${firstName}! A verification email has been sent to ${email}. Please verify your email before logging in`,
+        `Welcome, ${firstName}!`,
+        //`Welcome, ${firstName}! A verification email has been sent to ${email}. Please verify your email before logging in`,
         [{ text: 'Go to Login', onPress: () => {}}]
       );
 
@@ -192,7 +194,12 @@ export default function SignupScreen({ navigation }) {
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>
+                <Ionicons
+                  name={showPassword ? 'eye' : 'eye-off'}
+                  size={20}
+                  color="rgba(255, 255, 255, 0.7)"
+                />
+                {/*<Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>*/}
               </TouchableOpacity>
             </View>
 

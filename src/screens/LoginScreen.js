@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -118,7 +119,12 @@ export default function LoginScreen({ navigation }) {
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>
+                {/*<Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>*/}
+                 <Ionicons
+                    name={showPassword ? 'eye' : 'eye-off'}
+                    size={20}
+                    color="rgba(255, 255, 255, 0.7)"
+                  />
               </TouchableOpacity>
             </View>
 
