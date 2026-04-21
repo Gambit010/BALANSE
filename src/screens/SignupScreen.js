@@ -12,11 +12,13 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
 
 export default function SignupScreen({ navigation }) {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,15 +35,25 @@ export default function SignupScreen({ navigation }) {
   }, []);
 
   const handleSignup = async () => {
-    if (!fullName || !email || !password) {
+    if (!firstName || !lastName || !email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    // Full name validation
+    // Name validation: only letters and spaces should be allowed
     const nameRegex = /^[a-zA-Z\s]+$/;
-    if (!nameRegex.test(fullName)) {
-      Alert.alert('Error', 'Full name should only contain letters');
+    if (!nameRegex.test(firstName)) {
+      Alert.alert('Error', 'First name should only contain letters');
+      return;
+    }
+
+    if (!nameRegex.test(lastName)) {
+      Alert.alert('Error', 'Last name should only contain letters');
+      return;
+    }
+
+    if (middleName && !nameRegex.test(middleName)) {
+      Alert.alert('Error', 'Middle name should only contain letters');
       return;
     }
 
@@ -65,19 +77,38 @@ export default function SignupScreen({ navigation }) {
       return;
     }
 
+    const fullName = middleName
+    ? `${firstName} ${middleName} ${lastName}`
+    : `${firstName} ${lastName}`;
+
     setIsLoading(true);
-    try {
+      try {
       // await createUserWithEmailAndPassword(auth, email, password);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, {
         displayName: fullName,
       });
+
+      await sendEmailVerification(userCredential.user);
+
+      await auth.signOut();
+
+      Alert.alert(
+        'Account Created',
+        `Welcome, ${firstName}! A verification email has been sent to ${email}. Please verify your email before logging in`,
+        [{ text: 'Go to Login', onPress: () => {}}]
+      );
+
     } catch (error) {
-      Alert.alert('Signup Failed', error.message);
+      let message = 'Something went wrong. Please try again';
+      if (error.code === 'auth/email-already-in-use') message = 'This email is registered';
+      if (error.code === 'auth/invalid-email') message = 'Please enter a valid email address';
+      Alert.alert('Signup Failed', message);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <LinearGradient
@@ -99,15 +130,39 @@ export default function SignupScreen({ navigation }) {
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <Text style={styles.cardTitle}>Create Account</Text>
 
-            {/* Full Name */}
-            <Text style={styles.label}>Full Name</Text>
+            {/* First Name */}
+            <Text style={styles.label}>First Name <Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your name"
+                placeholder="Enter your first name"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={fullName}
-                onChangeText={setFullName}
+                value={firstName}
+                onChangeText={setFirstName}
+              />
+            </View>
+
+            {/* Middle Name */}
+            <Text style={styles.label}>Middle Name <Text style={styles.optional}>(Optional)</Text></Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your middle name"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={middleName}
+                onChangeText={setMiddleName}
+              />
+            </View>
+
+            {/* Last Name */}
+            <Text style={styles.label}>Last Name <Text style={styles.required}>*</Text></Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your last name"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={lastName}
+                onChangeText={setLastName}
               />
             </View>
 
@@ -126,7 +181,7 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Password */}
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>Password<Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
@@ -232,6 +287,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+
+  required:{
+    color: '#f87171',
+    textTransform: 'none',
+  },
+  optional:{
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: '400',
+    textTransform: 'none',
+    fontSize: 11,
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -253,6 +319,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#ffffff',
     fontWeight: '500',
+  },
+  showText: {
+    fontSize: 16,
+    opacity: 0.7,
   },
   createButton: {
     backgroundColor: '#ffffff',

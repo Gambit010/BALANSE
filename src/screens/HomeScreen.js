@@ -20,7 +20,6 @@ export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
 
-
   useFocusEffect(
     useCallback(() => {
       refetch();
