@@ -407,12 +407,16 @@ export default function HomeScreen({ navigation }) {
         )}
           
             </ScrollView>
+
+      <PriorityBreakdownModal
+        visible={!!breakdownTask}
+        task={breakdownTask}
+        onClose={() => setBreakdownTask(null)}
+      />
+
       <TouchableOpacity
         style={styles.addButton}
-        
         onPress={() => navigation.getParent()?.navigate('AddTask')}
-
-
       >
         <Ionicons name="add" size={28} color="#ffffff" />
       </TouchableOpacity>
