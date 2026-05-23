@@ -11,15 +11,15 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 
 // Get all tasks for the current user
 export const getUserTasks = async (userId) => {
   try {
     const q = query(
-
-  collection(db, 'tasks'),
-  where('userId', '==', userId)
-);
+      collection(db, 'tasks'),
+      where('userId', '==', userId)
+    );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -74,7 +74,6 @@ export const updateTask = async (taskId, taskData) => {
   }
 };
 
-
 // Delete a task
 export const deleteTask = async (taskId) => {
   try {
@@ -118,5 +117,85 @@ export const getWellnessHistory = async (userId) => {
   } catch (error) {
     console.error('Error fetching wellness history:', error);
     return [];
+  }
+};
+
+// Add recurring tasks — generates one Firestore task per matching weekday
+export const addRecurringTask = async (templateData, selectedDays, endDate) => {
+  try {
+    const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const targetDays = selectedDays.map(d => dayMap[d]);
+
+    const current = new Date();
+    current.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    let count = 0;
+    const templateName = `${templateData.title.replace(/\s+/g, '_')}_${Date.now()}`;
+
+    while (current <= end) {
+      if (targetDays.includes(current.getDay())) {
+        const taskDate = new Date(current);
+
+        if (templateData.hasTime && templateData.taskTime) {
+          const t = new Date(templateData.taskTime);
+          taskDate.setHours(t.getHours(), t.getMinutes(), 0, 0);
+        }
+
+        const deadlineStr = templateData.hasTime
+          ? taskDate.toISOString()
+          : taskDate.toISOString().split('T')[0];
+
+        const taskDoc = {
+          userId: templateData.userId,
+          title: templateData.title,
+          description: templateData.description,
+          category: templateData.category,
+          priority: templateData.priority,
+          deadline: deadlineStr,
+          assignments: [],
+          createdAt: serverTimestamp(),
+          isCompleted: false,
+          progress: 0,
+          recurrence: {
+            templateName,
+            frequency: 'weekly',
+            days: selectedDays,
+            instanceDate: taskDate.toISOString().split('T')[0],
+          },
+        };
+
+        const score = computePriorityScore(taskDoc);
+        taskDoc.priorityScore = score;
+        taskDoc.priorityLabel = getPriorityLabel(score);
+
+        await addDoc(collection(db, 'tasks'), taskDoc);
+        count++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    return count;
+  } catch (error) {
+    console.error('Error adding recurring tasks:', error);
+    return 0;
+  }
+};
+
+// Delete all tasks belonging to a recurring template
+export const deleteRecurringTasks = async (templateName) => {
+  try {
+    const q = query(
+      collection(db, 'tasks'),
+      where('recurrence.templateName', '==', templateName)
+    );
+    const snapshot = await getDocs(q);
+    const deletes = snapshot.docs.map(d => deleteDoc(doc(db, 'tasks', d.id)));
+    await Promise.all(deletes);
+    return snapshot.size;
+  } catch (error) {
+    console.error('Error deleting recurring tasks:', error);
+    return 0;
   }
 };
