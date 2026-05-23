@@ -137,6 +137,24 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
+        {/* QUICK ACTIONS */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.getParent()?.navigate('AddTask')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#a78bfa" />
+            <Text style={styles.quickActionText}>Add Task</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.getParent()?.navigate('AddClass')}
+          >
+            <Ionicons name="repeat-outline" size={18} color="#a78bfa" />
+            <Text style={styles.quickActionText}>Add Class Schedule</Text>
+          </TouchableOpacity>
+        </View>
+
                 {/* TODAY'S FOCUS */}
         {todaysFocus.length > 0 && (
           <View style={styles.focusSection}>
@@ -893,6 +911,28 @@ export default function HomeScreen({ navigation }) {
     color: 'rgba(255,255,255,0.4)',
     width: 30,
     textAlign: 'right',
+  },
+    quickActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(167,139,250,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.25)',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  quickActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#a78bfa',
   },
 
 });
