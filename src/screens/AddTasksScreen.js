@@ -421,7 +421,7 @@ export default function AddTaskScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f0f23' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 40, maxWidth: 600, alignSelf: 'center', width: '100%' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20, marginBottom: 28 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   unitChipText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
   unitChipTextActive: { color: '#ffffff', fontWeight: '700' },
 
-  // Repeat — session preview
+  // Repeat — session previewr
   sessionPreview: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: 'rgba(167,139,250,0.08)', borderRadius: 10,

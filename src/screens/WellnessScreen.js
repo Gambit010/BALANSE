@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f0f23' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: 'rgba(255,255,255,0.5)', marginTop: 12, fontSize: 14 },
-  scroll: { paddingHorizontal: 20, paddingTop: 16 },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, maxWidth: 600, alignSelf: 'center', width: '100%' },
   header: { marginBottom: 20 },
   title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff' },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
