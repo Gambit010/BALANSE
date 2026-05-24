@@ -14,16 +14,27 @@ import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown } from '../constants/scoring';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
+import { getUnreadCount } from '../services/notificationService';
+import { useWellness } from '../hooks/useWellness';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
+  const { latestScore, latestStatus } = useWellness();
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
-
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       refetch();
+      const fetchUnread = async () => {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const count = await getUnreadCount(currentUser.uid);
+          setUnreadCount(count);
+        }
+      };
+      fetchUnread();
     }, [])
   );
 
@@ -48,6 +59,15 @@ export default function HomeScreen({ navigation }) {
   const dueTodayTasks = tasks.filter(task => 
     new Date(task.deadline).toDateString() === today
   ).length;
+
+  const overdueTasks = tasks.filter(task => {
+    if (task.progress === 100) return false;
+    const dl = new Date(task.deadline);
+    dl.setHours(0, 0, 0, 0);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return dl < now;
+  }).length;
 
   const overallProgress = totalTasks > 0
     ? Math.round((completedTasks / totalTasks) * 100)
@@ -127,6 +147,13 @@ export default function HomeScreen({ navigation }) {
               onPress={() => navigation.navigate('Notifications')}
             >
               <Ionicons name="notifications-outline" size={24} color="#ffffff" />
+              {unreadCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -136,6 +163,36 @@ export default function HomeScreen({ navigation }) {
 
           </View>
         </View>
+        
+        {/* WELLNESS BANNER */}
+        {latestStatus && latestStatus.level !== 'positive' && (
+          <TouchableOpacity
+            style={[
+              styles.wellnessBanner,
+              { borderColor: latestStatus.level === 'severe' ? 'rgba(248,113,113,0.3)' : 'rgba(251,191,36,0.3)' },
+              { backgroundColor: latestStatus.level === 'severe' ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.08)' },
+            ]}
+            onPress={() => navigation.navigate('Wellness')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.wellnessBannerIcon}>
+              <Ionicons
+                name={latestStatus.level === 'severe' ? 'alert-circle' : 'warning'}
+                size={20}
+                color={latestStatus.color}
+              />
+            </View>
+            <View style={styles.wellnessBannerContent}>
+              <Text style={[styles.wellnessBannerTitle, { color: latestStatus.color }]}>
+                {latestStatus.label}
+              </Text>
+              <Text style={styles.wellnessBannerText}>
+                Your well-being score is {latestScore.percentage}%. Tap to view recommendations.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+          </TouchableOpacity>
+        )}
 
         {/* QUICK ACTIONS */}
         <View style={styles.quickActionsRow}>
@@ -270,6 +327,17 @@ export default function HomeScreen({ navigation }) {
           </View>
 
           {/* Stats Row */}
+          {/* Overdue Banner */}
+          {overdueTasks > 0 && (
+            <View style={styles.overdueBanner}>
+              <Ionicons name="alert-circle" size={16} color="#f87171" />
+              <Text style={styles.overdueText}>
+                {overdueTasks} task{overdueTasks !== 1 ? 's' : ''} overdue
+              </Text>
+            </View>
+          )}
+
+          {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{highPriorityTasks}</Text>
@@ -303,12 +371,12 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryName}>Academic</Text>
             <Text style={styles.categoryCount}>
-              {tasks.filter(t => t.category === 'Academic').length} active tasks
+                      {tasks.filter(t => t.category === 'Academic' && t.progress < 100).length} active tasks
             </Text>
-          </View>
-          <Text style={styles.categoryNumber}>
-            {tasks.filter(t => t.category === 'Academic').length}
-          </Text>
+            </View>
+            <Text style={styles.categoryNumber}>
+                      {tasks.filter(t => t.category === 'Academic' && t.progress < 100).length}
+            </Text>
         </TouchableOpacity>
 
         {/* Organization */}
@@ -320,12 +388,12 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryName}>Organization</Text>
             <Text style={styles.categoryCount}>
-              {tasks.filter(t => t.category === 'Organization').length} active tasks
+                    {tasks.filter(t => t.category === 'Organization' && t.progress < 100).length} active tasks
             </Text>
-          </View>
-          <Text style={styles.categoryNumber}>
-            {tasks.filter(t => t.category === 'Organization').length}
-          </Text>
+            </View>
+            <Text style={styles.categoryNumber}>
+                     {tasks.filter(t => t.category === 'Organization' && t.progress < 100).length}
+            </Text>
         </TouchableOpacity>
 
         {/* Personal */}
@@ -337,11 +405,11 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryName}>Personal</Text>
             <Text style={styles.categoryCount}>
-              {tasks.filter(t => t.category === 'Personal').length} active tasks
+                    {tasks.filter(t => t.category === 'Personal' && t.progress < 100).length} active tasks
             </Text>
           </View>
           <Text style={styles.categoryNumber}>
-            {tasks.filter(t => t.category === 'Personal').length}
+                     {tasks.filter(t => t.category === 'Personal' && t.progress < 100).length}
           </Text>
         </TouchableOpacity>
 
@@ -936,6 +1004,71 @@ export default function HomeScreen({ navigation }) {
     fontSize: 13,
     fontWeight: '600',
     color: '#a78bfa',
+  },
+    overdueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(248,113,113,0.1)',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.2)',
+  },
+  overdueText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#f87171',
+  },
+    notifBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#0f0f23',
+  },
+  notifBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+    wellnessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  wellnessBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wellnessBannerContent: {
+    flex: 1,
+  },
+  wellnessBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  wellnessBannerText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    lineHeight: 16,
   },
 
 });
