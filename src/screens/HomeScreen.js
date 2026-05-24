@@ -449,9 +449,12 @@ export default function HomeScreen({ navigation }) {
   },
 
   // homescreen header attributes
-  scrollContent: {
-    paddingHorizontal: 20,
+  scrollContent: { 
+    paddingHorizontal: 20, 
     paddingBottom: 30,
+    maxWidth: 600, 
+    alignSelf: 'center', 
+    width: '100%' 
   },
   header: {
     flexDirection: 'row',

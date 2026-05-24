@@ -59,6 +59,8 @@ const useWellness = () => {
         return null;
     };
 
+    const [activeTaskCount, setActiveTaskCount] = useState(0);
+
     // Derived values the screen expects
     const latestScore = history.length > 0 ? history[0] : null;
     const latestStatus = latestScore ? getWellnessStatus(latestScore.percentage) : null;
@@ -66,8 +68,6 @@ const useWellness = () => {
     const interventions = latestScore
         ? getInterventions(latestScore.percentage, activeTaskCount)
         : [];
-
-    const [activeTaskCount, setActiveTaskCount] = useState(0);
 
     // Check if 14 days have passed since last assessment
     const canTakeAssessment = (() => {
