@@ -38,11 +38,27 @@ export default function ProfileScreen() {
     ? Math.round((completedTasks / tasks.length) * 100)
     : 0;
 
+    /*
   const handleLogout = async () => {
     try {
       await signOut(auth);
     } catch (error) {
       console.error(error);
+    }
+  };
+  */
+
+  const handleLogout = async () => {
+    try {
+      // Sign out from Google native session too
+      const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+      await GoogleSignin.signOut();
+    } catch (error) {
+      // Ignore Google sign out errors — user may not have signed in with Google
+      console.log('Google signout:', error);
+    } finally {
+      // Always sign out from Firebase
+      await signOut(auth);
     }
   };
 
