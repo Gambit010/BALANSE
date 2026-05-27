@@ -19,10 +19,11 @@ const Stack = createStackNavigator();
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialRoute, setInitialRoute] = useState('Landing');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
       setLoading(false);
     });
     return unsubscribe;
@@ -32,7 +33,10 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator 
+        screenOptions={{ headerShown: false }}
+        initialRouteName={initialRoute}
+      >
         {user ? (
           <>
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
