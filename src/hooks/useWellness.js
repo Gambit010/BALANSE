@@ -3,6 +3,7 @@ import { auth } from '../../firebase'
 import { saveWellnessScore, getWellnessHistory } from "../services/taskService";
 import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline } from "../constants/wellness";
 import { getUserTasks } from '../services/taskService';
+import { detectAllConflicts } from '../services/conflictService';
 
 
 const useWellness = () => {
@@ -14,8 +15,14 @@ const useWellness = () => {
     const fetchTaskCount = useCallback(async () => {
         if (!user) return;
         const tasks = await getUserTasks(user.uid);
-        const active = tasks.filter(t => t.progress < 100).length;
-        setActiveTaskCount(active);
+        const active = tasks.filter(t => t.progress < 100);
+        setActiveTaskCount(active.length);
+        const conflictMap = detectAllConflicts(active);
+        let total = 0;
+        conflictMap.forEach((entries) => {
+            entries.forEach((e) => { total += e.conflicts.length; });
+        });
+        setConflictCount(total);
     }, [user]);
 
     const fetchHistory = useCallback(async () => {
@@ -60,13 +67,14 @@ const useWellness = () => {
     };
 
     const [activeTaskCount, setActiveTaskCount] = useState(0);
+    const [conflictCount, setConflictCount] = useState(0);
 
     // Derived values the screen expects
     const latestScore = history.length > 0 ? history[0] : null;
     const latestStatus = latestScore ? getWellnessStatus(latestScore.percentage) : null;
     const decline = detectDecline(history);
     const interventions = latestScore
-        ? getInterventions(latestScore.percentage, activeTaskCount)
+        ? getInterventions(latestScore.percentage, activeTaskCount, conflictCount)
         : [];
 
     // Check if 14 days have passed since last assessment

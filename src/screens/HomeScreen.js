@@ -79,8 +79,10 @@ export default function HomeScreen({ navigation }) {
     .slice(0, 5);
 
   const getDaysUntilDeadline = (deadline) => {
+    if (!deadline) return null;
     const now = new Date();
     const dl = new Date(deadline);
+    if (isNaN(dl.getTime())) return null;
     now.setHours(0, 0, 0, 0);
     dl.setHours(0, 0, 0, 0);
     return Math.ceil((dl - now) / (1000 * 60 * 60 * 24));
@@ -88,6 +90,7 @@ export default function HomeScreen({ navigation }) {
 
   const getDeadlineUrgency = (deadline) => {
     const days = getDaysUntilDeadline(deadline);
+    if (days === null) return { text: 'No deadline', color: 'rgba(255,255,255,0.3)' };
     if (days < 0) return { text: `${Math.abs(days)}d overdue`, color: '#f87171' };
     if (days === 0) return { text: 'Due today', color: '#f87171' };
     if (days === 1) return { text: 'Due tomorrow', color: '#fbbf24' };
@@ -439,7 +442,12 @@ export default function HomeScreen({ navigation }) {
           </View>
         ) : (
           tasks.slice(0, 3).map((task) => (
-            <View key={task.id} style={styles.taskCard}>
+            <TouchableOpacity
+              key={task.id}
+              style={styles.taskCard}
+              onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+              activeOpacity={0.7}
+            >
               
               {/* Task Title and Priority Badge */}
               <View style={styles.taskTopRow}>
@@ -488,7 +496,7 @@ export default function HomeScreen({ navigation }) {
 
               </View>
 
-            </View>
+            </TouchableOpacity>
           ))
         )}
           

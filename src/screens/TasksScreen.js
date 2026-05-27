@@ -24,16 +24,21 @@ export default function TasksScreen({ navigation, route }) {
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
 
-  // Refetch tasks when screen comes into focus
+  
+  // Refetch tasks and sync filter when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [])
+      if (route.params?.filterCategory) {
+        setFilterType('category');
+        setActiveFilter(route.params.filterCategory);
+      }
+    }, [route.params?.filterCategory])
   );
 
   const categoryFilters = ['All', 'Academic', 'Organization', 'Personal'];
   const priorityFilters = ['All', 'High', 'Medium', 'Low'];
-  const statusFilters = ['All', 'To Do', 'In Progress', 'Completed'];
+    const statusFilters = ['All', 'To Do', 'In Progress', 'Done'];
 
   const getActiveFilters = () => {
     switch (filterType) {
@@ -59,7 +64,7 @@ export default function TasksScreen({ navigation, route }) {
       } else if (filterType === 'priority') {
         matchesFilter = task.priorityLabel === activeFilter;
       } else if (filterType === 'status') {
-        if (activeFilter === 'Completed') {
+        if (activeFilter === 'Done') {
           matchesFilter = task.progress === 100;
         } else if (activeFilter === 'In Progress') {
           matchesFilter = task.progress > 0 && task.progress < 100;
@@ -115,7 +120,7 @@ export default function TasksScreen({ navigation, route }) {
   };
 
   const getStatusLabel = (progress) => {
-    if (progress === 100) return 'Completed';
+    if (progress === 100) return 'Done';
     if (progress > 0) return 'In Progress';
     return 'To Do';
   };
@@ -354,9 +359,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f0f23',
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 30, 
+    maxWidth: 600, 
+    alignSelf: 'center',
+    width: '100%' 
   },
   loadingContainer: {
     flex: 1,
