@@ -97,9 +97,9 @@ export default function SignupScreen({ navigation }) {
 
       Alert.alert(
         'Account Created',
-        `Welcome, ${firstName}!`,
+        `Welcome, ${firstName}! Please log in to continue`,
         //`Welcome, ${firstName}! A verification email has been sent to ${email}. Please verify your email before logging in`,
-        [{ text: 'Go to Login', onPress: () => {}}]
+        [{ text: 'Go to Login', onPress: () => navigation.navigate('Login') }]
       );
 
     } catch (error) {
