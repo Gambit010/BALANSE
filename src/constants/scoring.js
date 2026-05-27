@@ -4,16 +4,18 @@
 
 // A — Deadline proximity (max 40 pts)
 const getDeadlineScore = (deadline) => {
+  if (!deadline) return 10;
   const today = new Date();
   const deadlineDate = new Date(deadline);
+  if (isNaN(deadlineDate.getTime())) return 10;
   const daysUntilDeadline = Math.ceil(
     (deadlineDate - today) / (1000 * 60 * 60 * 24)
   );
 
-  if (daysUntilDeadline <= 0) return 40;  // Overdue or due today
-  if (daysUntilDeadline <= 2) return 30;  // Due in 1-2 days
-  if (daysUntilDeadline <= 5) return 20;  // Due in 3-5 days
-  return 10;                               // Due in 6+ days
+  if (daysUntilDeadline <= 0) return 40;
+  if (daysUntilDeadline <= 2) return 30;
+  if (daysUntilDeadline <= 5) return 20;
+  return 10;
 };
 
 // B — User priority level (max 40 pts)
@@ -77,7 +79,11 @@ export const getPriorityBreakdown = (task) => {
       { label: 'Category', score: C, maxScore: 20, reason: `${task.category}` },
     ],
   };
+
 };
+
+
+
 
 
 

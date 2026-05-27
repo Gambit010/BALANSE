@@ -63,6 +63,21 @@ export default function NotificationScreen({ navigation }) {
     }
   };
 
+    const formatTimeAgo = (notif) => {
+    const date = notif.createdAt?.toDate?.() || null;
+    if (!date) return '';
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   if (loading) {
@@ -138,7 +153,10 @@ export default function NotificationScreen({ navigation }) {
               </View>
               <View style={styles.notifContent}>
                 <Text style={styles.notifMessage}>{notif.message}</Text>
-                <Text style={styles.notifType}>{notif.type}</Text>
+                <View style={styles.notifMeta}>
+                  <Text style={styles.notifType}>{notif.type}</Text>
+                  <Text style={styles.notifTime}>{formatTimeAgo(notif)}</Text>
+                </View>
               </View>
               {!notif.isRead && <View style={styles.unreadDot} />}
             </TouchableOpacity>
@@ -262,6 +280,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.4)',
     textTransform: 'capitalize',
+  },
+  notifMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notifTime: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.25)',
   },
   unreadDot: {
     width: 8,
