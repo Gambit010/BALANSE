@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
-import { handleGoogleSignIn } from '../services/authService'; //a
+//import { handleGoogleSignIn } from '../services/authService'; //a
 
 export default function SignupScreen({ navigation }) {
   const [firstName, setFirstName] = useState('');
@@ -222,21 +222,9 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Social Buttons */}
-            <TouchableOpacity // d
-               style={styles.socialButton}
-               onPress={async () => {
-                  try {
-                    const userCredential = await handleGoogleSignIn();
-
-                    Alert.alert(
-                      "Success",
-                      `Welcome ${userCredential.user.displayName || "User"}!`
-                    );
-                  } catch(error) {
-                    console.log("Google error: ", error);
-                    Alert.alert("Error", "Google sign-in failed");
-                  }
-               }}
+            <TouchableOpacity
+               style={[styles.socialButton, { opacity: 0.4 }]}
+               onPress={() => Alert.alert('Coming Soon', 'Google Sign-In will be available in a future update.')}
             >
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>

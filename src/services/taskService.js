@@ -96,7 +96,7 @@ export const saveWellnessScore = async (userId, scoreData) => {
     return docRef.id;
   }
   catch (error) {
-    console.error('Error saving welness score', error);
+    console.error('Error saving wellness score', error);
     return null;
   }
 };
@@ -196,6 +196,72 @@ export const deleteRecurringTasks = async (templateName) => {
     return snapshot.size;
   } catch (error) {
     console.error('Error deleting recurring tasks:', error);
+    return 0;
+  }
+};
+export const addClassSchedule = async (scheduleData) => {
+  try {
+    const dayMap = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 0 };
+    const targetDays = scheduleData.days.map(d => dayMap[d]);
+
+    const current = new Date();
+    current.setHours(0, 0, 0, 0);
+    const end = new Date(scheduleData.endDate);
+    end.setHours(23, 59, 59, 999);
+
+    let count = 0;
+    const templateName = `class_${scheduleData.className.replace(/\s+/g, '_')}_${Date.now()}`;
+
+    while (current <= end) {
+      if (targetDays.includes(current.getDay())) {
+        const dayName = Object.keys(dayMap).find(k => dayMap[k] === current.getDay());
+        const times = scheduleData.dayTimes[dayName];
+        if (!times) { current.setDate(current.getDate() + 1); continue; }
+
+        const taskDate = new Date(current);
+        taskDate.setHours(times.startHour, times.startMinute, 0, 0);
+
+        const endDate = new Date(current);
+        endDate.setHours(times.endHour, times.endMinute, 0, 0);
+
+        const startLabel = taskDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        const endLabel = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+        const taskDoc = {
+          userId: scheduleData.userId,
+          ownerEmail: scheduleData.ownerEmail,
+          ownerName: scheduleData.ownerName,
+          title: scheduleData.className,
+          description: `Class scheduled ${startLabel} - ${endLabel}`,
+          category: scheduleData.category,
+          priority: 'Medium',
+          deadline: taskDate.toISOString(),
+          assignments: [],
+          createdAt: serverTimestamp(),
+          isCompleted: false,
+          progress: 0,
+          recurrence: {
+            templateName,
+            frequency: 'weekly',
+            days: scheduleData.days,
+            instanceDate: taskDate.toISOString().split('T')[0],
+            isClassSchedule: true,
+          },
+        };
+
+        const score = computePriorityScore(taskDoc);
+        taskDoc.priorityScore = score;
+        taskDoc.priorityLabel = getPriorityLabel(score);
+
+        await addDoc(collection(db, 'tasks'), taskDoc);
+        count++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    return count;
+  } catch (error) {
+    console.error('Error adding class schedule:', error);
     return 0;
   }
 };

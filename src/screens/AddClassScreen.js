@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform,
 } from 'react-native';
@@ -6,7 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { addClassSchedule } from '../services/taskService';
+import { detectConflicts } from '../services/conflictService';
+import { createNotification } from '../services/notificationService';
+import { useTasks } from '../hooks/useTasks';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -18,6 +22,7 @@ const DURATION_PRESETS = [
 ];
 
 export default function AddClassScreen({ navigation }) {
+  const { tasks: existingTasks } = useTasks();
   const [className, setClassName] = useState('');
   const [selectedDays, setSelectedDays] = useState([]);
   const [startTime, setStartTime] = useState(() => {
@@ -30,10 +35,12 @@ export default function AddClassScreen({ navigation }) {
     d.setHours(10, 30, 0, 0);
     return d;
   });
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [category, setCategory] = useState('Academic');
   const [isLoading, setIsLoading] = useState(false);
+  // Per-day time overrides — e.g. { Monday: { start: Date, end: Date } }
+  const [dayTimeOverrides, setDayTimeOverrides] = useState({});
+  const [editingDay, setEditingDay] = useState(null);   // null | 'default' | 'Monday' etc.
+  const [editingField, setEditingField] = useState(null); // null | 'start' | 'end'
 
   // Duration state
   const [durationPreset, setDurationPreset] = useState(null);
@@ -42,9 +49,62 @@ export default function AddClassScreen({ navigation }) {
   const [showCustom, setShowCustom] = useState(false);
 
   const toggleDay = (day) => {
+    const removing = selectedDays.includes(day);
     setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      removing ? prev.filter((d) => d !== day) : [...prev, day]
     );
+    if (removing) {
+      setDayTimeOverrides((prev) => {
+        const next = { ...prev };
+        delete next[day];
+        return next;
+      });
+    }
+  };
+    const getDayTime = (day) => {
+    const override = dayTimeOverrides[day];
+    return {
+      start: override?.start || startTime,
+      end: override?.end || endTime,
+      isCustom: !!override,
+    };
+  };
+
+  const getPickerValue = () => {
+    if (editingDay === 'default') {
+      return editingField === 'start' ? startTime : endTime;
+    }
+    if (editingDay) {
+      const override = dayTimeOverrides[editingDay];
+      if (editingField === 'start') return override?.start || startTime;
+      return override?.end || endTime;
+    }
+    return startTime;
+  };
+
+  const handlePickerChange = (event, selectedDate) => {
+    if (!selectedDate) {
+      setEditingDay(null);
+      setEditingField(null);
+      return;
+    }
+
+    if (editingDay === 'default') {
+      if (editingField === 'start') setStartTime(selectedDate);
+      else setEndTime(selectedDate);
+    } else if (editingDay) {
+      setDayTimeOverrides((prev) => ({
+        ...prev,
+        [editingDay]: {
+          start: prev[editingDay]?.start || startTime,
+          end: prev[editingDay]?.end || endTime,
+          [editingField]: selectedDate,
+        },
+      }));
+    }
+
+    setEditingDay(null);
+    setEditingField(null);
   };
 
   const getDuration = () => {
@@ -67,7 +127,7 @@ export default function AddClassScreen({ navigation }) {
     return end;
   };
 
-  const countSessions = () => {
+    const countSessions = () => {
     const endDate = getEndDate();
     if (!endDate || selectedDays.length === 0) return 0;
 
@@ -81,6 +141,87 @@ export default function AddClassScreen({ navigation }) {
       cursor.setDate(cursor.getDate() + 1);
     }
     return count;
+  };
+
+  const buildSessionTasks = () => {
+    const endDate = getEndDate();
+    if (!endDate || selectedDays.length === 0) return [];
+
+    const sessions = [];
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+
+    while (cursor <= endDate) {
+      const dayName = WEEKDAYS[cursor.getDay() === 0 ? 6 : cursor.getDay() - 1];
+      if (selectedDays.includes(dayName)) {
+        const dt = getDayTime(dayName);
+        const taskDate = new Date(cursor);
+        taskDate.setHours(dt.start.getHours(), dt.start.getMinutes(), 0, 0);
+
+        sessions.push({
+          title: className.trim(),
+          category,
+          priority: 'Medium',
+          deadline: taskDate.toISOString(),
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return sessions;
+  };
+
+  const [conflictSummary, setConflictSummary] = useState({ total: 0, high: 0, sessions: 0 });
+
+  const saveSchedule = async () => {
+    setIsLoading(true);
+    try {
+      const currentUser = auth.currentUser;
+      const dur = getDuration();
+      const endDate = getEndDate();
+
+      const dayTimes = {};
+      for (const day of selectedDays) {
+        const dt = getDayTime(day);
+        dayTimes[day] = {
+          startHour: dt.start.getHours(),
+          startMinute: dt.start.getMinutes(),
+          endHour: dt.end.getHours(),
+          endMinute: dt.end.getMinutes(),
+        };
+      }
+
+      const scheduleData = {
+        userId: currentUser.uid,
+        ownerEmail: (currentUser.email || '').toLowerCase(),
+        ownerName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Someone',
+        className: className.trim(),
+        category,
+        days: selectedDays,
+        dayTimes,
+        endDate,
+        duration: { value: dur.value, unit: dur.unit },
+      };
+
+      const count = await addClassSchedule(scheduleData);
+
+      if (count > 0 && conflictSummary.total > 0) {
+        await createNotification(
+          currentUser.uid,
+          `"${className.trim()}" created with ${conflictSummary.total} scheduling conflict${conflictSummary.total > 1 ? 's' : ''} across ${count} sessions.`,
+          'conflict'
+        );
+      }
+
+      Alert.alert(
+        'Schedule Created',
+        `"${className.trim()}" has been added — ${count} sessions created across your calendar.`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -97,47 +238,53 @@ export default function AddClassScreen({ navigation }) {
       return;
     }
     if (startTime >= endTime) {
-      Alert.alert('Error', 'End time must be after start time');
+      Alert.alert('Error', 'Default end time must be after start time');
+      return;
+    }
+    for (const day of selectedDays) {
+      const override = dayTimeOverrides[day];
+      if (override && override.start >= override.end) {
+        Alert.alert('Error', `End time must be after start time for ${day}`);
+        return;
+      }
+    }
+
+    const sessions = buildSessionTasks();
+    let conflictSessionCount = 0;
+    let highConflictCount = 0;
+    let totalConflicts = 0;
+
+    for (const session of sessions) {
+      const conflicts = detectConflicts(session, existingTasks);
+      if (conflicts.length > 0) {
+        conflictSessionCount++;
+        totalConflicts += conflicts.length;
+        if (conflicts.some((c) => c.severity === 'high')) highConflictCount++;
+      }
+    }
+
+    setConflictSummary({ total: totalConflicts, high: highConflictCount, sessions: conflictSessionCount });
+
+    if (conflictSessionCount > 0) {
+      Alert.alert(
+        'Schedule Conflicts Detected',
+        `${conflictSessionCount} of ${sessions.length} sessions conflict with existing tasks${highConflictCount > 0 ? ` (${highConflictCount} direct time overlaps)` : ''}.\n\nCreate anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Create Anyway', style: 'destructive', onPress: saveSchedule },
+        ]
+      );
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const currentUser = auth.currentUser;
-      const dur = getDuration();
-      const endDate = getEndDate();
-
-      const scheduleData = {
-        userId: currentUser.uid,
-        ownerEmail: (currentUser.email || '').toLowerCase(),
-        ownerName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Someone',
-        className: className.trim(),
-        category,
-        days: selectedDays,
-        startHour: startTime.getHours(),
-        startMinute: startTime.getMinutes(),
-        endHour: endTime.getHours(),
-        endMinute: endTime.getMinutes(),
-        endDate,
-        duration: { value: dur.value, unit: dur.unit },
-      };
-
-      const count = await addClassSchedule(scheduleData);
-
-      Alert.alert(
-        'Schedule Created',
-        `"${className.trim()}" has been added — ${count} sessions created across your calendar.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setIsLoading(false);
-    }
+    await saveSchedule();
   };
 
-  const sessionCount = countSessions();
   const dur = getDuration();
+  const sessionCount = useMemo(() => {
+    if (!dur || selectedDays.length === 0) return 0;
+    return countSessions();
+  }, [selectedDays, durationPreset, customValue, customUnit, showCustom]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -197,10 +344,13 @@ export default function AddClassScreen({ navigation }) {
           })}
         </View>
 
-        {/* TIME RANGE */}
-        <Text style={styles.label}>Time</Text>
+        {/* DEFAULT TIME */}
+        <Text style={styles.label}>Default Time</Text>
         <View style={styles.timeRangeRow}>
-          <TouchableOpacity style={styles.timeBox} onPress={() => setShowStartPicker(true)}>
+          <TouchableOpacity
+            style={styles.timeBox}
+            onPress={() => { setEditingDay('default'); setEditingField('start'); }}
+          >
             <Ionicons name="time-outline" size={16} color="#a78bfa" />
             <Text style={styles.timeBoxText}>
               {startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
@@ -209,7 +359,10 @@ export default function AddClassScreen({ navigation }) {
 
           <Text style={styles.timeDash}>—</Text>
 
-          <TouchableOpacity style={styles.timeBox} onPress={() => setShowEndPicker(true)}>
+          <TouchableOpacity
+            style={styles.timeBox}
+            onPress={() => { setEditingDay('default'); setEditingField('end'); }}
+          >
             <Ionicons name="time-outline" size={16} color="#a78bfa" />
             <Text style={styles.timeBoxText}>
               {endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
@@ -217,26 +370,60 @@ export default function AddClassScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {showStartPicker && (
-          <DateTimePicker
-            value={startTime}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(e, d) => {
-              setShowStartPicker(false);
-              if (d) setStartTime(d);
-            }}
-          />
+        {/* PER-DAY SCHEDULE */}
+        {selectedDays.length > 0 && (
+          <>
+            <Text style={styles.label}>Per-Day Schedule</Text>
+            <Text style={styles.perDayHint}>Tap a time to customize that day</Text>
+            {selectedDays.map((day) => {
+              const dt = getDayTime(day);
+              return (
+                <View key={day} style={[styles.dayScheduleRow, dt.isCustom && styles.dayScheduleRowCustom]}>
+                  <Text style={styles.dayScheduleName}>{day}</Text>
+                  <View style={styles.dayScheduleTimes}>
+                    <TouchableOpacity
+                      onPress={() => { setEditingDay(day); setEditingField('start'); }}
+                    >
+                      <Text style={[styles.dayScheduleTime, dt.isCustom && styles.dayScheduleTimeCustom]}>
+                        {dt.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={styles.dayScheduleDash}>—</Text>
+                    <TouchableOpacity
+                      onPress={() => { setEditingDay(day); setEditingField('end'); }}
+                    >
+                      <Text style={[styles.dayScheduleTime, dt.isCustom && styles.dayScheduleTimeCustom]}>
+                        {dt.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </Text>
+                    </TouchableOpacity>
+                    {dt.isCustom && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setDayTimeOverrides((prev) => {
+                            const next = { ...prev };
+                            delete next[day];
+                            return next;
+                          });
+                        }}
+                        style={styles.resetButton}
+                      >
+                        <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.3)" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </>
         )}
-        {showEndPicker && (
+
+        {/* UNIFIED TIME PICKER */}
+        {editingDay !== null && (
           <DateTimePicker
-            value={endTime}
+            value={getPickerValue()}
             mode="time"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(e, d) => {
-              setShowEndPicker(false);
-              if (d) setEndTime(d);
-            }}
+            onChange={handlePickerChange}
           />
         )}
 
@@ -412,6 +599,61 @@ const styles = StyleSheet.create({
   unitChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
   unitChipText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
   unitChipTextActive: { color: '#ffffff', fontWeight: '700' },
+    perDayHint: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.3)',
+    marginBottom: 10,
+    marginTop: -4,
+  },
+  dayScheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1a1a3e',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  dayScheduleRowCustom: {
+    borderColor: 'rgba(167,139,250,0.25)',
+    backgroundColor: 'rgba(167,139,250,0.06)',
+  },
+  dayScheduleName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    width: 90,
+  },
+  dayScheduleTimes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dayScheduleTime: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  dayScheduleTimeCustom: {
+    color: '#a78bfa',
+    backgroundColor: 'rgba(167,139,250,0.12)',
+    fontWeight: '700',
+  },
+  dayScheduleDash: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 14,
+  },
+  resetButton: {
+    marginLeft: 4,
+    padding: 2,
+  },
 
   previewBox: {
     flexDirection: 'row',

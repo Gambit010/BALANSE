@@ -19,6 +19,7 @@ import { useWellness } from '../hooks/useWellness';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
+  const regularTasks = tasks.filter(t => !t.recurrence?.isClassSchedule);
   const { latestScore, latestStatus } = useWellness();
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
@@ -50,17 +51,17 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   // Computed stats from tasks array
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(task => task.progress === 100).length;
-  const highPriorityTasks = tasks.filter(task => task.priorityLabel === 'High').length;
-  const inProgressTasks = tasks.filter(task => task.progress > 0 && task.progress < 100).length;
+  const totalTasks = regularTasks.length;
+  const completedTasks = regularTasks.filter(task => task.progress === 100).length;
+  const highPriorityTasks = regularTasks.filter(task => task.priorityLabel === 'High').length;
+  const inProgressTasks = regularTasks.filter(task => task.progress > 0 && task.progress < 100).length;
   
   const today = new Date().toDateString();
-  const dueTodayTasks = tasks.filter(task => 
+  const dueTodayTasks = regularTasks.filter(task => 
     new Date(task.deadline).toDateString() === today
   ).length;
 
-  const overdueTasks = tasks.filter(task => {
+  const overdueTasks = regularTasks.filter(task => {
     if (task.progress === 100) return false;
     const dl = new Date(task.deadline);
     dl.setHours(0, 0, 0, 0);
@@ -74,7 +75,7 @@ export default function HomeScreen({ navigation }) {
     : 0;
 
       // Today's Focus — top 5 incomplete tasks, auto-selected by the priority engine
-  const todaysFocus = tasks
+  const todaysFocus = regularTasks
     .filter(task => task.progress < 100)
     .slice(0, 5);
 
@@ -374,7 +375,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryName}>Academic</Text>
             <Text style={styles.categoryCount}>
-                      {tasks.filter(t => t.category === 'Academic' && t.progress < 100).length} active tasks
+                      {regularTasks.filter(t => t.category === 'Academic' && t.progress < 100).length} active tasks
             </Text>
             </View>
             <Text style={styles.categoryNumber}>
@@ -426,7 +427,7 @@ export default function HomeScreen({ navigation }) {
        
 
          {/* TASK CARDS */}
-        {tasks.length === 0 ? (
+        {regularTasks.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-circle-outline" size={56} color="rgba(255,255,255,0.15)" />
             <Text style={styles.emptyTitle}>No tasks yet</Text>
@@ -441,7 +442,7 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          tasks.slice(0, 3).map((task) => (
+          regularTasks.slice(0, 3).map((task) => (
             <TouchableOpacity
               key={task.id}
               style={styles.taskCard}

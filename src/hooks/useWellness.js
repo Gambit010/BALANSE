@@ -15,7 +15,7 @@ const useWellness = () => {
     const fetchTaskCount = useCallback(async () => {
         if (!user) return;
         const tasks = await getUserTasks(user.uid);
-        const active = tasks.filter(t => t.progress < 100);
+        const active = tasks.filter(t => t.progress < 100 && !t.recurrence?.isClassSchedule);
         setActiveTaskCount(active.length);
         const conflictMap = detectAllConflicts(active);
         let total = 0;

@@ -19,6 +19,16 @@ import { useFocusEffect } from '@react-navigation/native';
 
 export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
+  const sevenDaysFromNow = new Date();
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  sevenDaysFromNow.setHours(23, 59, 59, 999);
+
+  const visibleTasks = tasks.filter((t) => {
+    if (!t.recurrence?.isClassSchedule) return true;
+    if (!t.deadline) return false;
+    const dl = new Date(t.deadline);
+    return dl <= sevenDaysFromNow;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
   const [breakdownTask, setBreakdownTask] = useState(null);
@@ -49,7 +59,7 @@ export default function TasksScreen({ navigation, route }) {
   };
 
   // Filter tasks based on search and active filter
-  const filteredTasks = tasks.filter((task) => {
+  const filteredTasks = visibleTasks.filter((task) => {
     // Search filter
     const matchesSearch =
       searchQuery === '' ||
