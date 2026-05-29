@@ -10,6 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -294,6 +295,11 @@ export default function WellnessScreen() {
                 <View style={styles.interventionContent}>
                   <Text style={styles.interventionTitle}>{item.title}</Text>
                   <Text style={styles.interventionText}>{item.text}</Text>
+                  {item.link && (
+                    <TouchableOpacity onPress={() => Linking.openURL(item.link)}>
+                      <Text style={styles.interventionLink}>Visit Resource</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             ))}
@@ -502,6 +508,7 @@ const styles = StyleSheet.create({
   interventionContent: { flex: 1 },
   interventionTitle: { color: '#fff', fontWeight: '600', fontSize: 14 },
   interventionText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 4, lineHeight: 18 },
+  interventionLink: { color: '#a78bfa', fontSize: 12, marginTop: 6, textDecorationLine: 'underline', fontWeight: '500' },
   historySection: { marginBottom: 16 },
   historyItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a3e', borderRadius: 10, padding: 14, marginBottom: 8, gap: 12 },
   historyDot: { width: 10, height: 10, borderRadius: 5 },
