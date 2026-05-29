@@ -8,6 +8,7 @@ import { auth } from '../../firebase';
 import { addTask, addRecurringTask } from '../services/taskService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { checkAndNotifyConflicts } from '../services/conflictService';
+import { detectConflicts } from '../services/conflictService';
 import { useTaskConflicts } from '../hooks/useConflicts';
 import { useTasks } from '../hooks/useTasks';
 import ConflictAlert from '../components/ConflictAlert';
@@ -32,6 +33,14 @@ export default function AddTaskScreen({ navigation }) {
   const [customValue, setCustomValue] = useState('');
   const [customUnit, setCustomUnit] = useState('weeks');
 
+  // Per-day time overrides
+  const [dayTimeOverrides, setDayTimeOverrides] = useState({});
+  const [editingDay, setEditingDay] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+
+  const defaultStart = { hour: 17, minute: 0 };
+  const defaultEnd = { hour: 18, minute: 0 };
+
   const { tasks: existingTasks } = useTasks();
 
   const pendingTask = useMemo(() => ({
@@ -42,6 +51,50 @@ export default function AddTaskScreen({ navigation }) {
   }), [category, priority, deadline, hasTime]);
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
+
+  // --- Per-day time helpers ---
+  const getDayTime = (day) => {
+    if (dayTimeOverrides[day]) return dayTimeOverrides[day];
+    return { startHour: defaultStart.hour, startMinute: defaultStart.minute, endHour: defaultEnd.hour, endMinute: defaultEnd.minute };
+  };
+
+  const formatTime = (hour, minute) => {
+    const d = new Date();
+    d.setHours(hour, minute, 0, 0);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const getPickerValue = () => {
+    if (!editingDay) return new Date();
+    const times = getDayTime(editingDay);
+    const d = new Date();
+    if (editingField === 'start') {
+      d.setHours(times.startHour, times.startMinute, 0, 0);
+    } else {
+      d.setHours(times.endHour, times.endMinute, 0, 0);
+    }
+    return d;
+  };
+
+  const handleDayTimeChange = (event, selectedDate) => {
+    if (!editingDay || !selectedDate) {
+      setEditingDay(null);
+      setEditingField(null);
+      return;
+    }
+    const current = getDayTime(editingDay);
+    const updated = { ...current };
+    if (editingField === 'start') {
+      updated.startHour = selectedDate.getHours();
+      updated.startMinute = selectedDate.getMinutes();
+    } else {
+      updated.endHour = selectedDate.getHours();
+      updated.endMinute = selectedDate.getMinutes();
+    }
+    setDayTimeOverrides(prev => ({ ...prev, [editingDay]: updated }));
+    setEditingDay(null);
+    setEditingField(null);
+  };
 
   // --- Repeat helpers ---
   const toggleDay = (day) => {
@@ -89,6 +142,36 @@ export default function AddTaskScreen({ navigation }) {
 
   const sessionCount = isRepeat ? countSessions() : 0;
 
+  // Build session tasks for conflict checking
+  const buildSessionTasks = () => {
+    const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const targets = selectedDays.map(d => dayMap[d]);
+    const current = new Date();
+    current.setHours(0, 0, 0, 0);
+    const end = getEndDate();
+    end.setHours(23, 59, 59, 999);
+    const sessions = [];
+    const iter = new Date(current);
+
+    while (iter <= end) {
+      if (targets.includes(iter.getDay())) {
+        const dayAbbr = Object.keys(dayMap).find(k => dayMap[k] === iter.getDay());
+        const times = getDayTime(dayAbbr);
+        const taskDate = new Date(iter);
+        taskDate.setHours(times.startHour, times.startMinute, 0, 0);
+
+        sessions.push({
+          title: title.trim(),
+          category,
+          priority,
+          deadline: taskDate.toISOString(),
+        });
+      }
+      iter.setDate(iter.getDate() + 1);
+    }
+    return sessions;
+  };
+
   // --- Save logic ---
   const saveTask = async () => {
     setIsLoading(true);
@@ -128,18 +211,23 @@ export default function AddTaskScreen({ navigation }) {
     setIsLoading(true);
     try {
       const currentUser = auth.currentUser;
+
+      // Build dayTimes map for all selected days
+      const dayTimes = {};
+      selectedDays.forEach(day => {
+        dayTimes[day] = getDayTime(day);
+      });
+
       const templateData = {
         userId: currentUser.uid,
         title: title.trim(),
         description: description.trim(),
         category,
         priority,
-        hasTime,
-        taskTime: hasTime ? deadline.toISOString() : null,
       };
 
       const endDate = getEndDate();
-      const created = await addRecurringTask(templateData, selectedDays, endDate);
+      const created = await addRecurringTask(templateData, selectedDays, endDate, dayTimes);
 
       if (created > 0) {
         Alert.alert(
@@ -170,6 +258,28 @@ export default function AddTaskScreen({ navigation }) {
         Alert.alert('Error', 'Please enter a valid custom duration');
         return;
       }
+
+      // Conflict checking for recurring tasks
+      const sessions = buildSessionTasks();
+      let conflictCount = 0;
+      sessions.forEach(session => {
+        const found = detectConflicts(session, existingTasks);
+        const highConflicts = found.filter(c => c.severity === 'high');
+        conflictCount += highConflicts.length;
+      });
+
+      if (conflictCount > 0) {
+        Alert.alert(
+          'Schedule Conflicts Detected',
+          `${conflictCount} high-severity conflict${conflictCount > 1 ? 's' : ''} found across your recurring sessions. Add anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add Anyway', style: 'destructive', onPress: saveRecurringTask },
+          ]
+        );
+        return;
+      }
+
       await saveRecurringTask();
       return;
     }
@@ -276,10 +386,56 @@ export default function AddTaskScreen({ navigation }) {
                   if (selectedDate) setDeadline(selectedDate);
                 }} />
             )}
+
+            {/* TIME TOGGLE (single task only) */}
+            <TouchableOpacity
+              style={styles.timeToggleRow}
+              onPress={() => setHasTime(!hasTime)}
+            >
+              <View style={styles.timeToggleLeft}>
+                <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.timeToggleText}>Set specific time</Text>
+              </View>
+              <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
+                <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
+              </View>
+            </TouchableOpacity>
+
+            {hasTime && (
+              <TouchableOpacity
+                style={styles.timeRow}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={18} color="#a78bfa" />
+                <Text style={styles.timeText}>
+                  {deadline.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </Text>
+                <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            )}
+
+            {showTimePicker && (
+              <DateTimePicker
+                value={deadline}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, selectedDate) => {
+                  setShowTimePicker(false);
+                  if (selectedDate) setDeadline(selectedDate);
+                }}
+              />
+            )}
+
+            {/* CONFLICT ALERTS (single task) */}
+            <ConflictAlert conflicts={conflicts} />
           </>
         )}
 
-        {/* --- REPEAT: Day selector + Duration --- */}
+        {/* --- REPEAT: Day selector + Duration + Per-day times --- */}
         {isRepeat && (
           <>
             <Text style={styles.label}>Repeat On</Text>
@@ -344,6 +500,44 @@ export default function AddTaskScreen({ navigation }) {
               </View>
             )}
 
+            {/* PER-DAY TIME OVERRIDES */}
+            {selectedDays.length > 0 && (
+              <>
+                <Text style={styles.label}>Time Per Day</Text>
+                {selectedDays.map((day) => {
+                  const times = getDayTime(day);
+                  return (
+                    <View key={day} style={styles.dayTimeRow}>
+                      <Text style={styles.dayTimeLabel}>{day}</Text>
+                      <TouchableOpacity
+                        style={styles.dayTimeButton}
+                        onPress={() => { setEditingDay(day); setEditingField('start'); }}
+                      >
+                        <Text style={styles.dayTimeText}>{formatTime(times.startHour, times.startMinute)}</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.dayTimeSeparator}>to</Text>
+                      <TouchableOpacity
+                        style={styles.dayTimeButton}
+                        onPress={() => { setEditingDay(day); setEditingField('end'); }}
+                      >
+                        <Text style={styles.dayTimeText}>{formatTime(times.endHour, times.endMinute)}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Day time picker */}
+            {editingDay && (
+              <DateTimePicker
+                value={getPickerValue()}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDayTimeChange}
+              />
+            )}
+
             {/* Session preview */}
             {selectedDays.length > 0 && (
               <View style={styles.sessionPreview}>
@@ -355,53 +549,6 @@ export default function AddTaskScreen({ navigation }) {
             )}
           </>
         )}
-
-        {/* TIME TOGGLE */}
-        <TouchableOpacity
-          style={styles.timeToggleRow}
-          onPress={() => setHasTime(!hasTime)}
-        >
-          <View style={styles.timeToggleLeft}>
-            <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
-            <Text style={styles.timeToggleText}>Set specific time</Text>
-          </View>
-          <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
-            <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
-          </View>
-        </TouchableOpacity>
-
-        {/* TIME DISPLAY & PICKER */}
-        {hasTime && (
-          <TouchableOpacity
-            style={styles.timeRow}
-            onPress={() => setShowTimePicker(true)}
-          >
-            <Ionicons name="time-outline" size={18} color="#a78bfa" />
-            <Text style={styles.timeText}>
-              {deadline.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-              })}
-            </Text>
-            <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
-          </TouchableOpacity>
-        )}
-
-        {showTimePicker && (
-          <DateTimePicker
-            value={deadline}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(event, selectedDate) => {
-              setShowTimePicker(false);
-              if (selectedDate) setDeadline(selectedDate);
-            }}
-          />
-        )}
-
-        {/* CONFLICT ALERTS (only for single tasks) */}
-        {!isRepeat && <ConflictAlert conflicts={conflicts} />}
 
         <TouchableOpacity
           style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
@@ -433,9 +580,9 @@ const styles = StyleSheet.create({
   optionButtonActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.15)' },
   optionText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
   optionTextActive: { color: '#ffffff', fontWeight: '700' },
-  deadlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'space-between' },
+  deadlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'space-between' },
   deadlineText: { color: '#ffffff', fontSize: 14 },
-  submitButton: { backgroundColor: '#7c3aed', paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
+  submitButton: { backgroundColor: '#7c3aed', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 12 },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
 
@@ -446,7 +593,7 @@ const styles = StyleSheet.create({
   toggleTrackActive: { backgroundColor: 'rgba(167,139,250,0.4)' },
   toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)' },
   toggleThumbActive: { backgroundColor: '#a78bfa', alignSelf: 'flex-end' },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 28, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
   timeText: { color: '#a78bfa', fontSize: 16, fontWeight: '600', flex: 1 },
 
   // Repeat — day selector
@@ -484,11 +631,26 @@ const styles = StyleSheet.create({
   unitChipText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
   unitChipTextActive: { color: '#ffffff', fontWeight: '700' },
 
-  // Repeat — session previewr
+  // Repeat — per-day time overrides
+  dayTimeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#1a1a3e', borderRadius: 12, padding: 12,
+    marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  dayTimeLabel: { color: '#ffffff', fontWeight: '600', fontSize: 14, width: 40 },
+  dayTimeButton: {
+    backgroundColor: 'rgba(167,139,250,0.1)', borderRadius: 8,
+    paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.2)',
+  },
+  dayTimeText: { color: '#a78bfa', fontSize: 13, fontWeight: '600' },
+  dayTimeSeparator: { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
+
+  // Repeat — session preview
   sessionPreview: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: 'rgba(167,139,250,0.08)', borderRadius: 10,
-    padding: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(167,139,250,0.15)',
+    padding: 12, marginTop: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(167,139,250,0.15)',
   },
   sessionPreviewText: { fontSize: 13, color: 'rgba(255,255,255,0.7)', flex: 1 },
 });

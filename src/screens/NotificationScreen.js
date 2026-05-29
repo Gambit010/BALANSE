@@ -12,6 +12,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { getUserNotifications, markAsRead } from '../services/notificationService';
 
+const formatTimeAgo = (firebaseTimestamp) => {
+  if (!firebaseTimestamp) return '';
+  const date = firebaseTimestamp.toDate ? firebaseTimestamp.toDate() : new Date(firebaseTimestamp);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 export default function NotificationScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,21 +77,6 @@ export default function NotificationScreen({ navigation }) {
       case 'assignment': return { name: 'person-add-outline', color: '#60a5fa' };
       default: return { name: 'notifications-outline', color: '#a78bfa' };
     }
-  };
-
-    const formatTimeAgo = (notif) => {
-    const date = notif.createdAt?.toDate?.() || null;
-    if (!date) return '';
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24) return `${diffHrs}h ago`;
-    const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -155,7 +156,9 @@ export default function NotificationScreen({ navigation }) {
                 <Text style={styles.notifMessage}>{notif.message}</Text>
                 <View style={styles.notifMeta}>
                   <Text style={styles.notifType}>{notif.type}</Text>
-                  <Text style={styles.notifTime}>{formatTimeAgo(notif)}</Text>
+                  {notif.createdAt && (
+                    <Text style={styles.notifTime}>{formatTimeAgo(notif.createdAt)}</Text>
+                  )}
                 </View>
               </View>
               {!notif.isRead && <View style={styles.unreadDot} />}
@@ -276,15 +279,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 4,
   },
-  notifType: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    textTransform: 'capitalize',
-  },
   notifMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  notifType: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    textTransform: 'capitalize',
   },
   notifTime: {
     fontSize: 11,

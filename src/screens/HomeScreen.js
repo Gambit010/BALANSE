@@ -14,7 +14,7 @@ import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown } from '../constants/scoring';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
-import { getUnreadCount } from '../services/notificationService';
+import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
 import { useWellness } from '../hooks/useWellness';
 
 export default function HomeScreen({ navigation }) {
@@ -37,6 +37,21 @@ export default function HomeScreen({ navigation }) {
       };
       fetchUnread();
     }, [])
+  );
+
+  // Check for deadline-approaching notifications
+  useFocusEffect(
+    useCallback(() => {
+      const checkDeadlines = async () => {
+        const currentUser = auth.currentUser;
+        if (currentUser && regularTasks.length > 0) {
+          await checkDeadlineNotifications(currentUser.uid, regularTasks);
+          const count = await getUnreadCount(currentUser.uid);
+          setUnreadCount(count);
+        }
+      };
+      checkDeadlines();
+    }, [regularTasks])
   );
 
   useEffect(() => {
@@ -379,7 +394,7 @@ export default function HomeScreen({ navigation }) {
             </Text>
             </View>
             <Text style={styles.categoryNumber}>
-                      {tasks.filter(t => t.category === 'Academic' && t.progress < 100).length}
+                      {regularTasks.filter(t => t.category === 'Academic' && t.progress < 100).length}
             </Text>
         </TouchableOpacity>
 
@@ -392,11 +407,11 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryName}>Organization</Text>
             <Text style={styles.categoryCount}>
-                    {tasks.filter(t => t.category === 'Organization' && t.progress < 100).length} active tasks
+                    {regularTasks.filter(t => t.category === 'Organization' && t.progress < 100).length} active tasks
             </Text>
             </View>
             <Text style={styles.categoryNumber}>
-                     {tasks.filter(t => t.category === 'Organization' && t.progress < 100).length}
+                     {regularTasks.filter(t => t.category === 'Organization' && t.progress < 100).length}
             </Text>
         </TouchableOpacity>
 
@@ -409,11 +424,11 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryName}>Personal</Text>
             <Text style={styles.categoryCount}>
-                    {tasks.filter(t => t.category === 'Personal' && t.progress < 100).length} active tasks
+                    {regularTasks.filter(t => t.category === 'Personal' && t.progress < 100).length} active tasks
             </Text>
           </View>
           <Text style={styles.categoryNumber}>
-                     {tasks.filter(t => t.category === 'Personal' && t.progress < 100).length}
+                     {regularTasks.filter(t => t.category === 'Personal' && t.progress < 100).length}
           </Text>
         </TouchableOpacity>
 
