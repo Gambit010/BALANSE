@@ -121,15 +121,36 @@ export const getInterventions = (percentage, taskCount = 0, conflictCount = 0) =
         icon: 'moon-outline',
         title: 'Prioritize Sleep',
         text: 'Poor sleep strongly affects well-being. Aim for 7-9 hours tonight.',
-        })
-       
+        });
+        interventions.push({
+        icon: 'heart-outline',
+        title: 'Self-Compassion Resources',
+        text: 'Explore guided exercises and tools for self-compassion.',
+        link: 'https://self-compassion.org/',
+        });
+        interventions.push({
+        icon: 'globe-outline',
+        title: 'Mental Health Philippines',
+        text: 'Access local mental health resources, hotlines, and support services.',
+        link: 'https://mentalhealthph.org/',
+        });
     }
+
+    if(percentage >= WELLNESS_THRESHOLDS.RISK && percentage < WELLNESS_THRESHOLDS.POSITIVE){
+        interventions.push({
+        icon: 'globe-outline',
+        title: 'Mental Health Resources',
+        text: 'Your guidance counselor recommends these if you need support.',
+        link: 'https://mentalhealthph.org/',
+        });
+    }
+
     if(taskCount > 5){
         interventions.push({
         icon: 'list-outline',
         title: 'Reduce Workload',
         text: `You have ${taskCount} active tasks. Consider postponing or delegating lower-priority items.`,
-        })
+        });
     }
 
     if (conflictCount > 0){
@@ -137,14 +158,14 @@ export const getInterventions = (percentage, taskCount = 0, conflictCount = 0) =
         icon: 'warning-outline',
         title: 'Resolve Schedule Conflicts',
         text: `You have ${conflictCount} scheduling conflict${conflictCount > 1 ? 's' : ''}. Resolving these can reduce stress.`,
-        })
+        });
     }
     if (percentage >= WELLNESS_THRESHOLDS.POSITIVE && interventions.length === 0){
         interventions.push({
         icon: 'sunny-outline',
         title: 'Keep It Up!',
         text: 'Your well-being is in a good place. Maintain your current routines and balance.',
-        })
+        });
     }
 
     return interventions;
