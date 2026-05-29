@@ -4,7 +4,7 @@ import { saveWellnessScore, getWellnessHistory } from "../services/taskService";
 import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline } from "../constants/wellness";
 import { getUserTasks } from '../services/taskService';
 import { detectAllConflicts } from '../services/conflictService';
-
+import { createNotification, hasRecentNotification } from '../services/notificationService';
 
 const useWellness = () => {
     const user = auth.currentUser;
@@ -62,6 +62,19 @@ const useWellness = () => {
         const docId = await saveWellnessScore(user.uid, scoreData);
         setSubmitting(false);
         if (docId) {
+            if (percentageScore < 28) {
+                const msg = `Your well-being score is ${percentageScore}%. Please check your wellness interventions and consider reaching out for support.`;
+                const already = await hasRecentNotification(user.uid, msg);
+                if (!already) {
+                    await createNotification(user.uid, msg, 'wellness');
+                }
+            } else if (percentageScore < 50) {
+                const msg = `Your well-being score is ${percentageScore}%. Review your wellness recommendations to stay on track.`;
+                const already = await hasRecentNotification(user.uid, msg);
+                if (!already) {
+                    await createNotification(user.uid, msg, 'wellness');
+                }
+            }
             await fetchHistory();
             return { id: docId, rawScore, percentage: percentageScore, status };
         }
