@@ -98,3 +98,38 @@ export const hasRecentNotification = async (userId, message) => {
     return false; // Fail open — don't block notification creation on error
   }
 };
+// Check for approaching deadlines and create notifications
+export const checkDeadlineNotifications = async (userId, tasks) => {
+  try {
+    const now = new Date();
+    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+    const incompleteTasks = tasks.filter(t => t.progress < 100 && t.deadline);
+
+    for (const task of incompleteTasks) {
+      const deadline = new Date(task.deadline);
+      if (isNaN(deadline.getTime())) continue;
+
+      // Skip if already past deadline (overdue is handled elsewhere)
+      if (deadline <= now) continue;
+
+      let message = null;
+
+      if (deadline <= in24h) {
+        message = `"${task.title}" is due in less than 24 hours`;
+      } else if (deadline <= in48h) {
+        message = `"${task.title}" is due in less than 48 hours`;
+      }
+
+      if (message) {
+        const alreadyNotified = await hasRecentNotification(userId, message);
+        if (!alreadyNotified) {
+          await createNotification(userId, message, 'deadline');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error checking deadline notifications:', error);
+  }
+};
