@@ -121,7 +121,8 @@ export const getWellnessHistory = async (userId) => {
 };
 
 // Add recurring tasks — generates one Firestore task per matching weekday
-export const addRecurringTask = async (templateData, selectedDays, endDate) => {
+// Add recurring tasks — generates one Firestore task per matching weekday with per-day times
+export const addRecurringTask = async (templateData, selectedDays, endDate, dayTimes) => {
   try {
     const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
     const targetDays = selectedDays.map(d => dayMap[d]);
@@ -136,21 +137,35 @@ export const addRecurringTask = async (templateData, selectedDays, endDate) => {
 
     while (current <= end) {
       if (targetDays.includes(current.getDay())) {
-        const taskDate = new Date(current);
+        const dayAbbr = Object.keys(dayMap).find(k => dayMap[k] === current.getDay());
+        const times = dayTimes ? dayTimes[dayAbbr] : null;
 
-        if (templateData.hasTime && templateData.taskTime) {
-          const t = new Date(templateData.taskTime);
-          taskDate.setHours(t.getHours(), t.getMinutes(), 0, 0);
+        const taskDate = new Date(current);
+        if (times) {
+          taskDate.setHours(times.startHour, times.startMinute, 0, 0);
         }
 
-        const deadlineStr = templateData.hasTime
+        const deadlineStr = times
           ? taskDate.toISOString()
           : taskDate.toISOString().split('T')[0];
+
+        let description = templateData.description;
+        if (times) {
+          const startD = new Date(current);
+          startD.setHours(times.startHour, times.startMinute, 0, 0);
+          const endD = new Date(current);
+          endD.setHours(times.endHour, times.endMinute, 0, 0);
+          const startLabel = startD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          const endLabel = endD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          description = templateData.description
+            ? `${templateData.description} (${startLabel} - ${endLabel})`
+            : `Scheduled ${startLabel} - ${endLabel}`;
+        }
 
         const taskDoc = {
           userId: templateData.userId,
           title: templateData.title,
-          description: templateData.description,
+          description,
           category: templateData.category,
           priority: templateData.priority,
           deadline: deadlineStr,
