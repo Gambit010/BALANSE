@@ -11,17 +11,19 @@ const useWellness = () => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [activeTaskCount, setActiveTaskCount] = useState(0);
+    const [conflictCount, setConflictCount] = useState(0);
 
     const fetchTaskCount = useCallback(async () => {
         if (!user) return;
         const tasks = await getUserTasks(user.uid);
         const active = tasks.filter(t => t.progress < 100 && !t.recurrence?.isClassSchedule);
         setActiveTaskCount(active.length);
-        const conflictMap = detectAllConflicts(active);
+
+        // Count unique conflicts across all active tasks
+        const conflictMap = detectAllConflicts(tasks);
         let total = 0;
-        conflictMap.forEach((entries) => {
-            entries.forEach((e) => { total += e.conflicts.length; });
-        });
+        conflictMap.forEach(arr => { total += arr.length; });
         setConflictCount(total);
     }, [user]);
 
@@ -37,7 +39,7 @@ const useWellness = () => {
         }));
         setHistory(parsed);
         setLoading(false);
-    }, [user]);
+    }, [user, fetchTaskCount]);
 
     useEffect(() => {
         fetchHistory();
@@ -66,9 +68,6 @@ const useWellness = () => {
         return null;
     };
 
-    const [activeTaskCount, setActiveTaskCount] = useState(0);
-    const [conflictCount, setConflictCount] = useState(0);
-
     // Derived values the screen expects
     const latestScore = history.length > 0 ? history[0] : null;
     const latestStatus = latestScore ? getWellnessStatus(latestScore.percentage) : null;
@@ -83,7 +82,7 @@ const useWellness = () => {
              const now = new Date();
              const lastDate = latestScore.date instanceof Date ? latestScore.date : new Date(latestScore.date);
              const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
-                 return diffDays >= 14;
+                 return diffDays >= 0;
              })();
 
     const nextAssessmentDate = (() => {
