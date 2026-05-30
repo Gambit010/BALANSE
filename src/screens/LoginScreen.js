@@ -154,8 +154,14 @@ export default function LoginScreen({ navigation }) {
 
             {/* Social Buttons */}
             <TouchableOpacity
-               style={[styles.socialButton, { opacity: 0.4 }]}
-                onPress={() => Alert.alert('Coming Soon', 'Google Sign-In will be available in a future update.')}
+               style={styles.socialButton}
+               onPress={async () => {
+                 try {
+                   await handleGoogleSignIn();
+                 } catch (error) {
+                   Alert.alert('Google Sign-In Failed', error.message);
+                 }
+               }}
             >
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
