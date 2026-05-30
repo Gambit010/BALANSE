@@ -120,7 +120,7 @@ export const getWellnessHistory = async (userId) => {
   }
 };
 
-// Add recurring tasks — generates one Firestore task per matching weekday
+
 // Add recurring tasks — generates one Firestore task per matching weekday with per-day times
 export const addRecurringTask = async (templateData, selectedDays, endDate, dayTimes) => {
   try {
