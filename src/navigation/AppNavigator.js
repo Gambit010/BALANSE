@@ -8,6 +8,7 @@ import TasksScreen from '../screens/TasksScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import WellnessScreen from '../screens/WellnessScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import TeamsScreen from '../screens/TeamsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -32,9 +33,12 @@ export default function AppNavigator() {
             iconName = focused ? 'calendar' : 'calendar-outline';
           } else if (route.name === 'Wellness') {
             iconName = focused ? 'heart' : 'heart-outline';
+          } else if (route.name === 'Teams') {
+            iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
+          
 
           return <Ionicons name={iconName} size={22} color={color} />;
         },
@@ -44,6 +48,7 @@ export default function AppNavigator() {
       <Tab.Screen name="Tasks" component={TasksScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Wellness" component={WellnessScreen} />
+      <Tab.Screen name="Teams" component={TeamsScreen}/>
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

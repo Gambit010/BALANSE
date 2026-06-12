@@ -13,6 +13,7 @@ import AddTaskScreen from './src/screens/AddTasksScreen';
 import EditTaskScreen from './src/screens/EditTaskScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
 import AddClassScreen from './src/screens/AddClassScreen';
+import TeamBoardScreen from './src/screens/TeamBoardScreen';
 import { upsertUserProfile } from './src/services/userService';
 
 const Stack = createStackNavigator();
@@ -49,6 +50,7 @@ export default function App() {
             <Stack.Screen name="AddClass" component={AddClassScreen} />
             <Stack.Screen name="EditTask" component={EditTaskScreen} />
             <Stack.Screen name="Notifications" component={NotificationScreen} />
+            <Stack.Screen name="TeamBoard" component={TeamBoardScreen} />
           </>
         ) : (
           <>
