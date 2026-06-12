@@ -4,6 +4,11 @@ import { createNotification, hasRecentNotification } from './notificationService
 // Default task duration in minutes when no end time is specified
 const DEFAULT_TASK_DURATION = 60;
 
+// Number of tasks on a single calendar day that triggers a "busy day" overload warning.
+// Set to 3 based on typical student daily capacity — beyond this, same-day load tends to
+// correlate with schedule strain. Adjust here to tune the heuristic.
+const SAME_DAY_OVERLOAD_THRESHOLD = 3;
+
 /**
  * Parse a task's deadline into a time range { start, end }.
  * - Tasks with time (ISO string containing 'T'): start = deadline, end = start + DEFAULT_TASK_DURATION
@@ -33,7 +38,18 @@ const getTaskTimeRange = (task) => {
   // Timed task — parse the ISO string (gives UTC instant, comparisons use .getTime() which is timezone-agnostic)
   const start = new Date(task.deadline);
   if (isNaN(start.getTime())) return null;
-  const end = new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+
+  // Use the task's real end time when available (class schedules store endTime);
+  // otherwise fall back to the default duration.
+  let end;
+  if (task.endTime) {
+    const parsedEnd = new Date(task.endTime);
+    end = !isNaN(parsedEnd.getTime()) && parsedEnd > start
+      ? parsedEnd
+      : new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+  } else {
+    end = new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+  }
   return { start, end, isAllDay: false };
 };
 
@@ -101,12 +117,17 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
 
       if (rangesOverlap(targetRange, taskRange)) {
         const isCrossCategory = task.category !== targetTask.category;
+        const isClass = task.recurrence?.isClassSchedule;
         conflicts.push({
           task,
-          type: 'time_overlap',
+          type: isClass ? 'class_overlap' : 'time_overlap',
           severity: 'high',
-          message: `"${task.title}" is scheduled at the same time (${formatTime(taskRange.start)} - ${formatTime(taskRange.end)})${isCrossCategory ? ` in ${task.category}` : ''}.`,
-          suggestion: suggestAlternativeTime(targetRange, otherTasks),
+          message: isClass
+            ? `Overlaps your "${task.title}" class (${formatTime(taskRange.start)} - ${formatTime(taskRange.end)}).`
+            : `"${task.title}" is scheduled at the same time (${formatTime(taskRange.start)} - ${formatTime(taskRange.end)})${isCrossCategory ? ` in ${task.category}` : ''}.`,
+          suggestion: isClass
+            ? 'Classes are fixed commitments — consider scheduling this task before or after class.'
+            : suggestAlternativeTime(targetRange, otherTasks),
         });
       }
     }
@@ -119,7 +140,7 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
     return isSameDay(taskRange.start, targetRange.start);
   });
 
-  if (sameDayTasks.length >= 3) {
+  if (sameDayTasks.length >= SAME_DAY_OVERLOAD_THRESHOLD) {
     const highPriorityCount = sameDayTasks.filter(
       (t) => t.priorityLabel === 'High' || t.priorityScore >= 70
     ).length;
@@ -265,9 +286,14 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
   const highConflicts = conflicts.filter((c) => c.severity === 'high');
 
   for (const conflict of highConflicts) {
-    const message = conflict.type === 'time_overlap'
-      ? `Schedule conflict: "${savedTask.title}" overlaps with ${conflict.message}`
-      : `Busy day alert: ${conflict.message}`;
+    let message;
+    if (conflict.type === 'class_overlap') {
+      message = `Class conflict: "${savedTask.title}" overlaps your "${conflict.task.title}" class.`;
+    } else if (conflict.type === 'time_overlap') {
+      message = `Schedule conflict: "${savedTask.title}" overlaps with ${conflict.message}`;
+    } else {
+      message = `Busy day alert: ${conflict.message}`;
+    }
 
     // Dedupe: skip if the same notification was already created recently
     const isDuplicate = await hasRecentNotification(userId, message);

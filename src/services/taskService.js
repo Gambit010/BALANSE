@@ -251,6 +251,7 @@ export const addClassSchedule = async (scheduleData) => {
           category: scheduleData.category,
           priority: 'Medium',
           deadline: taskDate.toISOString(),
+          endTime: endDate.toISOString(),
           assignments: [],
           createdAt: serverTimestamp(),
           isCompleted: false,
