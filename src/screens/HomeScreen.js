@@ -13,11 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
-import { getPriorityBreakdown } from '../constants/scoring';
+import { getPriorityBreakdown, getWellnessAdjustedScore } from '../constants/scoring';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
 import { useWellness } from '../hooks/useWellness';
+import { getWellnessThrottleAdvice } from '../constants/wellness';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
@@ -106,7 +107,11 @@ export default function HomeScreen({ navigation }) {
     ? Math.round((completedTasks / totalTasks) * 100)
     : 0;
 
-      // Today's Focus — overdue & due-today first, then highest priority
+  const wellnessPercentage = latestScore?.percentage ?? null;
+
+      // Today's Focus — overdue & due-today first, then wellness-adjusted priority.
+  // When well-being is low, Personal tasks surface higher and non-urgent Low tasks
+  // are de-emphasized in the "rest" bucket. Urgent tasks are never affected.
   const todaysFocus = useMemo(() => {
     const incomplete = regularTasks.filter(task => task.progress < 100);
 
@@ -131,11 +136,22 @@ export default function HomeScreen({ navigation }) {
         return b.priorityScore - a.priorityScore;
       });
 
-    // Everything else stays in priority order (regularTasks is pre-sorted)
-    const rest = incomplete.filter(t => daysUntil(t.deadline) > 0);
+    // Everything else — wellness-adjusted ranking when well-being is low
+    const rest = incomplete
+      .filter(t => daysUntil(t.deadline) > 0)
+      .map(t => ({
+        ...t,
+        adjustedScore: getWellnessAdjustedScore(t, t.priorityScore, wellnessPercentage),
+      }))
+      .sort((a, b) => b.adjustedScore - a.adjustedScore);
 
     return [...urgent, ...rest].slice(0, 5);
-  }, [regularTasks]);
+  }, [regularTasks, wellnessPercentage]);
+
+  const throttleAdvice = useMemo(
+    () => getWellnessThrottleAdvice(wellnessPercentage, regularTasks),
+    [wellnessPercentage, regularTasks]
+  );
 
   const getDaysUntilDeadline = (deadline) => {
     if (!deadline) return null;
@@ -274,6 +290,24 @@ export default function HomeScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
           </TouchableOpacity>
+        )}
+
+        {/* WELLNESS THROTTLE — LIGHTEN YOUR WEEK */}
+        {throttleAdvice.shouldThrottle && throttleAdvice.deferrableCount > 0 && (
+          <View style={styles.throttleBanner}>
+            <View style={styles.throttleBannerIcon}>
+              <Ionicons name="heart-half-outline" size={20} color="#a78bfa" />
+            </View>
+            <View style={styles.throttleBannerContent}>
+              <Text style={styles.throttleBannerTitle}>Lighten Your Week</Text>
+              <Text style={styles.throttleBannerText}>{throttleAdvice.message}</Text>
+              {throttleAdvice.deferrableTasks.slice(0, 2).map(t => (
+                <Text key={t.id} style={styles.throttleDeferItem}>
+                  • {t.title} ({t.priority})
+                </Text>
+              ))}
+            </View>
+          </View>
         )}
 
         {/* QUICK ACTIONS */}
@@ -1156,6 +1190,45 @@ export default function HomeScreen({ navigation }) {
     fontSize: 12,
     color: 'rgba(255,255,255,0.5)',
     lineHeight: 16,
+  },
+  throttleBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.25)',
+    backgroundColor: 'rgba(167,139,250,0.08)',
+    gap: 12,
+  },
+  throttleBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  throttleBannerContent: {
+    flex: 1,
+  },
+  throttleBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#a78bfa',
+    marginBottom: 4,
+  },
+  throttleBannerText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 17,
+  },
+  throttleDeferItem: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 4,
+    marginLeft: 4,
   },
 
 });

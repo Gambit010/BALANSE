@@ -170,6 +170,48 @@ export const getInterventions = (percentage, taskCount = 0, conflictCount = 0) =
 
     return interventions;
 };
+// Wellness-aware throttle advice — identifies tasks that can be deferred
+// when the student's well-being is below positive threshold.
+export const getWellnessThrottleAdvice = (percentage, tasks) => {
+  if (percentage == null || percentage >= WELLNESS_THRESHOLDS.POSITIVE) {
+    return { shouldThrottle: false, message: null, deferrableTasks: [], deferrableCount: 0 };
+  }
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const deferrable = tasks.filter(t => {
+    if (t.progress === 100) return false;
+    if (t.priority === 'High') return false;
+    if (t.recurrence?.isClassSchedule) return false;
+    if (!t.deadline) return true;
+    const dl = new Date(t.deadline);
+    dl.setHours(0, 0, 0, 0);
+    return Math.ceil((dl - now) / (1000 * 60 * 60 * 24)) > 2;
+  });
+
+  const isSevere = percentage < WELLNESS_THRESHOLDS.RISK;
+
+  if (deferrable.length === 0) {
+    return {
+      shouldThrottle: true,
+      severity: isSevere ? 'severe' : 'risk',
+      message: 'All your current tasks are urgent or high priority. Focus on what matters most and take breaks when you can.',
+      deferrableTasks: [],
+      deferrableCount: 0,
+    };
+  }
+
+  return {
+    shouldThrottle: true,
+    severity: isSevere ? 'severe' : 'risk',
+    message: isSevere
+      ? `Your well-being needs care. ${deferrable.length} non-urgent task${deferrable.length !== 1 ? 's' : ''} could be deferred to lighten your load.`
+      : `${deferrable.length} lower-priority task${deferrable.length !== 1 ? 's are' : ' is'} not urgent — consider postponing if you need breathing room.`,
+    deferrableTasks: deferrable,
+    deferrableCount: deferrable.length,
+  };
+};
 
 // Workload-Wellness Trend Insight — compares the two most recent assessments
 // and generates a plain-language interpretation linking score change to workload change.

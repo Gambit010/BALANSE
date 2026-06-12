@@ -95,6 +95,37 @@ export const getPriorityBreakdown = (task) => {
 
 };
 
+// Wellness-aware score adjustment — applied at display time only, never stored.
+// When well-being is low, Personal/rest tasks surface higher and non-urgent
+// Low-priority items are de-emphasized, nudging the student toward self-care.
+const isUrgent = (deadline) => {
+  if (!deadline) return false;
+  const now = new Date();
+  const dl = new Date(deadline);
+  if (isNaN(dl.getTime())) return false;
+  now.setHours(0, 0, 0, 0);
+  dl.setHours(0, 0, 0, 0);
+  return Math.ceil((dl - now) / (1000 * 60 * 60 * 24)) <= 2;
+};
+
+export const getWellnessAdjustedScore = (task, baseScore, wellnessPercentage) => {
+  if (wellnessPercentage == null || wellnessPercentage >= 50) return baseScore;
+
+  let adj = 0;
+
+  if (wellnessPercentage < 28) {
+    // Severe: strong nudge toward self-care
+    if (task.category === 'Personal') adj += 15;
+    if (task.priority === 'Low' && !isUrgent(task.deadline)) adj -= 10;
+  } else {
+    // At-risk: gentle nudge
+    if (task.category === 'Personal') adj += 8;
+    if (task.priority === 'Low' && !isUrgent(task.deadline)) adj -= 5;
+  }
+
+  return Math.max(0, Math.min(100, baseScore + adj));
+};
+
 
 
 
