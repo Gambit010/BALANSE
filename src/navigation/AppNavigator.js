@@ -1,5 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,9 +9,20 @@ import TasksScreen from '../screens/TasksScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import WellnessScreen from '../screens/WellnessScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import AnalyticsScreen from '../screens/AnalyticsScreen';
 import TeamsScreen from '../screens/TeamsScreen';
 
 const Tab = createBottomTabNavigator();
+const ProfileStack = createNativeStackNavigator();
+
+function ProfileStackScreen() {
+  return (
+    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="Analytics" component={AnalyticsScreen} />
+    </ProfileStack.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   return (
@@ -49,7 +61,7 @@ export default function AppNavigator() {
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Wellness" component={WellnessScreen} />
       <Tab.Screen name="Teams" component={TeamsScreen}/>
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileStackScreen} />
     </Tab.Navigator>
   );
 }

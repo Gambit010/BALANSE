@@ -13,7 +13,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const [darkMode, setDarkMode] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const { tasks } = useTasks();
@@ -184,6 +184,22 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
           </TouchableOpacity>
 
+          <View style={styles.separator} />
+
+          {/* Analytics */}
+          <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Analytics')}>
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIcon, { backgroundColor: 'rgba(167,139,250,0.2)' }]}>
+                <Ionicons name="analytics-outline" size={18} color="#a78bfa" />
+              </View>
+              <View>
+                <Text style={styles.settingTitle}>Analytics & Insights</Text>
+                <Text style={styles.settingSubtitle}>View your trends and patterns</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
+          </TouchableOpacity>
+
         </View>
 
         {/* LOGOUT */}
@@ -347,3 +363,4 @@ const styles = StyleSheet.create({
 
 
 
+  
