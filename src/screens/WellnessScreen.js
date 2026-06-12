@@ -49,6 +49,10 @@ export default function WellnessScreen() {
   const [result, setResult] = useState(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
+  const daysUntilNext = nextAssessmentDate
+    ? Math.max(0, Math.ceil((nextAssessmentDate - new Date()) / (1000 * 60 * 60 * 24)))
+    : null;
+
   // ─── Questionnaire Logic ───
 
   const startAssessment = () => {
@@ -256,6 +260,18 @@ export default function WellnessScreen() {
             : latestScore ? 'New Check-in' : 'Take WHO-5 Assessment'}
          </Text>
          </TouchableOpacity>
+
+        {/* Next check-in countdown */}
+        {latestScore && nextAssessmentDate && (
+          <View style={styles.nextCheckinRow}>
+            <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.45)" />
+            <Text style={styles.nextCheckinNote}>
+              {daysUntilNext > 0
+                ? `Recommended next check-in in ${daysUntilNext} day${daysUntilNext !== 1 ? 's' : ''} · ${nextAssessmentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                : 'Your next check-in is recommended now'}
+            </Text>
+          </View>
+        )}
 
         {/* Score History Chart */}
         {renderChart()}
@@ -520,6 +536,8 @@ const styles = StyleSheet.create({
   alertText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 4, lineHeight: 18 },
   assessButton: { backgroundColor: '#a78bfa', borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, gap: 8, marginBottom: 24 },
   assessButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  nextCheckinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: -14, marginBottom: 24 },
+  nextCheckinNote: { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
   chartContainer: { marginBottom: 24 },
   sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '600', marginBottom: 12 },
   chartBox: { backgroundColor: '#1a1a3e', borderRadius: 12, position: 'relative', overflow: 'hidden' },
