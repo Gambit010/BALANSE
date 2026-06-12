@@ -34,6 +34,7 @@ export default function WellnessScreen() {
     latestStatus,
     decline,
     interventions,
+    trendInsight,
     activeTaskCount,
     canTakeAssessment,
     nextAssessmentDate,
@@ -258,6 +259,39 @@ export default function WellnessScreen() {
 
         {/* Score History Chart */}
         {renderChart()}
+                {/* Workload-Wellness Trend Insight */}
+        {trendInsight && (
+          <View
+            style={[
+              styles.insightCard,
+              trendInsight.tone === 'positive' && styles.insightPositive,
+              trendInsight.tone === 'warning' && styles.insightWarning,
+              trendInsight.tone === 'neutral' && styles.insightNeutral,
+            ]}
+          >
+            <Ionicons
+              name={
+                trendInsight.tone === 'positive'
+                  ? 'trending-up'
+                  : trendInsight.tone === 'warning'
+                  ? 'trending-down'
+                  : 'remove-outline'
+              }
+              size={22}
+              color={
+                trendInsight.tone === 'positive'
+                  ? '#4ade80'
+                  : trendInsight.tone === 'warning'
+                  ? '#f87171'
+                  : '#fbbf24'
+              }
+            />
+            <View style={styles.insightContent}>
+              <Text style={styles.insightTitle}>Trend Insight</Text>
+              <Text style={styles.insightText}>{trendInsight.message}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Workload Correlation */}
         {latestScore && (
@@ -503,6 +537,13 @@ const styles = StyleSheet.create({
   correlationValue: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
   correlationLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 4 },
   correlationWarning: { color: '#fbbf24', fontSize: 12, textAlign: 'center', marginTop: 12, lineHeight: 18 },
+  insightCard: { flexDirection: 'row', borderRadius: 12, padding: 16, marginBottom: 16, alignItems: 'flex-start', gap: 12, borderWidth: 1 },
+  insightPositive: { backgroundColor: 'rgba(74, 222, 128, 0.1)', borderColor: 'rgba(74, 222, 128, 0.3)' },
+  insightWarning: { backgroundColor: 'rgba(248, 113, 113, 0.1)', borderColor: 'rgba(248, 113, 113, 0.3)' },
+  insightNeutral: { backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' },
+  insightContent: { flex: 1 },
+  insightTitle: { color: '#fff', fontWeight: '600', fontSize: 14, marginBottom: 4 },
+  insightText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 19 },
   interventionsSection: { marginBottom: 24 },
   interventionCard: { flexDirection: 'row', backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 10, alignItems: 'flex-start', gap: 12 },
   interventionContent: { flex: 1 },

@@ -48,7 +48,7 @@ export default function ProfileScreen() {
   };
   */
 
-  const handleLogout = async () => {
+  /*const handleLogout = async () => {
     try {
       // Sign out from Google native session too
       const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
@@ -59,6 +59,14 @@ export default function ProfileScreen() {
     } finally {
       // Always sign out from Firebase
       await signOut(auth);
+    }
+  };*/
+    const handleLogout = async () => {
+    try {
+      // Expo Go: just sign out from Firebase (no native Google session to clear)
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout error:', error);
     }
   };
 

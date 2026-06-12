@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { auth } from '../../firebase'
 import { saveWellnessScore, getWellnessHistory } from "../services/taskService";
-import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline } from "../constants/wellness";
+import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline, getTrendInsight } from "../constants/wellness";
 import { getUserTasks } from '../services/taskService';
 import { detectAllConflicts } from '../services/conflictService';
 import { createNotification, hasRecentNotification } from '../services/notificationService';
+
 
 const useWellness = () => {
     const user = auth.currentUser;
@@ -15,16 +16,18 @@ const useWellness = () => {
     const [conflictCount, setConflictCount] = useState(0);
 
     const fetchTaskCount = useCallback(async () => {
-        if (!user) return;
+        if (!user) return { active: 0, conflicts: 0 };
         const tasks = await getUserTasks(user.uid);
         const active = tasks.filter(t => t.progress < 100 && !t.recurrence?.isClassSchedule);
-        setActiveTaskCount(active.length);
 
         // Count unique conflicts across all active tasks
         const conflictMap = detectAllConflicts(tasks);
         let total = 0;
         conflictMap.forEach(arr => { total += arr.length; });
+
+        setActiveTaskCount(active.length);
         setConflictCount(total);
+        return { active: active.length, conflicts: total };
     }, [user]);
 
     const fetchHistory = useCallback(async () => {
@@ -52,12 +55,18 @@ const useWellness = () => {
         const percentageScore = rawScore * 4;
         const status = getWellnessStatus(percentageScore);
         const interventions = getInterventions(percentageScore);
+
+        // Capture fresh workload snapshot so future trend insights can compare over time
+        const { active, conflicts } = await fetchTaskCount();
+
         const scoreData = {
             responses,
             rawScore,
             percentage: percentageScore,
             status: status.label,
             interventions,
+            activeTaskCount: active,
+            conflictCount: conflicts,
         };
         const docId = await saveWellnessScore(user.uid, scoreData);
         setSubmitting(false);
@@ -89,6 +98,8 @@ const useWellness = () => {
         ? getInterventions(latestScore.percentage, activeTaskCount, conflictCount)
         : [];
 
+    const trendInsight = getTrendInsight(history);
+
     // Check if 14 days have passed since last assessment
     const canTakeAssessment = (() => {
           if (!latestScore || !latestScore.date) return true;
@@ -113,6 +124,7 @@ const useWellness = () => {
         latestStatus,
         decline,
         interventions,
+        trendInsight,
         activeTaskCount,
         canTakeAssessment,      
         nextAssessmentDate, 

@@ -170,3 +170,74 @@ export const getInterventions = (percentage, taskCount = 0, conflictCount = 0) =
 
     return interventions;
 };
+
+// Workload-Wellness Trend Insight — compares the two most recent assessments
+// and generates a plain-language interpretation linking score change to workload change.
+export const getTrendInsight = (history) => {
+    if (!history || history.length < 2) return null;
+
+    const latest = history[0];
+    const previous = history[1];
+
+    const scoreDelta = Math.round(latest.percentage - previous.percentage);
+    const absScore = Math.abs(scoreDelta);
+
+    // Well-being direction (small ±2% swings count as steady)
+    let direction;
+    if (scoreDelta >= 3) direction = 'improved';
+    else if (scoreDelta <= -3) direction = 'declined';
+    else direction = 'steady';
+
+    // Workload comparison only if BOTH entries stored a task count
+    const hasWorkload =
+        typeof latest.activeTaskCount === 'number' &&
+        typeof previous.activeTaskCount === 'number';
+    const latestTasks = latest.activeTaskCount;
+    const prevTasks = previous.activeTaskCount;
+    const taskDelta = hasWorkload ? latestTasks - prevTasks : 0;
+
+    let message;
+    let tone; // 'positive' | 'warning' | 'neutral'
+
+    if (direction === 'improved') {
+        tone = 'positive';
+        if (hasWorkload && taskDelta < 0) {
+            message = `Your well-being improved by ${absScore}% since your last check-in, and your active tasks dropped from ${prevTasks} to ${latestTasks}. Lightening your load appears to be helping.`;
+        } else if (hasWorkload && taskDelta > 0) {
+            message = `Your well-being improved by ${absScore}% even though your active tasks rose from ${prevTasks} to ${latestTasks}. You're managing a heavier load well — keep an eye on it.`;
+        } else if (hasWorkload) {
+            message = `Your well-being improved by ${absScore}% with a steady workload of ${latestTasks} active task${latestTasks === 1 ? '' : 's'}. Your current balance is working.`;
+        } else {
+            message = `Your well-being improved by ${absScore}% since your last check-in. Whatever you're doing is working — keep it up.`;
+        }
+    } else if (direction === 'declined') {
+        tone = 'warning';
+        if (hasWorkload && taskDelta > 0) {
+            message = `Your well-being dropped by ${absScore}% while your active tasks increased from ${prevTasks} to ${latestTasks}. A rising workload may be affecting your mood — consider prioritizing or delegating.`;
+        } else if (hasWorkload && taskDelta < 0) {
+            message = `Your well-being dropped by ${absScore}% even though your active tasks decreased from ${prevTasks} to ${latestTasks}. Something beyond workload may be at play — be gentle with yourself.`;
+        } else if (hasWorkload) {
+            message = `Your well-being dropped by ${absScore}% with a steady workload of ${latestTasks} active task${latestTasks === 1 ? '' : 's'}. Factors outside your task list may be affecting you.`;
+        } else {
+            message = `Your well-being dropped by ${absScore}% since your last check-in. Take a moment to check in with yourself and review your recommendations below.`;
+        }
+    } else {
+        tone = 'neutral';
+        if (hasWorkload && taskDelta > 0) {
+            message = `Your well-being held steady, though your active tasks rose from ${prevTasks} to ${latestTasks}. Watch for signs of strain as your load grows.`;
+        } else if (hasWorkload && taskDelta < 0) {
+            message = `Your well-being held steady and your active tasks eased from ${prevTasks} to ${latestTasks}. A lighter load may help you recover.`;
+        } else {
+            message = `Your well-being has held steady since your last check-in. Consistency is a good sign — keep monitoring how you feel.`;
+        }
+    }
+
+    return {
+        scoreDelta,
+        taskDelta: hasWorkload ? taskDelta : null,
+        direction,
+        tone,
+        message,
+        hasWorkload,
+    };
+};

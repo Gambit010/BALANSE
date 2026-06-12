@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
-import { handleGoogleSignIn } from '../services/authService'; //a
+//import { handleGoogleSignIn } from '../services/authService'; //a
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');

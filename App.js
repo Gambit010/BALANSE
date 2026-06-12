@@ -13,6 +13,7 @@ import AddTaskScreen from './src/screens/AddTasksScreen';
 import EditTaskScreen from './src/screens/EditTaskScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
 import AddClassScreen from './src/screens/AddClassScreen';
+import { upsertUserProfile } from './src/services/userService';
 
 const Stack = createStackNavigator();
 
@@ -26,6 +27,9 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
+      if (currentUser) {
+        upsertUserProfile(currentUser);
+      }
     });
     return unsubscribe;
   }, []);

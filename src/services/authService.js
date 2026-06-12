@@ -1,4 +1,4 @@
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+/*import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '../../firebase';
 
@@ -27,4 +27,17 @@ export const handleGoogleSignIn = async () => {
     }
     throw error;
   }
+};*/
+// Google Sign-In is a NATIVE module and does NOT work in Expo Go.
+// This stub lets the app run in Expo Go without crashing.
+//
+// To re-enable Google Sign-In later, restore the native implementation
+// (GoogleSignin.configure + signIn) and run a development build
+// (npx expo run:android / EAS build) instead of Expo Go.
+
+export const handleGoogleSignIn = async () => {
+  throw new Error(
+    'Google Sign-In is unavailable in Expo Go. Please use email/password login, ' +
+    'or build a development client to enable Google Sign-In.'
+  );
 };
