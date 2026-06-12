@@ -52,6 +52,18 @@ export default function AddTaskScreen({ navigation }) {
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
 
+  const handleApplySuggestion = (slot) => {
+    if (slot.type === 'time') {
+      setDeadline(new Date(slot.value));
+      setHasTime(true);
+    } else if (slot.type === 'date') {
+      const [year, month, day] = slot.value.split('-').map(Number);
+      const newDate = new Date(deadline);
+      newDate.setFullYear(year, month - 1, day);
+      setDeadline(newDate);
+    }
+  };
+
   // --- Per-day time helpers ---
   const getDayTime = (day) => {
     if (dayTimeOverrides[day]) return dayTimeOverrides[day];
@@ -431,7 +443,7 @@ export default function AddTaskScreen({ navigation }) {
             )}
 
             {/* CONFLICT ALERTS (single task) */}
-            <ConflictAlert conflicts={conflicts} />
+            <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
           </>
         )}
 

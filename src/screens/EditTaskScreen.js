@@ -40,6 +40,18 @@ export default function EditTaskScreen({ route, navigation }) {
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
 
+  const handleApplySuggestion = (slot) => {
+    if (slot.type === 'time') {
+      setDeadline(new Date(slot.value));
+      setHasTime(true);
+    } else if (slot.type === 'date') {
+      const [year, month, day] = slot.value.split('-').map(Number);
+      const newDate = new Date(deadline);
+      newDate.setFullYear(year, month - 1, day);
+      setDeadline(newDate);
+    }
+  };
+
 
 
   const progressOptions = [
@@ -307,7 +319,7 @@ export default function EditTaskScreen({ route, navigation }) {
         </View>
 
                 {/* CONFLICT ALERTS */}
-        <ConflictAlert conflicts={conflicts} />
+        <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />        <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
 
         {/* SAVE BUTTON */}
         <TouchableOpacity

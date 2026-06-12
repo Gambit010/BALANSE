@@ -8,7 +8,7 @@ const SEVERITY_CONFIG = {
   low: { color: '#fb923c', bg: 'rgba(251,146,60,0.08)', icon: 'information-circle', label: 'Note' },
 };
 
-export default function ConflictAlert({ conflicts, style }) {
+export default function ConflictAlert({ conflicts, style, onApplySuggestion }) {
   const [expandedIndex, setExpandedIndex] = useState(null);
 
   if (!conflicts || conflicts.length === 0) return null;
@@ -48,7 +48,21 @@ export default function ConflictAlert({ conflicts, style }) {
             {isExpanded && conflict.suggestion && (
               <View style={styles.suggestionBox}>
                 <Ionicons name="bulb-outline" size={14} color="#a78bfa" />
-                <Text style={styles.suggestionText}>{conflict.suggestion}</Text>
+                <View style={styles.suggestionContent}>
+                  <Text style={styles.suggestionText}>{conflict.suggestion}</Text>
+                  {conflict.suggestedSlot && onApplySuggestion && (
+                    <TouchableOpacity
+                      style={styles.applyButton}
+                      onPress={() => onApplySuggestion(conflict.suggestedSlot)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="swap-horizontal" size={14} color="#ffffff" />
+                      <Text style={styles.applyButtonText}>
+                        Move to {conflict.suggestedSlot.label}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
           </TouchableOpacity>
@@ -107,10 +121,28 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
   },
+  suggestionContent: {
+    flex: 1,
+  },
   suggestionText: {
     fontSize: 12,
     color: '#a78bfa',
     lineHeight: 17,
-    flex: 1,
+  },
+  applyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#7c3aed',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  applyButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

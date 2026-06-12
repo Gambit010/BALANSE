@@ -145,6 +145,13 @@ export const addRecurringTask = async (templateData, selectedDays, endDate, dayT
           taskDate.setHours(times.startHour, times.startMinute, 0, 0);
         }
 
+        let endTimeStr = null;
+        if (times) {
+          const endD = new Date(current);
+          endD.setHours(times.endHour, times.endMinute, 0, 0);
+          endTimeStr = endD.toISOString();
+        }
+
         const deadlineStr = times
           ? taskDate.toISOString()
           : taskDate.toISOString().split('T')[0];
@@ -169,6 +176,7 @@ export const addRecurringTask = async (templateData, selectedDays, endDate, dayT
           category: templateData.category,
           priority: templateData.priority,
           deadline: deadlineStr,
+          ...(endTimeStr && { endTime: endTimeStr }),
           assignments: [],
           createdAt: serverTimestamp(),
           isCompleted: false,
