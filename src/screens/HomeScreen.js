@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback} from 'react';
+import React, { useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
@@ -19,11 +21,26 @@ import { useWellness } from '../hooks/useWellness';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
-  const regularTasks = tasks.filter(t => !t.recurrence?.isClassSchedule);
+  const regularTasks = useMemo(
+    () => tasks.filter(t => !t.recurrence?.isClassSchedule),
+    [tasks]
+  );
   const { latestScore, latestStatus } = useWellness();
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const count = await getUnreadCount(currentUser.uid);
+      setUnreadCount(count);
+    }
+    setRefreshing(false);
+  }, [refetch]);
 
   useFocusEffect(
     useCallback(() => {
@@ -89,10 +106,36 @@ export default function HomeScreen({ navigation }) {
     ? Math.round((completedTasks / totalTasks) * 100)
     : 0;
 
-      // Today's Focus — top 5 incomplete tasks, auto-selected by the priority engine
-  const todaysFocus = regularTasks
-    .filter(task => task.progress < 100)
-    .slice(0, 5);
+      // Today's Focus — overdue & due-today first, then highest priority
+  const todaysFocus = useMemo(() => {
+    const incomplete = regularTasks.filter(task => task.progress < 100);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const daysUntil = (deadline) => {
+      if (!deadline) return Infinity;
+      const dl = new Date(deadline);
+      if (isNaN(dl.getTime())) return Infinity;
+      dl.setHours(0, 0, 0, 0);
+      return Math.round((dl - startOfToday) / (1000 * 60 * 60 * 24));
+    };
+
+    // Overdue or due today — most overdue first, then by priority score
+    const urgent = incomplete
+      .filter(t => daysUntil(t.deadline) <= 0)
+      .sort((a, b) => {
+        const da = daysUntil(a.deadline);
+        const db = daysUntil(b.deadline);
+        if (da !== db) return da - db;
+        return b.priorityScore - a.priorityScore;
+      });
+
+    // Everything else stays in priority order (regularTasks is pre-sorted)
+    const rest = incomplete.filter(t => daysUntil(t.deadline) > 0);
+
+    return [...urgent, ...rest].slice(0, 5);
+  }, [regularTasks]);
 
   const getDaysUntilDeadline = (deadline) => {
     if (!deadline) return null;
@@ -123,6 +166,18 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  const formatDeadline = (deadline) => {
+    if (!deadline) return 'No deadline';
+    const d = new Date(deadline);
+    if (isNaN(d.getTime())) return deadline;
+    const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (deadline.includes('T')) {
+      const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      return `${datePart}, ${timePart}`;
+    }
+    return datePart;
+  };
+
   const getPriorityColor = (label) => {
     switch (label) {
       case 'High': return '#ef4444';
@@ -150,6 +205,14 @@ export default function HomeScreen({ navigation }) {
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#a78bfa"
+            colors={['#a78bfa']}
+          />
+        }
       >
         {/* HEADER */}
         <View style={styles.header}>
@@ -485,7 +548,7 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.taskCategory}>{task.category}</Text>
                 <View style={styles.taskDeadline}>
                   <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
-                  <Text style={styles.taskDeadlineText}>{task.deadline}</Text>
+                  <Text style={styles.taskDeadlineText}>{formatDeadline(task.deadline)}</Text>
                 </View>
               </View>
 
