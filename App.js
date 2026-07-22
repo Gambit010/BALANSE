@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
+import { ThemeProvider } from './src/context/ThemeContext'; // for dark mode 
 
 import LandingScreen from './src/screens/LandingScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -38,6 +39,7 @@ export default function App() {
   if (loading) return null;
 
   return (
+    <ThemeProvider> {/* Dark mode*/}
     <NavigationContainer>
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
@@ -61,5 +63,6 @@ export default function App() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    </ThemeProvider>
   );
 }
