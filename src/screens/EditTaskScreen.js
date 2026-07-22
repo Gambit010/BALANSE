@@ -319,7 +319,7 @@ export default function EditTaskScreen({ route, navigation }) {
         </View>
 
                 {/* CONFLICT ALERTS */}
-        <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />        <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
+      <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
 
         {/* SAVE BUTTON */}
         <TouchableOpacity
