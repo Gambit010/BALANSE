@@ -15,12 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { auth } from '../../firebase';
 import { useTeams } from '../hooks/useTeams';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 export default function TeamsScreen({ navigation }) {
   const { teams, loading, create, refetch } = useTeams();
   const [modalVisible, setModalVisible] = useState(false);
   const [teamName, setTeamName] = useState('');
   const [creating, setCreating] = useState(false);
+  const { theme, isDarkMode } = useTheme(); // for dark mode
 
   const myUid = auth.currentUser?.uid;
 
@@ -48,30 +50,30 @@ export default function TeamsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, {backgroundColor: theme.background}]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.screenTitle}>Teams</Text>
-            <Text style={styles.screenSubtitle}>Shared task boards for your orgs</Text>
+            <Text style={[styles.screenTitle, {color:theme.text}]}>Teams</Text>
+            <Text style={[styles.screenSubtitle, {color:theme.subtext}]}>Shared task boards for your orgs</Text>
           </View>
-          <TouchableOpacity style={styles.newButton} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity style={[styles.newButton, {backgroundColor: theme.accent}]} onPress={() => setModalVisible(true)}>
             <Ionicons name="add" size={20} color="#ffffff" />
             <Text style={styles.newButtonText}>New</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
-          <ActivityIndicator color="#a78bfa" style={{ marginTop: 40 }} />
+          <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : teams.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={56} color="rgba(167,139,250,0.4)" />
-            <Text style={styles.emptyTitle}>No teams yet</Text>
-            <Text style={styles.emptyText}>
+            <Ionicons name="people-outline" size={56} color={theme.accent} />
+            <Text style={[styles.emptyTitle, {color:theme.text}]}>No teams yet</Text>
+            <Text style={[styles.emptyText, {color:theme.subtext}]}>
               Create a team to assign tasks, track progress, and collaborate with your org.
             </Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={() => setModalVisible(true)}>
+            <TouchableOpacity style={[styles.emptyButton, {backgroundColor:theme.accent}]} onPress={() => setModalVisible(true)}>
               <Text style={styles.emptyButtonText}>Create your first team</Text>
             </TouchableOpacity>
           </View>
@@ -82,24 +84,24 @@ export default function TeamsScreen({ navigation }) {
             return (
               <TouchableOpacity
                 key={team.id}
-                style={styles.teamCard}
+                style={[styles.teamCard, {backgroundColor: theme.card, borderColor:theme.border}]}
                 onPress={() =>
                   navigation.navigate('TeamBoard', { teamId: team.id, teamName: team.name })
                 }
               >
-                <View style={styles.teamIcon}>
-                  <Text style={styles.teamIconText}>
+                <View style={[styles.teamIcon, {backgroundColor: isDarkMode ? 'rgba(167,139,250,0.15)' : '#F3E8FF',}]}>
+                  <Text style={[styles.teamIconText, {color:theme.accent}]}>
                     {team.name.charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.teamName}>{team.name}</Text>
-                  <Text style={styles.teamMeta}>
+                  <Text style={[styles.teamName, {color:theme.text}]}>{team.name}</Text>
+                  <Text style={[styles.teamMeta, {color:theme.subtext}]}>
                     {memberCount} member{memberCount !== 1 ? 's' : ''}
                     {isOwner ? '  •  Owner' : ''}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />
+                <Ionicons name="chevron-forward" size={20} color={theme.subtext} />
               </TouchableOpacity>
             );
           })
@@ -109,26 +111,34 @@ export default function TeamsScreen({ navigation }) {
       {/* CREATE TEAM MODAL */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>New Team</Text>
-            <Text style={styles.modalLabel}>Team Name</Text>
+          <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+            <Text style={[styles.modalTitle, {color:theme.text}]}>New Team</Text>
+            <Text style={[styles.modalLabel, {color:theme.text}]}>Team Name</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, {
+                backgroundColor: theme.background,
+                color: theme.text,
+                borderColor: theme.border
+              }]}
               placeholder="e.g. Student Council, CS Org"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.subtext}
               value={teamName}
               onChangeText={setTeamName}
               autoFocus
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalCancel]}
+                style={[styles.modalBtn, styles.modalCancel, {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                  borderWidth: 1,
+                }]}
                 onPress={() => {
                   setModalVisible(false);
                   setTeamName('');
                 }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirm]}
