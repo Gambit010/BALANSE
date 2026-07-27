@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
@@ -27,10 +28,12 @@ export default function HomeScreen({ navigation }) {
     [tasks]
   );
   const { latestScore, latestStatus } = useWellness();
+  const { theme } = useTheme(); // for dark mode
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -207,17 +210,18 @@ export default function HomeScreen({ navigation }) {
 
     if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#a78bfa" />
-          <Text style={styles.loadingText}>Loading your tasks...</Text>
+          <ActivityIndicator size="large" color={theme.accent} />
+          {/* <Text style={styles.loadingText}>Loading your tasks...</Text> */}
+          <Text style={[styles.loadingText, { color: theme.text }]}>Loading your tasks...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -233,18 +237,20 @@ export default function HomeScreen({ navigation }) {
         {/* HEADER */}
         <View style={styles.header}>
           <View style={{ flex: 1, marginRight: 12, justifyContent: 'center' }}>
-            <Text style={styles.greeting} numberOfLines={1}>Hey, {userName} 👋</Text>
-            <Text style={styles.date}>
+            {/* <Text style={styles.greeting} numberOfLines={1}>Hey, {userName} 👋</Text> */}
+            <Text style={[styles.greeting, { color: theme.text }]} numberOfLines={1}>{userName}</Text>
+            <Text style={[styles.date, { color: theme.subtext}]}>
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
-
+          {/* Notification icon & Avatar */}
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.iconButton}
               onPress={() => navigation.navigate('Notifications')}
             >
-              <Ionicons name="notifications-outline" size={24} color="#ffffff" />
+              {/* <Ionicons name="notifications-outline" size={24} color="#ffffff" /> */}
+              <Ionicons name="notifications-outline" size={24} color={theme.icon} />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
                   <Text style={styles.notifBadgeText}>
@@ -262,6 +268,82 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
         
+
+        {/* QUICK ACTIONS */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.getParent()?.navigate('AddTask')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#a78bfa" />
+            {/* <Text style={styles.quickActionText}>Add Task</Text> */} 
+            <Text style={[styles.quickActionText, { color: theme.text }]}>Add Task</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.getParent()?.navigate('AddClass')}
+          >
+            <Ionicons name="repeat-outline" size={18} color="#a78bfa" />
+            {/* <Text style={styles.quickActionText}>Add Class Schedule</Text> */}
+            <Text style={[styles.quickActionText, { color: theme.text }]}>Add Class Schedule</Text>
+          </TouchableOpacity>
+        </View>
+
+
+         {/* OVERALL PROGRESS CARD */}
+        {/* <View style={styles.progressCard}> */}
+        <View style={[styles.progressCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
+          <View style={styles.progressHeader}>
+            {/* <Text style={styles.progressLabel}>Overall Progress</Text> */}
+            <Text style={[styles.progressLabel, { color: theme.subtext }]}>Overall Progress</Text>
+            {/* <Text style={styles.progressFraction}> */} 
+            <Text style={[styles.progressFraction, { color: theme.subtext }]}> 
+              {completedTasks}/{totalTasks} tasks done
+            </Text>
+          </View>
+
+          {/* <Text style={styles.progressPercent}>{overallProgress}%</Text> */}
+          <Text style={[styles.progressPercent, { color: theme.text }]}>{overallProgress}%</Text>
+
+          {/* Progress Bar */}
+          <View style={[styles.progressBarBg, { backgroundColor: theme.border},]}>
+            <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
+          </View>
+
+          {/* Stats Row */}
+          {/* Overdue Banner */}
+          {overdueTasks > 0 && (
+            <View style={styles.overdueBanner}>
+              <Ionicons name="alert-circle" size={16} color="#f87171" />
+              <Text style={styles.overdueText}>
+                {overdueTasks} task{overdueTasks !== 1 ? 's' : ''} overdue
+              </Text>
+            </View>
+          )}
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              {/* <Text style={styles.statNumber}>{highPriorityTasks}</Text> */}
+              <Text style={[styles.statNumber, { color: theme.text }]}>{highPriorityTasks}</Text>
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>High Priority</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.border},]} />
+            <View style={styles.statItem}>
+              {/* <Text style={styles.statNumber}>{inProgressTasks}</Text> */}
+              <Text style={[styles.statNumber, { color: theme.text }]}>{inProgressTasks}</Text>
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>In Progress</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.border},]} />
+            <View style={styles.statItem}>
+              {/* <Text style={styles.statNumber}>{dueTodayTasks}</Text> */}
+              <Text style={[styles.statNumber, { color: theme.text }]}>{dueTodayTasks}</Text>
+              {/* <Text style={styles.statLabel}>Due Today</Text> */}
+              <Text style={[styles.statLabel, { color: theme.subtext }]}>Due Today</Text>
+            </View>
+          </View>
+        </View>
+
         {/* WELLNESS BANNER */}
         {latestStatus && latestStatus.level !== 'positive' && (
           <TouchableOpacity
@@ -284,11 +366,13 @@ export default function HomeScreen({ navigation }) {
               <Text style={[styles.wellnessBannerTitle, { color: latestStatus.color }]}>
                 {latestStatus.label}
               </Text>
-              <Text style={styles.wellnessBannerText}>
+              {/* <Text style={styles.wellnessBannerText}> */}
+              <Text style={[styles.wellnessBannerText, { color: theme.text }]}> 
                 Your well-being score is {latestScore.percentage}%. Tap to view recommendations.
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+            {/* <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" /> */}
+            <Ionicons name="chevron-forward" size={16} color={theme.subtext}/>
           </TouchableOpacity>
         )}
 
@@ -296,13 +380,13 @@ export default function HomeScreen({ navigation }) {
         {throttleAdvice.shouldThrottle && throttleAdvice.deferrableCount > 0 && (
           <View style={styles.throttleBanner}>
             <View style={styles.throttleBannerIcon}>
-              <Ionicons name="heart-half-outline" size={20} color="#a78bfa" />
+              <Ionicons name="heart-half-outline" size={20} color={theme.accent} />
             </View>
             <View style={styles.throttleBannerContent}>
-              <Text style={styles.throttleBannerTitle}>Lighten Your Week</Text>
-              <Text style={styles.throttleBannerText}>{throttleAdvice.message}</Text>
+              <Text style={[styles.throttleBannerTitle, {color:theme.accent}]}>Lighten Your Week</Text>
+              <Text style={[styles.throttleBannerText, {color:theme.text}]}>{throttleAdvice.message}</Text>
               {throttleAdvice.deferrableTasks.slice(0, 2).map(t => (
-                <Text key={t.id} style={styles.throttleDeferItem}>
+                <Text key={t.id} style={[styles.throttleDeferItem, { color: theme.subtext}]}>
                   • {t.title} ({t.priority})
                 </Text>
               ))}
@@ -310,35 +394,19 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        {/* QUICK ACTIONS */}
-        <View style={styles.quickActionsRow}>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => navigation.getParent()?.navigate('AddTask')}
-          >
-            <Ionicons name="add-circle-outline" size={18} color="#a78bfa" />
-            <Text style={styles.quickActionText}>Add Task</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => navigation.getParent()?.navigate('AddClass')}
-          >
-            <Ionicons name="repeat-outline" size={18} color="#a78bfa" />
-            <Text style={styles.quickActionText}>Add Class Schedule</Text>
-          </TouchableOpacity>
-        </View>
-
-                {/* TODAY'S FOCUS */}
+        {/* TODAY'S FOCUS */}
         {todaysFocus.length > 0 && (
           <View style={styles.focusSection}>
             <View style={styles.focusSectionHeader}>
-              <View style={styles.focusTitleRow}>
-                <Ionicons name="flash" size={20} color="#fbbf24" />
-                <Text style={styles.focusSectionTitle}>Today's Focus</Text>
+              <View>
+                {/* <Ionicons name="flash" size={20} color="#fbbf24" /> */}
+                <Text style={[styles.focusSectionTitle, { color: theme.text }]}>
+                  Today's Focus
+                </Text>
+                <Text style={[styles.focusSubtitle, { color: theme.subtext }]}> 
+                  {todaysFocus.length} task{todaysFocus.length !== 1 ? 's' : ''} to focus on
+                </Text>
               </View>
-              <Text style={styles.focusSubtitle}>
-                {todaysFocus.length} task{todaysFocus.length !== 1 ? 's' : ''} to focus on
-              </Text>
             </View>
 
             {todaysFocus.map((task, index) => {
@@ -350,7 +418,7 @@ export default function HomeScreen({ navigation }) {
               return (
                 <TouchableOpacity
                   key={task.id}
-                  style={styles.focusCard}
+                  style={[ styles.focusCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]} 
                   onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
                   activeOpacity={0.7}
                 >
@@ -359,8 +427,9 @@ export default function HomeScreen({ navigation }) {
                   </View>
 
                   <View style={styles.focusContent}>
-                                       <View style={styles.focusTitleContainer}>
-                      <Text style={styles.focusTaskTitle} numberOfLines={1}>
+                    <View style={styles.focusTitleContainer}>
+                      <Text style={[styles.focusTaskTitle, { color: theme.text}]} numberOfLines={1}>
+                      {/* </Text><Text style={styles.focusTaskTitle} numberOfLines={1}> */}
                         {task.title}
                       </Text>
                       <TouchableOpacity
@@ -403,8 +472,9 @@ export default function HomeScreen({ navigation }) {
 
 
                     </View>
-
-                    <Text style={styles.focusReason}>
+ 
+                    {/* <Text style={styles.focusReason}> */}
+                    <Text style={[styles.focusReason, { color: theme.subtext }]}> 
                       {breakdown.factors
                         .sort((a, b) => b.score - a.score)
                         .slice(0, 2)
@@ -413,7 +483,7 @@ export default function HomeScreen({ navigation }) {
                     </Text>
 
                     <View style={styles.focusProgressRow}>
-                      <View style={styles.focusProgressBg}>
+                      <View style={[styles.focusProgressBg, { backgroundColor: theme.border},]}>
                         <View style={[styles.focusProgressFill, { width: `${task.progress}%` }]} />
                       </View>
                       <Text style={styles.focusProgressText}>{task.progress}%</Text>
@@ -425,193 +495,74 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-
-         {/* OVERALL PROGRESS CARD */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Overall Progress</Text>
-            <Text style={styles.progressFraction}>
-              {completedTasks}/{totalTasks} tasks done
-            </Text>
-          </View>
-
-          <Text style={styles.progressPercent}>{overallProgress}%</Text>
-
-          {/* Progress Bar */}
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
-          </View>
-
-          {/* Stats Row */}
-          {/* Overdue Banner */}
-          {overdueTasks > 0 && (
-            <View style={styles.overdueBanner}>
-              <Ionicons name="alert-circle" size={16} color="#f87171" />
-              <Text style={styles.overdueText}>
-                {overdueTasks} task{overdueTasks !== 1 ? 's' : ''} overdue
-              </Text>
-            </View>
-          )}
-
-          {/* Stats Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{highPriorityTasks}</Text>
-              <Text style={styles.statLabel}>High Priority</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{inProgressTasks}</Text>
-              <Text style={styles.statLabel}>In Progress</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{dueTodayTasks}</Text>
-              <Text style={styles.statLabel}>Due Today</Text>
-            </View>
-          </View>
-        </View>
-
-
           {/* TASKS SECTION */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Your Tasks</Text>
+          {/* <Text style={styles.sectionTitle}>Your Tasks</Text> */}
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Tasks</Text>
         </View>
 
         {/* Academic */}
-        <TouchableOpacity style={styles.categoryCard}
+        {/* <TouchableOpacity style={styles.categoryCard} */}
+        <TouchableOpacity style={[styles.categoryCard, { backgroundColor: theme.card, borderColor: theme.border }]} 
         onPress={() => navigation.navigate('Tasks', { filterCategory: 'Academic' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#3b5bdb' }]}>
             <Ionicons name="book-outline" size={20} color="#ffffff" />
           </View>
           <View style={styles.categoryInfo}>
-            <Text style={styles.categoryName}>Academic</Text>
-            <Text style={styles.categoryCount}>
+            {/* <Text style={styles.categoryName}>Academic</Text> */}
+            <Text style={[styles.categoryName, { color: theme.text }]}>Academic</Text>
+            {/* <Text style={styles.categoryCount}> */}
+            <Text style={[styles.categoryCount, { color: theme.subtext }]}> 
                       {regularTasks.filter(t => t.category === 'Academic' && t.progress < 100).length} active tasks
             </Text>
             </View>
-            <Text style={styles.categoryNumber}>
+            {/* <Text style={styles.categoryNumber}> */}
+            <Text style={[styles.categoryNumber, { color: theme.text }]}> 
                       {regularTasks.filter(t => t.category === 'Academic' && t.progress < 100).length}
             </Text>
         </TouchableOpacity>
 
         {/* Organization */}
-        <TouchableOpacity style={styles.categoryCard}
+        {/* <TouchableOpacity style={styles.categoryCard} */}
+        <TouchableOpacity style={[styles.categoryCard, { backgroundColor: theme.card, borderColor: theme.border }]} 
         onPress={() => navigation.navigate('Tasks', { filterCategory: 'Organization' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#9c36b5' }]}>
             <Ionicons name="people-outline" size={20} color="#ffffff" />
           </View>
           <View style={styles.categoryInfo}>
-            <Text style={styles.categoryName}>Organization</Text>
-            <Text style={styles.categoryCount}>
+            {/* <Text style={styles.categoryName}>Organization</Text> */}
+            <Text style={[styles.categoryName, { color: theme.text }]}>Organization</Text>
+            {/* <Text style={styles.categoryCount}> */}
+            <Text style={[styles.categoryCount, { color: theme.subtext }]}> 
                     {regularTasks.filter(t => t.category === 'Organization' && t.progress < 100).length} active tasks
             </Text>
             </View>
-            <Text style={styles.categoryNumber}>
+            {/* <Text style={styles.categoryNumber}> */}
+            <Text style={[styles.categoryNumber, { color: theme.text }]}> 
                      {regularTasks.filter(t => t.category === 'Organization' && t.progress < 100).length}
             </Text>
         </TouchableOpacity>
 
         {/* Personal */}
-        <TouchableOpacity style={styles.categoryCard}
+        {/* <TouchableOpacity style={styles.categoryCard} */}
+        <TouchableOpacity style={[styles.categoryCard, { backgroundColor: theme.card, borderColor: theme.border }]} 
         onPress={() => navigation.navigate('Tasks', { filterCategory: 'Personal' })}>
           <View style={[styles.categoryIcon, { backgroundColor: '#0ca678' }]}>
             <Ionicons name="heart-outline" size={20} color="#ffffff" />
           </View>
           <View style={styles.categoryInfo}>
-            <Text style={styles.categoryName}>Personal</Text>
-            <Text style={styles.categoryCount}>
+            {/* <Text style={styles.categoryName}>Personal</Text> */}
+            <Text style={[styles.categoryName, { color: theme.text }]}>Personal</Text>
+            {/* <Text style={styles.categoryCount}> */}
+            <Text style={[styles.categoryCount, { color: theme.subtext }]}> 
                     {regularTasks.filter(t => t.category === 'Personal' && t.progress < 100).length} active tasks
             </Text>
           </View>
-          <Text style={styles.categoryNumber}>
+          {/* <Text style={styles.categoryNumber}> */}
+          <Text style={[styles.categoryNumber, { color: theme.text }]}> 
                      {regularTasks.filter(t => t.category === 'Personal' && t.progress < 100).length}
           </Text>
         </TouchableOpacity>
-
-        {/* PRIORITY TASKS SECTION */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Priority Tasks</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Tasks')}>
-            <Text style={styles.viewAll}>View All</Text>
-          </TouchableOpacity>
-        </View>
-       
-
-         {/* TASK CARDS */}
-        {regularTasks.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="checkmark-circle-outline" size={56} color="rgba(255,255,255,0.15)" />
-            <Text style={styles.emptyTitle}>No tasks yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Tap the + button to add your first task
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => navigation.navigate('AddTask')}
-            >
-              <Text style={styles.emptyButtonText}>Add your first task</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          regularTasks.slice(0, 3).map((task) => (
-            <TouchableOpacity
-              key={task.id}
-              style={styles.taskCard}
-              onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
-              activeOpacity={0.7}
-            >
-              
-              {/* Task Title and Priority Badge */}
-              <View style={styles.taskTopRow}>
-                <Text style={styles.taskTitle} numberOfLines={1}>
-                  {task.title}
-                </Text>
-                <View style={[
-                  styles.priorityBadge,
-                  task.priority === 'High' && styles.priorityHigh,
-                  task.priority === 'Medium' && styles.priorityMedium,
-                  task.priority === 'Low' && styles.priorityLow,
-                ]}>
-                  <Text style={styles.priorityText}>{task.priorityLabel} ({task.priorityScore})</Text>
-                </View>
-              </View>
-
-              {/* Category and Deadline */}
-              <View style={styles.taskMidRow}>
-                <Text style={styles.taskCategory}>{task.category}</Text>
-                <View style={styles.taskDeadline}>
-                  <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
-                  <Text style={styles.taskDeadlineText}>{formatDeadline(task.deadline)}</Text>
-                </View>
-              </View>
-
-              {/* Progress Bar */}
-              <View style={styles.taskProgressBg}>
-                <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
-              </View>
-
-              {/* Bottom Row */}
-              <View style={styles.taskBottomRow}>
-                <View style={styles.assigneeRow}>
-                  {task.assignments && task.assignments.slice(0, 3).map((initial, index) => (
-                    <View
-                      key={index}
-                      style={[styles.assigneeAvatar, { marginLeft: index === 0 ? 0 : -8 }]}
-                    >
-                      <Text style={styles.assigneeInitial}>{initial}</Text>
-                    </View>
-                  ))}
-                </View>
-                <Text style={styles.taskProgressText}>
-                      {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
-                </Text>
-
-              </View>
-
-            </TouchableOpacity>
-          ))
-        )}
           
             </ScrollView>
 
@@ -620,7 +571,7 @@ export default function HomeScreen({ navigation }) {
         task={breakdownTask}
         onClose={() => setBreakdownTask(null)}
       />
-
+      {/* Floating Add button */}
       <TouchableOpacity
         style={styles.addButton}
         onPress={() => navigation.getParent()?.navigate('AddTask')}
@@ -695,7 +646,7 @@ export default function HomeScreen({ navigation }) {
     backgroundColor: '#1a1a3e',
     borderRadius: 20,
     padding: 20,
-    marginBottom: 24,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(167, 139, 250, 0.2)',
   },
@@ -804,7 +755,14 @@ export default function HomeScreen({ navigation }) {
     fontSize: 20,
     fontWeight: '700',
     color: '#a78bfa',
-  }, // end of your task section attributes
+  }, 
+  yourTasksHeader: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  // end of your task section attributes
 
   // priority tasks section attributes
   viewAll: {
@@ -970,7 +928,7 @@ export default function HomeScreen({ navigation }) {
 
     // Today's Focus styles
   focusSection: {
-    marginBottom: 24,
+    marginBottom: 4,
   },
   focusSectionHeader: {
     marginBottom: 14,
@@ -983,13 +941,14 @@ export default function HomeScreen({ navigation }) {
   focusSectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#ffffff',
+    // color: '#ffffff',
+    color: '#1e293b', // replace the css above
   },
   focusSubtitle: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.4)',
     marginTop: 4,
-    marginLeft: 28,
+    //marginLeft: 28,
   },
   focusCard: {
     flexDirection: 'row',
@@ -1028,7 +987,8 @@ export default function HomeScreen({ navigation }) {
   focusTaskTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#ffffff',
+    //color: '#ffffff',
+    color: '#1e293b', // replace the css
     flex: 1,
     marginRight: 8,
   },
@@ -1154,7 +1114,8 @@ export default function HomeScreen({ navigation }) {
     alignItems: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#0f0f23',
+    //borderColor: '#0f0f23', 
+    borderColor: 'transparent', // Replace the css above
   },
   notifBadgeText: {
     color: '#ffffff',
@@ -1188,7 +1149,8 @@ export default function HomeScreen({ navigation }) {
   },
   wellnessBannerText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
+    //color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(100,116,139,0.8)', // Replace the css above
     lineHeight: 16,
   },
   throttleBanner: {
@@ -1221,7 +1183,8 @@ export default function HomeScreen({ navigation }) {
   },
   throttleBannerText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    // color: 'rgba(255,255,255,0.6)',
+    color: '#64748b', // replace the css above
     lineHeight: 17,
   },
   throttleDeferItem: {
