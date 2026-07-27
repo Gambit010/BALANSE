@@ -9,6 +9,7 @@ import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { checkAndNotifyConflicts } from '../services/conflictService';
 import { useTaskConflicts } from '../hooks/useConflicts';
 import { useTasks } from '../hooks/useTasks';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -28,6 +29,7 @@ export default function EditTaskScreen({ route, navigation }) {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const { tasks: existingTasks } = useTasks();
+  const { theme, isDarkMode } = useTheme(); // for dark mode
 
   // Build a temporary task object for live conflict checking
   const pendingTask = useMemo(() => ({
@@ -126,7 +128,7 @@ export default function EditTaskScreen({ route, navigation }) {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -134,32 +136,32 @@ export default function EditTaskScreen({ route, navigation }) {
         {/* HEADER */}
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,},]}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            <Ionicons name="arrow-back" size={24} color={theme.icon} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Task</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Edit Task</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* TITLE INPUT */}
-        <Text style={styles.label}>Task Title</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Task Title</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border,},]}
           placeholder="Enter task title"
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor= {theme.subtext}
           value={title}
           onChangeText={setTitle}
           maxLength={100}
         />
 
         {/* DESCRIPTION INPUT */}
-        <Text style={styles.label}>Description</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Description</Text>
         <TextInput
-          style={[styles.input, styles.textArea]}
+          style={[styles.input, styles.textArea, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border, },]}
           placeholder="Enter task description"
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor= {theme.subtext}
           value={description}
           onChangeText={setDescription}
           multiline
@@ -168,20 +170,21 @@ export default function EditTaskScreen({ route, navigation }) {
         />
 
         {/* CATEGORY SELECTOR */}
-        <Text style={styles.label}>Category</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Category</Text>
         <View style={styles.optionRow}>
           {['Academic', 'Organization', 'Personal'].map((cat) => (
             <TouchableOpacity
               key={cat}
-              style={[
-                styles.optionButton,
-                category === cat && styles.optionButtonActive,
+              style={[styles.optionButton, {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              }, category === cat && styles.optionButtonActive,
               ]}
               onPress={() => setCategory(cat)}
             >
               <Text style={[
-                styles.optionText,
-                category === cat && styles.optionTextActive,
+                styles.optionText, { color: category === cat ? theme.text : theme.subtext, },
+                category === cat && { color: theme.text, fontWeight: '700',},
               ]}>
                 {cat}
               </Text>
@@ -190,13 +193,15 @@ export default function EditTaskScreen({ route, navigation }) {
         </View>
 
         {/* PRIORITY SELECTOR */}
-        <Text style={styles.label}>Priority</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Priority</Text>
         <View style={styles.optionRow}>
           {['Low', 'Medium', 'High'].map((pri) => (
             <TouchableOpacity
               key={pri}
-              style={[
-                styles.optionButton,
+              style={[styles.optionButton, {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
                 priority === pri && styles.optionButtonActive,
                 priority === pri && pri === 'High' && { borderColor: '#ef4444' },
                 priority === pri && pri === 'Medium' && { borderColor: '#fb923c' },
@@ -205,8 +210,8 @@ export default function EditTaskScreen({ route, navigation }) {
               onPress={() => setPriority(pri)}
             >
               <Text style={[
-                styles.optionText,
-                priority === pri && styles.optionTextActive,
+                styles.optionText, { color: priority === pri ? theme.text : theme.subtext },
+                priority === pri && { color: theme.text, fontWeight:'700',},
               ]}>
                 {pri}
               </Text>
@@ -215,13 +220,13 @@ export default function EditTaskScreen({ route, navigation }) {
         </View>
 
         {/* DEADLINE */}
-        <Text style={styles.label}>Deadline</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Deadline</Text>
         <TouchableOpacity
-          style={styles.deadlineRow}
+          style={[styles.deadlineRow, { backgroundColor: theme.card }]}
           onPress={() => setShowDatePicker(true)}
         >
-          <Ionicons name="calendar-outline" size={18} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.deadlineText}>
+          <Ionicons name="calendar-outline" size={18} color= {theme.subtext} />
+          <Text style={[styles.deadlineText, { color: theme.text }]}>
             {deadline.toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
@@ -230,7 +235,7 @@ export default function EditTaskScreen({ route, navigation }) {
             })}
             {hasTime ? ` at ${deadline.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
           </Text>
-          <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+          <Ionicons name="chevron-down-outline" size={18} color={theme.subtext} />
         </TouchableOpacity>
 
                 {showDatePicker && (
@@ -253,28 +258,28 @@ export default function EditTaskScreen({ route, navigation }) {
           onPress={() => setHasTime(!hasTime)}
         >
           <View style={styles.timeToggleLeft}>
-            <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
-            <Text style={styles.timeToggleText}>Set specific time</Text>
+            <Ionicons name="time-outline" size={18} color={ theme.subtext } />
+            <Text style={[styles.timeToggleText, { color: theme.subtext }]}>Set specific time</Text>
           </View>
-          <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
-            <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
+          <View style={[styles.toggleTrack, { backgroundColor: hasTime ? '#7c3aed' : '#64748b'}]}>
+            <View style={[styles.toggleThumb, { backgroundColor: '#ffffff'}, hasTime && styles.toggleThumbActive]} />
           </View>
         </TouchableOpacity>
 
         {hasTime && (
           <TouchableOpacity
-            style={styles.timeRow}
+            style={[styles.timeRow, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,}]}
             onPress={() => setShowTimePicker(true)}
           >
-            <Ionicons name="time-outline" size={18} color="#a78bfa" />
-            <Text style={styles.timeText}>
+            <Ionicons name="time-outline" size={18} color={theme.subtext} />
+            <Text style={[styles.timeText, { color: theme.text }]}>
               {deadline.toLocaleTimeString('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true,
               })}
             </Text>
-            <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+            <Ionicons name="chevron-down-outline" size={18} color={theme.subtext} />
           </TouchableOpacity>
         )}
 
@@ -291,20 +296,21 @@ export default function EditTaskScreen({ route, navigation }) {
         )}
 
                 {/* STATUS SELECTOR */}
-        <Text style={styles.label}>Status</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Status</Text>
         <View style={styles.progressRow}>
           {progressOptions.map((opt) => (
             <TouchableOpacity
               key={opt.value}
-              style={[
-                styles.progressChip,
+              style={[styles.progressChip, {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
                 progress === opt.value && styles.progressChipActive,
               ]}
               onPress={() => setProgress(opt.value)}
             >
-              <Text style={[
-                styles.progressChipText,
-                progress === opt.value && styles.progressChipTextActive,
+              <Text style={[styles.progressChipText, { color: progress === opt.value ? theme.text : theme.subtext },
+                progress === opt.value && { color: theme.text, fontWeight: '700',},
               ]}>
                 {opt.label}
               </Text>
@@ -314,12 +320,12 @@ export default function EditTaskScreen({ route, navigation }) {
 
 
         {/* Progress Bar Preview */}
-        <View style={styles.progressBarBg}>
+        <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
           <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
         </View>
 
                 {/* CONFLICT ALERTS */}
-      <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
+      <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion}/>
 
         {/* SAVE BUTTON */}
         <TouchableOpacity
@@ -485,15 +491,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-
-  timeToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  timeToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  timeToggleText: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
-  toggleTrack: { width: 44, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', paddingHorizontal: 2 },
-  toggleTrackActive: { backgroundColor: 'rgba(167,139,250,0.4)' },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)' },
-  toggleThumbActive: { backgroundColor: '#a78bfa', alignSelf: 'flex-end' },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 28, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
-  timeText: { color: '#a78bfa', fontSize: 16, fontWeight: '600', flex: 1 },
-
+  timeToggleRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: 12 
+  },
+  timeToggleLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8 
+  },
+  timeToggleText: { 
+    fontSize: 14, 
+    color: 'rgba(255,255,255,0.6)' 
+  },
+  toggleTrack: { 
+    width: 44, 
+    height: 24, 
+    borderRadius: 12, 
+    backgroundColor: 'rgba(255,255,255,0.15)', 
+    justifyContent: 'center', paddingHorizontal: 2 
+  },
+  toggleTrackActive: { 
+    backgroundColor: 'rgba(167,139,250,0.4)' 
+  },
+  toggleThumb: { 
+    width: 20, 
+    height: 20, 
+    borderRadius: 10, 
+    backgroundColor: 'rgba(255,255,255,0.4)' 
+  },
+  toggleThumbActive: { 
+    backgroundColor: '#a78bfa', 
+    alignSelf: 'flex-end' 
+  },
+  timeRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 12, 
+    padding: 14, 
+    marginBottom: 28, 
+    borderWidth: 1, 
+    borderColor: 'rgba(167,139,250,0.2)', 
+    justifyContent: 'space-between' 
+  },
+  timeText: { 
+    color: '#a78bfa', 
+    fontSize: 16, 
+    fontWeight: '600', 
+    flex: 1 
+  },
 });
