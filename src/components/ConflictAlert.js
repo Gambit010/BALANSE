@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const SEVERITY_CONFIG = {
   high: { color: '#ef4444', bg: 'rgba(239,68,68,0.1)', icon: 'alert-circle', label: 'Conflict' },
@@ -10,6 +11,7 @@ const SEVERITY_CONFIG = {
 
 export default function ConflictAlert({ conflicts, style, onApplySuggestion }) {
   const [expandedIndex, setExpandedIndex] = useState(null);
+  const { theme, isDarkMode } = useTheme(); // for dark mode
 
   if (!conflicts || conflicts.length === 0) return null;
 
@@ -17,7 +19,7 @@ export default function ConflictAlert({ conflicts, style, onApplySuggestion }) {
     <View style={[styles.container, style]}>
       <View style={styles.headerRow}>
         <Ionicons name="git-compare-outline" size={16} color="#ef4444" />
-        <Text style={styles.headerText}>
+        <Text style={[styles.headerText, { color: '#ef4444'}]}>
           {conflicts.length} scheduling {conflicts.length === 1 ? 'conflict' : 'conflicts'} detected
         </Text>
       </View>
@@ -29,7 +31,7 @@ export default function ConflictAlert({ conflicts, style, onApplySuggestion }) {
         return (
           <TouchableOpacity
             key={index}
-            style={[styles.conflictCard, { backgroundColor: config.bg, borderLeftColor: config.color }]}
+            style={[styles.conflictCard, { backgroundColor: config.bg , borderLeftColor: config.color, borderColor: theme.border, borderWidth: 1, }]}
             onPress={() => setExpandedIndex(isExpanded ? null : index)}
             activeOpacity={0.7}
           >
@@ -39,17 +41,17 @@ export default function ConflictAlert({ conflicts, style, onApplySuggestion }) {
               <Ionicons
                 name={isExpanded ? 'chevron-up' : 'chevron-down'}
                 size={14}
-                color="rgba(255,255,255,0.4)"
+                color={theme.subtext}
               />
             </View>
 
-            <Text style={styles.conflictMessage}>{conflict.message}</Text>
+            <Text style={[styles.conflictMessage, { color: theme.text }]}>{conflict.message}</Text>
 
             {isExpanded && conflict.suggestion && (
               <View style={styles.suggestionBox}>
-                <Ionicons name="bulb-outline" size={14} color="#a78bfa" />
+                <Ionicons name="bulb-outline" size={14} color={theme.accent} />
                 <View style={styles.suggestionContent}>
-                  <Text style={styles.suggestionText}>{conflict.suggestion}</Text>
+                  <Text style={[styles.suggestionText, { color: theme.text }]}>{conflict.suggestion}</Text>
                   {conflict.suggestedSlot && onApplySuggestion && (
                     <TouchableOpacity
                       style={styles.applyButton}
