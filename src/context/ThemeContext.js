@@ -7,7 +7,7 @@ export const themes = {
     background: '#0f0f23',
     card: '#1a1a3e',
     text: '#ffffff',
-    subtext: 'rgba(255,255,255,0.5)',
+    subtext: 'rgba(255,255,255,0.3)',
     border: 'rgba(255,255,255,0.08)',
     accent: '#a78bfa',
     inputBg: 'rgba(88,28,135,0.4)',
