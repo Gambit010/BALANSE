@@ -10,6 +10,7 @@ import { detectConflicts } from '../services/conflictService';
 import { createNotification } from '../services/notificationService';
 import { useTasks } from '../hooks/useTasks';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -25,6 +26,7 @@ export default function AddClassScreen({ navigation }) {
   const { tasks: existingTasks } = useTasks();
   const [className, setClassName] = useState('');
   const [selectedDays, setSelectedDays] = useState([]);
+  const { theme, isDarkMode } = useTheme(); // for dark mode
   const [startTime, setStartTime] = useState(() => {
     const d = new Date();
     d.setHours(9, 0, 0, 0);
@@ -287,38 +289,52 @@ export default function AddClassScreen({ navigation }) {
   }, [selectedDays, durationPreset, customValue, customUnit, showCustom]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <TouchableOpacity style={[styles.backButton, { 
+            backgroundColor: theme.card, 
+            borderColor: theme.border, 
+            borderWidth: 1,}
+            ,]} 
+          onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={ theme.text } />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Class Schedule</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Add Class Schedule</Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* CLASS NAME */}
-        <Text style={styles.label}>Class / Activity Name</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Class / Activity Name</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, {
+            backgroundColor: theme.card,
+            color: theme.text,
+            borderColor: theme.border
+
+          }]}
           placeholder='e.g. "Math 101" or "Gym"'
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor= {theme.subtext}
           value={className}
           onChangeText={setClassName}
           maxLength={100}
         />
 
         {/* CATEGORY */}
-        <Text style={styles.label}>Category</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Category</Text>
         <View style={styles.optionRow}>
           {['Academic', 'Organization', 'Personal'].map((cat) => (
             <TouchableOpacity
               key={cat}
-              style={[styles.optionButton, category === cat && styles.optionButtonActive]}
+              style={[styles.optionButton, { 
+                backgroundColor: theme.card, 
+                borderColor: theme.border 
+              }, category === cat && styles.optionButtonActive]}
               onPress={() => setCategory(cat)}
             >
-              <Text style={[styles.optionText, category === cat && styles.optionTextActive]}>
+              <Text style={[styles.optionText, { color: category === cat ? theme.text : theme.subtext}, 
+                category === cat && {color: theme.text, fontWeight: '700',},]}>
                 {cat}
               </Text>
             </TouchableOpacity>
@@ -326,17 +342,20 @@ export default function AddClassScreen({ navigation }) {
         </View>
 
         {/* DAY SELECTOR */}
-        <Text style={styles.label}>Repeat on</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Repeat on</Text>
         <View style={styles.dayRow}>
           {WEEKDAYS.map((day, i) => {
             const isSelected = selectedDays.includes(day);
             return (
               <TouchableOpacity
                 key={day}
-                style={[styles.dayChip, isSelected && styles.dayChipActive]}
+                style={[styles.dayChip, { 
+                  backgroundColor: theme.card,
+                  borderColor: theme.border
+                }, isSelected && styles.dayChipActive]}
                 onPress={() => toggleDay(day)}
               >
-                <Text style={[styles.dayChipText, isSelected && styles.dayChipTextActive]}>
+                <Text style={[styles.dayChipText, { color: isSelected ? theme.text : theme.subtext}, isSelected && {color: theme.text, fontWeight: '700',},]}>
                   {WEEKDAY_SHORT[i]}
                 </Text>
               </TouchableOpacity>
@@ -345,26 +364,32 @@ export default function AddClassScreen({ navigation }) {
         </View>
 
         {/* DEFAULT TIME */}
-        <Text style={styles.label}>Default Time</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Default Time</Text>
         <View style={styles.timeRangeRow}>
           <TouchableOpacity
-            style={styles.timeBox}
+            style={[styles.timeBox, {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            }]}
             onPress={() => { setEditingDay('default'); setEditingField('start'); }}
           >
-            <Ionicons name="time-outline" size={16} color="#a78bfa" />
-            <Text style={styles.timeBoxText}>
+            <Ionicons name="time-outline" size={16} color={theme.accent} />
+            <Text style={[styles.timeBoxText, { color: theme.text }]}>
               {startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
             </Text>
           </TouchableOpacity>
 
-          <Text style={styles.timeDash}>—</Text>
+          <Text style={[styles.timeDash, { color: theme.subtext }]}>—</Text>
 
           <TouchableOpacity
-            style={styles.timeBox}
+            style={[styles.timeBox, {
+              backgroundColor: theme.card,
+              borderColor: theme.border
+            }]}
             onPress={() => { setEditingDay('default'); setEditingField('end'); }}
           >
-            <Ionicons name="time-outline" size={16} color="#a78bfa" />
-            <Text style={styles.timeBoxText}>
+            <Ionicons name="time-outline" size={16} color={ theme.accent } />
+            <Text style={[styles.timeBoxText, { color: theme.text }]}>
               {endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
             </Text>
           </TouchableOpacity>
@@ -373,26 +398,26 @@ export default function AddClassScreen({ navigation }) {
         {/* PER-DAY SCHEDULE */}
         {selectedDays.length > 0 && (
           <>
-            <Text style={styles.label}>Per-Day Schedule</Text>
-            <Text style={styles.perDayHint}>Tap a time to customize that day</Text>
+            <Text style={[styles.label, { color: theme.text }]}>Per-Day Schedule</Text>
+            <Text style={[styles.perDayHint, { color: theme.subtext }]}>Tap a time to customize that day</Text>
             {selectedDays.map((day) => {
               const dt = getDayTime(day);
               return (
-                <View key={day} style={[styles.dayScheduleRow, dt.isCustom && styles.dayScheduleRowCustom]}>
-                  <Text style={styles.dayScheduleName}>{day}</Text>
+                <View key={day} style={[styles.dayScheduleRow, { backgroundColor: theme.card, borderColor: theme.border}]}>
+                  <Text style={[styles.dayScheduleName, { color: theme.text }]}>{day}</Text>
                   <View style={styles.dayScheduleTimes}>
                     <TouchableOpacity
                       onPress={() => { setEditingDay(day); setEditingField('start'); }}
                     >
-                      <Text style={[styles.dayScheduleTime, dt.isCustom && styles.dayScheduleTimeCustom]}>
+                      <Text style={[styles.dayScheduleTime, { color: theme.text }, dt.isCustom && { color: theme.accent},]}>
                         {dt.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                       </Text>
                     </TouchableOpacity>
-                    <Text style={styles.dayScheduleDash}>—</Text>
+                    <Text style={[styles.dayScheduleDash, { color: theme.subtext }]}>—</Text>
                     <TouchableOpacity
                       onPress={() => { setEditingDay(day); setEditingField('end'); }}
                     >
-                      <Text style={[styles.dayScheduleTime, dt.isCustom && styles.dayScheduleTimeCustom]}>
+                      <Text style={[styles.dayScheduleTime, { color: theme.text }, dt.isCustom && { color: theme.accent }]}>
                         {dt.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                       </Text>
                     </TouchableOpacity>
@@ -407,7 +432,7 @@ export default function AddClassScreen({ navigation }) {
                         }}
                         style={styles.resetButton}
                       >
-                        <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.3)" />
+                        <Ionicons name="close-circle" size={16} color={ theme.subtext } />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -428,33 +453,33 @@ export default function AddClassScreen({ navigation }) {
         )}
 
         {/* DURATION */}
-        <Text style={styles.label}>Duration</Text>
+        <Text style={[styles.label, { color: theme.text }]}>Duration</Text>
         <View style={styles.durationRow}>
           {DURATION_PRESETS.map((preset) => {
             const isActive = durationPreset?.value === preset.value && durationPreset?.unit === preset.unit && !showCustom;
             return (
               <TouchableOpacity
                 key={preset.label}
-                style={[styles.durationChip, isActive && styles.durationChipActive]}
+                style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, isActive && styles.durationChipActive]}
                 onPress={() => {
                   setDurationPreset(preset);
                   setShowCustom(false);
                 }}
               >
-                <Text style={[styles.durationChipText, isActive && styles.durationChipTextActive]}>
+                <Text style={[styles.durationChipText, { color: isActive ? theme.text : theme.subtext }, isActive && { color: theme.text, fontWeight: '700',},]}>
                   {preset.label}
                 </Text>
               </TouchableOpacity>
             );
           })}
           <TouchableOpacity
-            style={[styles.durationChip, showCustom && styles.durationChipActive]}
+            style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, showCustom && styles.durationChipActive]}
             onPress={() => {
               setShowCustom(true);
               setDurationPreset(null);
             }}
           >
-            <Text style={[styles.durationChipText, showCustom && styles.durationChipTextActive]}>
+            <Text style={[styles.durationChipText, { color: showCustom ? theme.text : theme.subtext }, showCustom && { color: theme.text, fontWeight: '700',},]}>
               Custom
             </Text>
           </TouchableOpacity>
@@ -464,28 +489,32 @@ export default function AddClassScreen({ navigation }) {
         {showCustom && (
           <View style={styles.customRow}>
             <TextInput
-              style={styles.customInput}
+              style={[styles.customInput, { 
+                backgroundColor: theme.card, 
+                color: theme.text, 
+                borderColor: theme.border 
+              }]}
               value={customValue}
               onChangeText={setCustomValue}
               keyboardType="number-pad"
               maxLength={2}
               placeholder="8"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholderTextColor= {theme.subtext}
             />
             <View style={styles.unitRow}>
               <TouchableOpacity
-                style={[styles.unitChip, customUnit === 'weeks' && styles.unitChipActive]}
+                style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border}, customUnit === 'weeks' && styles.unitChipActive]}
                 onPress={() => setCustomUnit('weeks')}
               >
-                <Text style={[styles.unitChipText, customUnit === 'weeks' && styles.unitChipTextActive]}>
+                <Text style={[styles.unitChipText, { color: customUnit ? theme.subtext : theme.text}, customUnit === 'weeks' && { color: theme.text, fontWeight: '700',},]}>
                   Weeks
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.unitChip, customUnit === 'months' && styles.unitChipActive]}
+                style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border }, customUnit === 'months' && styles.unitChipActive]}
                 onPress={() => setCustomUnit('months')}
               >
-                <Text style={[styles.unitChipText, customUnit === 'months' && styles.unitChipTextActive]}>
+                <Text style={[styles.unitChipText, { color: customUnit ? theme.subtext : theme.text}, customUnit === 'months' && { color: theme.text, fontWeight: '700',},]}>
                   Months
                 </Text>
               </TouchableOpacity>
@@ -496,8 +525,8 @@ export default function AddClassScreen({ navigation }) {
         {/* PREVIEW */}
         {sessionCount > 0 && dur && (
           <View style={styles.previewBox}>
-            <Ionicons name="calendar-outline" size={16} color="#a78bfa" />
-            <Text style={styles.previewText}>
+            <Ionicons name="calendar-outline" size={16} color={ theme.subtext } />
+            <Text style={[styles.previewText, { color: theme.subtext }]}>
               {sessionCount} session{sessionCount !== 1 ? 's' : ''} will be created
               {' '}({selectedDays.map((d) => d.slice(0, 3)).join(', ')} for {dur.value} {dur.unit})
             </Text>
@@ -520,20 +549,85 @@ export default function AddClassScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f0f23' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20, marginBottom: 28 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
-  label: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: { backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, color: '#ffffff', fontSize: 15, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  optionRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  optionButton: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', alignItems: 'center', backgroundColor: '#1a1a3e' },
-  optionButtonActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.15)' },
-  optionText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
-  optionTextActive: { color: '#ffffff', fontWeight: '700' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#0f0f23' 
+  },
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 40 
+  },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingTop: 20, marginBottom: 28 
+  },
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: '#ffffff' 
+  },
+  label: { 
+    fontSize: 13, 
+    fontWeight: '600', 
+    color: 'rgba(255,255,255,0.6)', 
+    marginBottom: 8, 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.5 
+  },
+  input: { 
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 12, 
+    padding: 14, 
+    color: '#ffffff', 
+    fontSize: 15, 
+    marginBottom: 20, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.08)' 
+  },
+  optionRow: { 
+    flexDirection: 'row', 
+    gap: 10, 
+    marginBottom: 20 
+  },
+  optionButton: { 
+    flex: 1, 
+    paddingVertical: 12, 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.15)', 
+    alignItems: 'center', 
+    backgroundColor: '#1a1a3e' 
+  },
+  optionButtonActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.15)' 
+  },
+  optionText: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.5)', 
+    fontWeight: '500' 
+  },
+  optionTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
 
-  dayRow: { flexDirection: 'row', gap: 6, marginBottom: 20, flexWrap: 'wrap' },
+  dayRow: { 
+    flexDirection: 'row', 
+    gap: 6, 
+    marginBottom: 20, 
+    flexWrap: 'wrap' 
+  },
   dayChip: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -542,11 +636,25 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: '#1a1a3e',
   },
-  dayChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
-  dayChipText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
-  dayChipTextActive: { color: '#ffffff', fontWeight: '700' },
-
-  timeRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  dayChipActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.2)' 
+  },
+  dayChipText: { 
+    fontSize: 13, 
+    fontWeight: '500', 
+    color: 'rgba(255,255,255,0.5)' 
+  },
+  dayChipTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
+  timeRangeRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    marginBottom: 20 
+  },
   timeBox: {
     flex: 1,
     flexDirection: 'row',
@@ -558,10 +666,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(167,139,250,0.2)',
   },
-  timeBoxText: { color: '#a78bfa', fontSize: 15, fontWeight: '600' },
-  timeDash: { color: 'rgba(255,255,255,0.3)', fontSize: 18 },
-
-  durationRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
+  timeBoxText: { 
+    color: '#a78bfa', 
+    fontSize: 14, 
+    fontWeight: '600' 
+  },
+  timeDash: { 
+    color: 'rgba(255,255,255,0.3)', 
+    fontSize: 18 
+  },
+  durationRow: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    marginBottom: 12, 
+    flexWrap: 'wrap' 
+  },
   durationChip: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -570,24 +689,39 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: '#1a1a3e',
   },
-  durationChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
-  durationChipText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
-  durationChipTextActive: { color: '#ffffff', fontWeight: '700' },
-
-  customRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  durationChipActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.2)' 
+  },
+  durationChipText: { 
+    fontSize: 13, 
+    fontWeight: '500', 
+    color: 'rgba(255,255,255,0.5)' 
+  },
+  durationChipTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
+  customRow: { flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    marginBottom: 20 
+  },
   customInput: {
-    width: 60,
+    width: 70,
     backgroundColor: '#1a1a3e',
     borderRadius: 10,
     padding: 12,
     color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 15,
     textAlign: 'center',
     borderWidth: 1,
     borderColor: 'rgba(167,139,250,0.2)',
   },
-  unitRow: { flexDirection: 'row', gap: 8 },
+  unitRow: { 
+    flexDirection: 'row', 
+    gap: 8 
+  },
   unitChip: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -596,11 +730,21 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: '#1a1a3e',
   },
-  unitChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
-  unitChipText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
-  unitChipTextActive: { color: '#ffffff', fontWeight: '700' },
-    perDayHint: {
-    fontSize: 11,
+  unitChipActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.2)' 
+  },
+  unitChipText: { 
+    fontSize: 13, 
+    fontWeight: '500', 
+    color: 'rgba(255,255,255,0.5)' 
+  },
+  unitChipTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
+  perDayHint: {
+    fontSize: 12,
     color: 'rgba(255,255,255,0.3)',
     marginBottom: 10,
     marginTop: -4,
@@ -633,13 +777,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dayScheduleTime: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.5)',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  dayScheduleTimeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   dayScheduleTimeCustom: {
     color: '#a78bfa',
@@ -666,9 +816,24 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 24,
   },
-  previewText: { fontSize: 13, color: '#a78bfa', flex: 1, lineHeight: 18 },
-
-  submitButton: { backgroundColor: '#7c3aed', paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  previewText: { 
+    fontSize: 13, 
+    color: '#a78bfa', 
+    flex: 1, 
+    lineHeight: 18 
+  },
+  submitButton: { 
+    backgroundColor: '#7c3aed', 
+    paddingVertical: 16, 
+    borderRadius: 16, 
+    alignItems: 'center' 
+  },
+  submitButtonDisabled: { 
+    opacity: 0.6 
+  },
+  submitButtonText: { 
+    color: '#ffffff', 
+    fontSize: 16, 
+    fontWeight: '700' 
+  },
 });
