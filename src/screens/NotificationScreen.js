@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { getUserNotifications, markAsRead } from '../services/notificationService';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const formatTimeAgo = (firebaseTimestamp) => {
   if (!firebaseTimestamp) return '';
@@ -31,6 +32,7 @@ const formatTimeAgo = (firebaseTimestamp) => {
 export default function NotificationScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { theme, isDarkMode } = useTheme();
 
   useEffect(() => {
     fetchNotifications();
@@ -83,44 +85,64 @@ export default function NotificationScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background}]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#a78bfa" />
-          <Text style={styles.loadingText}>Loading notifications...</Text>
+          <ActivityIndicator size="large" color= {theme.accent} />
+          <Text style={[styles.loadingText, { color: theme.subtext }]}>Loading notifications...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* HEADER */}
         <View style={styles.header}>
+          <View style={styles.headerSide}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[styles.backButton, {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+              borderWidth: 1,
+            }]}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            <Ionicons name="arrow-back" size={24} color= { theme.text } />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          {unreadCount > 0 ? (
-            <TouchableOpacity onPress={handleMarkAllRead}>
-              <Text style={styles.markAllText}>Mark all read</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 80 }} />
-          )}
+          </View>
+
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Notifications</Text>
+
+          <View style={styles.headerSide}>
+            {/*}
+             {unreadCount > 0 ? (
+              <TouchableOpacity onPress={handleMarkAllRead}>
+                <Text style={[styles.markAllText, { color: theme.accent }]}>Mark all read</Text>
+              </TouchableOpacity>
+              ) : (
+              <View style={{ width: 80 }} />
+            )}
+              */}
+            {unreadCount > 0 && (
+              <TouchableOpacity onPress={handleMarkAllRead}>
+                <Text style={[styles.markAllText, { color: theme.accent }]}>Mark all as read</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* UNREAD COUNT */}
         {unreadCount > 0 && (
-          <View style={styles.unreadBanner}>
-            <Ionicons name="ellipse" size={8} color="#a78bfa" />
-            <Text style={styles.unreadText}>
+          <View style={[styles.unreadBanner, {
+            backgroundColor: isDarkMode ? 'rgba(167,139,250,0.08)' : '#F3E8FF',
+            borderColor: theme.accent,
+          },]}>
+            <Ionicons name="ellipse" size={8} color={theme.accent} />
+            <Text style={[styles.unreadText, { color: theme.accent },]}>
               {unreadCount} unread notification{unreadCount > 1 ? 's' : ''}
             </Text>
           </View>
@@ -129,8 +151,8 @@ export default function NotificationScreen({ navigation }) {
         {/* EMPTY STATE */}
         {notifications.length === 0 && (
           <View style={styles.emptyState}>
-            <Ionicons name="notifications-off-outline" size={56} color="rgba(255,255,255,0.15)" />
-            <Text style={styles.emptyTitle}>No notifications yet</Text>
+            <Ionicons name="notifications-off-outline" size={56} color={ theme.subtext } />
+            <Text style={[styles.emptyTitle, { color: theme.subtext }]}>No notifications yet</Text>
             <Text style={styles.emptySubtitle}>
               Deadline alerts and wellness reminders will appear here
             </Text>
@@ -144,8 +166,14 @@ export default function NotificationScreen({ navigation }) {
             <TouchableOpacity
               key={notif.id}
               style={[
-                styles.notifCard,
-                !notif.isRead && styles.notifCardUnread,
+                styles.notifCard, { 
+                  backgroundColor: theme.card, 
+                  borderColor: theme.border
+                },
+                !notif.isRead && { 
+                  borderColor: theme.accent, 
+                  backgroundColor: isDarkMode ? 'rgba(167,139,250,0.08)' : '#F3E8FF',
+                },
               ]}
               onPress={() => handleMarkAsRead(notif.id)}
             >
@@ -153,15 +181,15 @@ export default function NotificationScreen({ navigation }) {
                 <Ionicons name={icon.name} size={20} color={icon.color} />
               </View>
               <View style={styles.notifContent}>
-                <Text style={styles.notifMessage}>{notif.message}</Text>
+                <Text style={[styles.notifMessage, { color: theme.text },]}>{notif.message}</Text>
                 <View style={styles.notifMeta}>
-                  <Text style={styles.notifType}>{notif.type}</Text>
+                  <Text style={[styles.notifType, { color: theme.subtext }]}>{notif.type}</Text>
                   {notif.createdAt && (
-                    <Text style={styles.notifTime}>{formatTimeAgo(notif.createdAt)}</Text>
+                    <Text style={[styles.notifTime, { color: theme.subtext }]}>{formatTimeAgo(notif.createdAt)}</Text>
                   )}
                 </View>
               </View>
-              {!notif.isRead && <View style={styles.unreadDot} />}
+              {!notif.isRead && <View style={[styles.unreadDot, { color: theme.accent }]} />}
             </TouchableOpacity>
           );
         })}
@@ -193,9 +221,18 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    //justifyContent: 'space-between',
     paddingTop: 20,
     marginBottom: 20,
+  },
+  headerSide: {
+    width: 80
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
   },
   backButton: {
     width: 40,
@@ -204,11 +241,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
   },
   markAllText: {
     fontSize: 13,
