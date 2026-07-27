@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTeamBoard } from '../hooks/useTeams';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const COLUMN_WIDTH = Dimensions.get('window').width * 0.78;
 
@@ -77,6 +78,8 @@ export default function TeamBoardScreen({ route, navigation }) {
 
   // Add-member form
   const [memberEmail, setMemberEmail] = useState('');
+
+  const { theme } = useTheme(); // for dark mode
 
   useFocusEffect(
     useCallback(() => {
@@ -176,17 +179,17 @@ export default function TeamBoardScreen({ route, navigation }) {
   const members = team?.members || [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, {backgroundColor:theme.background}]}>
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color="#ffffff" />
+          <Ionicons name="chevron-back" size={26} color={theme.icon} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={[styles.headerTitle, {color:theme.text}]} numberOfLines={1}>
             {team?.name || teamName}
           </Text>
-          <Text style={styles.headerMeta}>
+          <Text style={[styles.headerMeta, {color:theme.subtext}]}>
             {members.length} member{members.length !== 1 ? 's' : ''}
           </Text>
         </View>
@@ -198,19 +201,19 @@ export default function TeamBoardScreen({ route, navigation }) {
       </View>
 
       {/* ACTION BAR */}
-      <View style={styles.actionBar}>
+      <View style={[styles.actionBar, {borderBottomColor:theme.border}]}>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setTaskModal(true)}>
-          <Ionicons name="add-circle-outline" size={18} color="#a78bfa" />
-          <Text style={styles.actionText}>Add Task</Text>
+          <Ionicons name="add-circle-outline" size={18} color={theme.accent} />
+          <Text style={[styles.actionText, {color:theme.text}]}>Add Task</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setMemberModal(true)}>
-          <Ionicons name="person-add-outline" size={18} color="#a78bfa" />
-          <Text style={styles.actionText}>Add Member</Text>
+          <Ionicons name="person-add-outline" size={18} color={theme.accent}/>
+          <Text style={[styles.actionText, {color:theme.text}]}>Add Member</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#a78bfa" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
       ) : (
         <ScrollView
           horizontal
@@ -220,25 +223,25 @@ export default function TeamBoardScreen({ route, navigation }) {
           {COLUMNS.map((col) => {
             const colTasks = columns[col.key] || [];
             return (
-              <View key={col.key} style={[styles.column, { width: COLUMN_WIDTH }]}>
+              <View key={col.key} style={[styles.column, {backgroundColor:theme.card, borderColor:theme.border},{ width: COLUMN_WIDTH }]}>
                 <View style={styles.columnHeader}>
                   <View style={[styles.statusDot, { backgroundColor: col.color }]} />
-                  <Text style={styles.columnTitle}>{col.label}</Text>
-                  <Text style={styles.columnCount}>{colTasks.length}</Text>
+                  <Text style={[styles.columnTitle, {color:theme.text}]}>{col.label}</Text>
+                  <Text style={[styles.columnCount, {color:theme.subtext}]}>{colTasks.length}</Text>
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false}>
                   {colTasks.length === 0 ? (
-                    <Text style={styles.emptyColumn}>No tasks</Text>
+                    <Text style={[styles.emptyColumn, {color:theme.subtext}]}>No tasks</Text>
                   ) : (
                     colTasks.map((task) => {
                       const dl = formatDeadline(task.deadline);
                       const editable = canModify(task);
                       return (
-                        <View key={task.id} style={styles.taskCard}>
-                          <Text style={styles.taskTitle}>{task.title}</Text>
+                        <View key={task.id} style={[styles.taskCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+                          <Text style={[styles.taskTitle, {color:theme.text}]}>{task.title}</Text>
                           {!!task.description && (
-                            <Text style={styles.taskDesc} numberOfLines={2}>
+                            <Text style={[styles.taskDesc, {color:theme.subtext}]} numberOfLines={2}>
                               {task.description}
                             </Text>
                           )}
@@ -247,19 +250,17 @@ export default function TeamBoardScreen({ route, navigation }) {
                           <View style={styles.taskMetaRow}>
                             <View
                               style={[
-                                styles.assigneePill,
-                                !task.assigneeName && styles.assigneePillEmpty,
+                                styles.assigneePill, {backgroundColor: task.assigneeName ? `${theme.accent}20` : theme.border,},
                               ]}
                             >
                               <Ionicons
                                 name="person"
                                 size={11}
-                                color={task.assigneeName ? '#a78bfa' : 'rgba(255,255,255,0.4)'}
+                                color={task.assigneeName ? theme.accent : theme.subtext}
                               />
                               <Text
                                 style={[
-                                  styles.assigneeText,
-                                  !task.assigneeName && styles.assigneeTextEmpty,
+                                  styles.assigneeText, {color: task.assigneeName ? theme.accent : theme.subtext,},
                                 ]}
                               >
                                 {task.assigneeName || 'Unassigned'}
@@ -274,7 +275,7 @@ export default function TeamBoardScreen({ route, navigation }) {
                           </View>
 
                           {/* Progress */}
-                          <View style={styles.progressTrack}>
+                          <View style={[styles.progressTrack, {backgroundColor:theme.border}]}>
                             <View
                               style={[
                                 styles.progressFill,
@@ -282,22 +283,22 @@ export default function TeamBoardScreen({ route, navigation }) {
                               ]}
                             />
                           </View>
-                          <Text style={styles.progressLabel}>{task.progress}%</Text>
+                          <Text style={[styles.progressLabel, {color:theme.subtext}]}>{task.progress}%</Text>
 
                           {/* Controls */}
                           {editable ? (
                             <View style={styles.controls}>
                               <TouchableOpacity
-                                style={styles.ctrlBtn}
+                                style={[styles.ctrlBtn, {backgroundColor: theme.border}]}
                                 onPress={() => handleProgress(task, -25)}
                               >
-                                <Text style={styles.ctrlText}>−25</Text>
+                                <Text style={[styles.ctrlText, {color:theme.text}]}>−25</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={styles.ctrlBtn}
+                                style={[styles.ctrlBtn, {backgroundColor: theme.border}]}
                                 onPress={() => handleProgress(task, 25)}
                               >
-                                <Text style={styles.ctrlText}>+25</Text>
+                                <Text style={[styles.ctrlText, {color:theme.text}]}>+25</Text>
                               </TouchableOpacity>
                               {task.progress < 100 && (
                                 <TouchableOpacity
@@ -309,17 +310,17 @@ export default function TeamBoardScreen({ route, navigation }) {
                               )}
                             </View>
                           ) : (
-                            <Text style={styles.lockedNote}>Assigned to {task.assigneeName}</Text>
+                            <Text style={[styles.lockedNote, {color:theme.subtext}]}>Assigned to {task.assigneeName}</Text>
                           )}
 
                           {/* Footer actions */}
-                          <View style={styles.cardFooter}>
+                          <View style={[styles.cardFooter, {borderTopColor: theme.border}]}>
                             <TouchableOpacity
                               style={styles.footerBtn}
                               onPress={() => setAssignModal(task)}
                             >
-                              <Ionicons name="swap-horizontal" size={13} color="rgba(255,255,255,0.6)" />
-                              <Text style={styles.footerBtnText}>Assign</Text>
+                              <Ionicons name="swap-horizontal" size={13} color={theme.subtext} />
+                              <Text style={[styles.footerBtnText, {color:theme.subtext}]}>Assign</Text>
                             </TouchableOpacity>
                             {(isOwner || task.assignedById === actor?.uid) && (
                               <TouchableOpacity
@@ -344,59 +345,72 @@ export default function TeamBoardScreen({ route, navigation }) {
       {/* ADD TASK MODAL */}
       <Modal visible={taskModal} transparent animationType="slide" onRequestClose={() => setTaskModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>New Task</Text>
+              <Text style={[styles.modalTitle, {color:theme.text}]}>New Task</Text>
 
-              <Text style={styles.modalLabel}>Title</Text>
+              <Text style={[styles.modalLabel, {color:theme.text}]}>Title</Text>
               <TextInput
-                style={styles.modalInput}
+                style={[styles.modalInput, {
+                  backgroundColor: theme.card,
+                  color: theme.text,
+                  borderColor:theme.border,
+                }]}
                 placeholder="What needs to be done?"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor={theme.subtext}
                 value={title}
                 onChangeText={setTitle}
               />
 
-              <Text style={styles.modalLabel}>Description (optional)</Text>
+              <Text style={[styles.modalLabel, {color:theme.text}]}>Description (optional)</Text>
               <TextInput
-                style={[styles.modalInput, { height: 70, textAlignVertical: 'top' }]}
+                style={[styles.modalInput, { 
+                  height: 70, 
+                  textAlignVertical: 'top',
+                  backgroundColor:theme.card,
+                  color:theme.text,
+                  borderColor:theme.border
+                }]}
                 placeholder="Add details..."
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor={theme.subtext}
                 value={description}
                 onChangeText={setDescription}
                 multiline
               />
 
-              <Text style={styles.modalLabel}>Deadline</Text>
+              <Text style={[styles.modalLabel, {color:theme.text}]}>Deadline</Text>
               <View style={styles.chipRow}>
                 {DEADLINE_PRESETS.map((p) => (
                   <TouchableOpacity
                     key={p.label}
-                    style={[styles.chip, deadlineDays === p.days && styles.chipActive]}
+                    style={[styles.chip, {backgroundColor:theme.card, borderColor:theme.border}, 
+                    deadlineDays === p.days && styles.chipActive]}
                     onPress={() => setDeadlineDays(p.days)}
                   >
-                    <Text style={[styles.chipText, deadlineDays === p.days && styles.chipTextActive]}>
+                    <Text style={[styles.chipText, {color: deadlineDays === p.days ? theme.text : theme.subtext,}, deadlineDays === p.days && {color:theme.text,},]}>
                       {p.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.modalLabel}>Assign to</Text>
+              <Text style={[styles.modalLabel, {color:theme.text}]}>Assign to</Text>
               <View style={styles.chipRow}>
                 <TouchableOpacity
-                  style={[styles.chip, !assignee && styles.chipActive]}
+                  style={[styles.chip, {backgroundColor:theme.card, borderColor:theme.border}, 
+                  !assignee && styles.chipActive]}
                   onPress={() => setAssignee(null)}
                 >
-                  <Text style={[styles.chipText, !assignee && styles.chipTextActive]}>Unassigned</Text>
+                  <Text style={[styles.chipText, {color: !assignee ? theme.text : theme.subtext}, !assignee && {color:theme.text,}]}>Unassigned</Text>
                 </TouchableOpacity>
                 {members.map((m) => (
                   <TouchableOpacity
                     key={m.uid}
-                    style={[styles.chip, assignee?.uid === m.uid && styles.chipActive]}
+                    style={[styles.chip, {backgroundColor:theme.card, borderColor:theme.border}, 
+                    assignee?.uid === m.uid && styles.chipActive]}
                     onPress={() => setAssignee({ uid: m.uid, name: m.name })}
                   >
-                    <Text style={[styles.chipText, assignee?.uid === m.uid && styles.chipTextActive]}>
+                    <Text style={[styles.chipText, {color: assignee?.uid === m.uid ? theme.text : theme.subtext}, assignee?.uid === m.uid && {color:theme.text,}]}>
                       {m.name}
                     </Text>
                   </TouchableOpacity>
@@ -405,13 +419,13 @@ export default function TeamBoardScreen({ route, navigation }) {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalCancel]}
+                  style={[styles.modalBtn, styles.modalCancel, {backgroundColor:theme.border}]}
                   onPress={() => {
                     setTaskModal(false);
                     resetTaskForm();
                   }}
                 >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
+                  <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalConfirm]}
@@ -429,16 +443,20 @@ export default function TeamBoardScreen({ route, navigation }) {
       {/* ADD MEMBER MODAL */}
       <Modal visible={memberModal} transparent animationType="fade" onRequestClose={() => setMemberModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Member</Text>
-            <Text style={styles.modalHint}>
+          <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border, borderWidth:1,}]}>
+            <Text style={[styles.modalTitle, {color:theme.text}]}>Add Member</Text>
+            <Text style={[styles.modalHint, {color:theme.subtext}]}>
               Enter the email your teammate uses for BALANSE. They’ll be notified and gain access to this board.
             </Text>
-            <Text style={styles.modalLabel}>Email</Text>
+            <Text style={[styles.modalLabel, {color:theme.text}]}>Email</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, {
+                backgroundColor:theme.card,
+                color:theme.text,
+                borderColor:theme.border,
+              }]}
               placeholder="teammate@gmail.com"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.subtext}
               value={memberEmail}
               onChangeText={setMemberEmail}
               autoCapitalize="none"
@@ -446,13 +464,13 @@ export default function TeamBoardScreen({ route, navigation }) {
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalCancel]}
+                style={[styles.modalBtn, styles.modalCancel, {backgroundColor:theme.border}]}
                 onPress={() => {
                   setMemberModal(false);
                   setMemberEmail('');
                 }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirm]}
