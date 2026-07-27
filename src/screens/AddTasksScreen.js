@@ -11,6 +11,7 @@ import { checkAndNotifyConflicts } from '../services/conflictService';
 import { detectConflicts } from '../services/conflictService';
 import { useTaskConflicts } from '../hooks/useConflicts';
 import { useTasks } from '../hooks/useTasks';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -42,6 +43,7 @@ export default function AddTaskScreen({ navigation }) {
   const defaultEnd = { hour: 18, minute: 0 };
 
   const { tasks: existingTasks } = useTasks();
+  const { theme } = useTheme(); // for dark mode
 
   const pendingTask = useMemo(() => ({
     title: title.trim(),
@@ -313,49 +315,89 @@ export default function AddTaskScreen({ navigation }) {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background}]}>
+    {/* <SafeAreaView style={styles.container}> */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
         {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,}]} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={ theme.icon } />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add New Task</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Add New Task</Text>
           <View style={{ width: 40 }} />
         </View>
 
-        <Text style={styles.label}>Task Title</Text>
+        <Text style={[styles.label, {color: theme.text}]}>Task Title</Text>
+        <TextInput style={[styles.input, 
+          { 
+            backgroundColor: theme.card, 
+            color : theme.text, 
+            borderColor: theme.border
+          }]} 
+          placeholder="Enter task title" 
+          placeholderTextColor={ theme.subtext } 
+          value={title} 
+          onChangeText={setTitle} maxLength={100}
+        />
+
+          {/*}
         <TextInput style={styles.input} placeholder="Enter task title"
           placeholderTextColor="rgba(255,255,255,0.3)" value={title}
           onChangeText={setTitle} maxLength={100} />
+          */}
 
-        <Text style={styles.label}>Description</Text>
+        <Text style={[styles.label, {color: theme.text}]}>Description</Text>
+        <TextInput style={[styles.input, styles.textArea, 
+        { 
+          backgroundColor: theme.card, 
+          color: theme.text, 
+          borderColor: theme.border
+        }]}
+          placeholder="Enter task description" 
+          placeholderTextColor={ theme.subtext } 
+          value={description} 
+          onChangeText={setDescription} 
+          multiline numberOfLines={4} 
+          maxLength={500} 
+        />
+
+        {/*}
         <TextInput style={[styles.input, styles.textArea]} placeholder="Enter task description"
           placeholderTextColor="rgba(255,255,255,0.3)" value={description}
           onChangeText={setDescription} multiline numberOfLines={4} maxLength={500} />
+        */}
 
-        <Text style={styles.label}>Category</Text>
+        <Text style={[styles.label, {color: theme.text}]}>Category</Text>
         <View style={styles.optionRow}>
           {['Academic', 'Organization', 'Personal'].map((cat) => (
             <TouchableOpacity key={cat}
-              style={[styles.optionButton, category === cat && styles.optionButtonActive]}
+              style={[styles.optionButton, { 
+                backgroundColor: theme.card, 
+                borderColor: theme.border }, 
+                category === cat && styles.optionButtonActive]}
               onPress={() => setCategory(cat)}>
-              <Text style={[styles.optionText, category === cat && styles.optionTextActive]}>{cat}</Text>
+              <Text style={[styles.optionText, { color: category === cat ? theme.text : theme.subtext, }, category === cat && {color: theme.text, fontWeight: '700',},]}>{cat}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Priority</Text>
+        <Text style={[styles.label, {color: theme.text}]}>Priority</Text>
         <View style={styles.optionRow}>
           {['Low', 'Medium', 'High'].map((pri) => (
             <TouchableOpacity key={pri}
-              style={[styles.optionButton, priority === pri && styles.optionButtonActive,
+              style={[styles.optionButton, 
+                { 
+                  backgroundColor: theme.card, 
+                  borderColor: theme.border 
+                }, 
+                priority === pri && styles.optionButtonActive,
                 priority === pri && pri === 'High' && { borderColor: '#ef4444' },
                 priority === pri && pri === 'Medium' && { borderColor: '#fb923c' },
                 priority === pri && pri === 'Low' && { borderColor: '#34d399' },
               ]}
               onPress={() => setPriority(pri)}>
-              <Text style={[styles.optionText, priority === pri && styles.optionTextActive]}>{pri}</Text>
+              <Text style={[styles.optionText, { color: priority === pri ? theme.text : theme.subtext}, priority === pri && {color: theme.text, fontWeight: '700',},]}>{pri}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -366,27 +408,27 @@ export default function AddTaskScreen({ navigation }) {
           onPress={() => setIsRepeat(!isRepeat)}
         >
           <View style={styles.timeToggleLeft}>
-            <Ionicons name="repeat-outline" size={18} color="rgba(255,255,255,0.5)" />
-            <Text style={styles.timeToggleText}>Repeat weekly</Text>
+            <Ionicons name="repeat-outline" size={18} color={ theme.subtext } />
+            <Text style={[styles.timeToggleText, { color: theme.subtext }]}>Repeat weekly</Text>
           </View>
-          <View style={[styles.toggleTrack, isRepeat && styles.toggleTrackActive]}>
-            <View style={[styles.toggleThumb, isRepeat && styles.toggleThumbActive]} />
+          <View style={[styles.toggleTrack, { backgroundColor: isRepeat ? '#7c3aed' : '#64748b'}]}>
+            <View style={[styles.toggleThumb, { backgroundColor: '#ffffff'}, isRepeat && styles.toggleThumbActive]} />
           </View>
         </TouchableOpacity>
 
         {/* --- SINGLE TASK: Deadline --- */}
         {!isRepeat && (
           <>
-            <Text style={styles.label}>Deadline</Text>
-            <TouchableOpacity style={styles.deadlineRow} onPress={() => setShowDatePicker(true)}>
-              <Ionicons name="calendar-outline" size={18} color="rgba(255,255,255,0.5)" />
-              <Text style={styles.deadlineText}>
+            <Text style={[styles.label, {color: theme.text}]}>Deadline</Text>
+            <TouchableOpacity style={[styles.deadlineRow, {backgroundColor: theme.card, borderColor: theme.border}]} onPress={() => setShowDatePicker(true)}>
+              <Ionicons name="calendar-outline" size={18} color={ theme.subtext } />
+              <Text style={[styles.deadlineText, { color: theme.text}]}>
                 {deadline.toLocaleDateString('en-US', {
                   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
                 })}
                 {hasTime ? ` at ${deadline.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
               </Text>
-              <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+              <Ionicons name="chevron-down-outline" size={18} color={ theme.subtext } />
             </TouchableOpacity>
 
             {showDatePicker && (
@@ -405,28 +447,28 @@ export default function AddTaskScreen({ navigation }) {
               onPress={() => setHasTime(!hasTime)}
             >
               <View style={styles.timeToggleLeft}>
-                <Ionicons name="time-outline" size={18} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.timeToggleText}>Set specific time</Text>
+                <Ionicons name="time-outline" size={18} color={ theme.subtext } />
+                <Text style={[styles.timeToggleText, { color: theme.subtext}]}>Set specific time</Text>
               </View>
-              <View style={[styles.toggleTrack, hasTime && styles.toggleTrackActive]}>
-                <View style={[styles.toggleThumb, hasTime && styles.toggleThumbActive]} />
+              <View style={[styles.toggleTrack, { backgroundColor: hasTime ? '#7c3aed' : '#64748b'}]}>
+                <View style={[styles.toggleThumb, { backgroundColor: '#ffffff' }, hasTime && styles.toggleThumbActive]} />
               </View>
             </TouchableOpacity>
 
             {hasTime && (
               <TouchableOpacity
-                style={styles.timeRow}
+                style={[styles.timeRow, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,}]}
                 onPress={() => setShowTimePicker(true)}
               >
-                <Ionicons name="time-outline" size={18} color="#a78bfa" />
-                <Text style={styles.timeText}>
+                <Ionicons name="time-outline" size={18} color={ theme.subtext } />
+                <Text style={[styles.timeText, { color: theme.text }]}>
                   {deadline.toLocaleTimeString('en-US', {
                     hour: 'numeric',
                     minute: '2-digit',
                     hour12: true,
                   })}
                 </Text>
-                <Ionicons name="chevron-down-outline" size={18} color="rgba(255,255,255,0.5)" />
+                <Ionicons name="chevron-down-outline" size={18} color={ theme.subtext } />
               </TouchableOpacity>
             )}
 
@@ -450,22 +492,22 @@ export default function AddTaskScreen({ navigation }) {
         {/* --- REPEAT: Day selector + Duration + Per-day times --- */}
         {isRepeat && (
           <>
-            <Text style={styles.label}>Repeat On</Text>
+            <Text style={[styles.label, {color: theme.text}]}>Repeat On</Text>
             <View style={styles.dayRow}>
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
                 <TouchableOpacity
                   key={day}
-                  style={[styles.dayChip, selectedDays.includes(day) && styles.dayChipActive]}
+                  style={[styles.dayChip, { backgroundColor: theme.card, borderColor: theme.border }, selectedDays.includes(day) && styles.dayChipActive]}
                   onPress={() => toggleDay(day)}
                 >
-                  <Text style={[styles.dayChipText, selectedDays.includes(day) && styles.dayChipTextActive]}>
+                  <Text style={[styles.dayChipText, { color: selectedDays.includes(day) ? theme.text : theme.subtext}, selectedDays.includes(day) && {color: theme.text, fontWeight: '700',},]}>
                     {day}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.label}>Duration</Text>
+            <Text style={[styles.label, {color: theme.text}]}>Duration</Text>
             <View style={styles.durationRow}>
               {[
                 { key: '4weeks', label: '4 Weeks' },
@@ -475,10 +517,10 @@ export default function AddTaskScreen({ navigation }) {
               ].map((opt) => (
                 <TouchableOpacity
                   key={opt.key}
-                  style={[styles.durationChip, durationPreset === opt.key && styles.durationChipActive]}
+                  style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, durationPreset === opt.key && styles.durationChipActive]}
                   onPress={() => setDurationPreset(opt.key)}
                 >
-                  <Text style={[styles.durationChipText, durationPreset === opt.key && styles.durationChipTextActive]}>
+                  <Text style={[styles.durationChipText, { color: durationPreset === opt.key ? theme.text : theme.subtext }, durationPreset === opt.key && {color: theme.text, fontWeight: '700',},]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -488,9 +530,13 @@ export default function AddTaskScreen({ navigation }) {
             {durationPreset === 'custom' && (
               <View style={styles.customRow}>
                 <TextInput
-                  style={styles.customInput}
+                  style={[styles.customInput, {
+                    backgroundColor: theme.card,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  }]}
                   placeholder="e.g. 6"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor= { theme.subtext }
                   keyboardType="number-pad"
                   value={customValue}
                   onChangeText={setCustomValue}
@@ -500,10 +546,10 @@ export default function AddTaskScreen({ navigation }) {
                   {['weeks', 'months'].map((u) => (
                     <TouchableOpacity
                       key={u}
-                      style={[styles.unitChip, customUnit === u && styles.unitChipActive]}
+                      style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border }, customUnit === u && styles.unitChipActive]}
                       onPress={() => setCustomUnit(u)}
                     >
-                      <Text style={[styles.unitChipText, customUnit === u && styles.unitChipTextActive]}>
+                      <Text style={[styles.unitChipText, { color: customUnit === u ? theme.text : theme.subtext }, customUnit === u && {color: theme.text, fontWeight: '700',},]}>
                         {u.charAt(0).toUpperCase() + u.slice(1)}
                       </Text>
                     </TouchableOpacity>
@@ -515,24 +561,24 @@ export default function AddTaskScreen({ navigation }) {
             {/* PER-DAY TIME OVERRIDES */}
             {selectedDays.length > 0 && (
               <>
-                <Text style={styles.label}>Time Per Day</Text>
+                <Text style={[styles.label, { color: theme.text }]}>Time Per Day</Text>
                 {selectedDays.map((day) => {
                   const times = getDayTime(day);
                   return (
-                    <View key={day} style={styles.dayTimeRow}>
-                      <Text style={styles.dayTimeLabel}>{day}</Text>
+                    <View key={day} style={[styles.dayTimeRow, {backgroundColor: theme.card, borderColor: theme.border}]}>
+                      <Text style={[styles.dayTimeLabel, { color: theme.text }]}>{day}</Text>
                       <TouchableOpacity
                         style={styles.dayTimeButton}
                         onPress={() => { setEditingDay(day); setEditingField('start'); }}
                       >
-                        <Text style={styles.dayTimeText}>{formatTime(times.startHour, times.startMinute)}</Text>
+                        <Text style={[styles.dayTimeText, { color: theme.text }]}>{formatTime(times.startHour, times.startMinute)}</Text>
                       </TouchableOpacity>
-                      <Text style={styles.dayTimeSeparator}>to</Text>
+                      <Text style={[styles.dayTimeSeparator, { color: theme.text }]}>to</Text>
                       <TouchableOpacity
                         style={styles.dayTimeButton}
                         onPress={() => { setEditingDay(day); setEditingField('end'); }}
                       >
-                        <Text style={styles.dayTimeText}>{formatTime(times.endHour, times.endMinute)}</Text>
+                        <Text style={[styles.dayTimeText, { color: theme.text }]}>{formatTime(times.endHour, times.endMinute)}</Text>
                       </TouchableOpacity>
                     </View>
                   );
@@ -552,9 +598,9 @@ export default function AddTaskScreen({ navigation }) {
 
             {/* Session preview */}
             {selectedDays.length > 0 && (
-              <View style={styles.sessionPreview}>
+              <View style={[styles.sessionPreview, { backgroundColor: theme.card, borderColor: theme.border}]}>
                 <Ionicons name="information-circle-outline" size={16} color="#a78bfa" />
-                <Text style={styles.sessionPreviewText}>
+                <Text style={[styles.sessionPreviewText, { color: theme.subtext}]}>
                   This will create {sessionCount} sessions ({selectedDays.join(', ')}) over {getDurationWeeks()} weeks
                 </Text>
               </View>
@@ -579,90 +625,318 @@ export default function AddTaskScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f0f23' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40, maxWidth: 600, alignSelf: 'center', width: '100%' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20, marginBottom: 28 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
-  label: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: { backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, color: '#ffffff', fontSize: 15, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  textArea: { height: 100, textAlignVertical: 'top' },
-  optionRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  optionButton: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', alignItems: 'center', backgroundColor: '#1a1a3e' },
-  optionButtonActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.15)' },
-  optionText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
-  optionTextActive: { color: '#ffffff', fontWeight: '700' },
-  deadlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'space-between' },
-  deadlineText: { color: '#ffffff', fontSize: 14 },
-  submitButton: { backgroundColor: '#7c3aed', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 12 },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-
-  timeToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  timeToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  timeToggleText: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
-  toggleTrack: { width: 44, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', paddingHorizontal: 2 },
-  toggleTrackActive: { backgroundColor: 'rgba(167,139,250,0.4)' },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)' },
-  toggleThumbActive: { backgroundColor: '#a78bfa', alignSelf: 'flex-end' },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)', justifyContent: 'space-between' },
-  timeText: { color: '#a78bfa', fontSize: 16, fontWeight: '600', flex: 1 },
-
+  container: { 
+    flex: 1, backgroundColor: '#0f0f23' 
+  },
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 40, 
+    axWidth: 600, 
+    alignSelf: 'center', 
+    width: '100%' 
+  },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingTop: 20, 
+    marginBottom: 28 
+  },
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: '#ffffff' 
+  },
+  label: { 
+    fontSize: 13, 
+    fontWeight: '600', 
+    color: 'rgba(255,255,255,0.6)', 
+    marginBottom: 8, 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.5 
+  },
+  input: { 
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 12, 
+    padding: 14, 
+    color: '#ffffff', 
+    fontSize: 15, 
+    marginBottom: 20, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255, 255, 255, 0.12)' 
+  },
+  textArea: { 
+    height: 100, 
+    textAlignVertical: 'top' 
+  },
+  optionRow: { 
+    flexDirection: 'row', 
+    gap: 10, 
+    marginBottom: 20 
+  },
+  optionButton: { 
+    flex: 1, 
+    paddingVertical: 12, 
+    borderRadius: 10, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.15)', 
+    alignItems: 'center', 
+    backgroundColor: '#1a1a3e' 
+  },
+  optionButtonActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.15)' 
+  },
+  optionText: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.5)', 
+    fontWeight: '500' 
+  },
+  optionTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
+  deadlineRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 12, 
+    padding: 14, 
+    marginBottom: 20, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.08)', 
+    justifyContent: 'space-between' 
+  },
+  deadlineText: { 
+    color: '#ffffff', 
+    fontSize: 14 
+  },
+  submitButton: { 
+    backgroundColor: '#7c3aed', 
+    paddingVertical: 16, 
+    borderRadius: 16, 
+    alignItems: 'center', 
+    marginTop: 12 
+  },
+  submitButtonDisabled: { 
+    opacity: 0.6 
+  },
+  submitButtonText: { 
+    color: '#ffffff', 
+    fontSize: 16, 
+    fontWeight: '700' 
+  },
+  timeToggleRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: 12 
+  },
+  timeToggleLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8 
+  },
+  timeToggleText: { 
+    fontSize: 14, 
+    color: 'rgba(255,255,255,0.6)' 
+  },
+  toggleTrack: { 
+    width: 44, 
+    height: 24, 
+    borderRadius: 12, 
+    justifyContent: 'center', 
+    paddingHorizontal: 2 
+  },
+  toggleTrackActive: { 
+    backgroundColor: 'rgba(167,139,250,0.4)' 
+  },
+  toggleThumb: { 
+    width: 20, 
+    height: 20, 
+    borderRadius: 10, 
+    backgroundColor: '#ffffff' 
+  },
+  toggleThumbActive: { 
+   // backgroundColor: '#a78bfa', 
+    alignSelf: 'flex-end' 
+  },
+  timeRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 12, 
+    padding: 14, 
+    marginBottom: 20, 
+    borderWidth: 1, 
+    borderColor: 'rgba(167,139,250,0.2)', 
+    justifyContent: 'space-between' 
+  },
+  timeText: { 
+    color: '#a78bfa', 
+    fontSize: 16, 
+    fontWeight: '600', 
+    flex: 1 
+  },
   // Repeat — day selector
-  dayRow: { flexDirection: 'row', gap: 6, marginBottom: 20, flexWrap: 'wrap' },
+  dayRow: { 
+    flexDirection: 'row', 
+    gap: 6, 
+    marginBottom: 20, 
+    flexWrap: 'wrap' 
+  },
   dayChip: {
-    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', backgroundColor: '#1a1a3e',
+    paddingVertical: 10, 
+    paddingHorizontal: 14, 
+    borderRadius: 10,
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.15)', 
+    backgroundColor: '#1a1a3e',
   },
-  dayChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
-  dayChipText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
-  dayChipTextActive: { color: '#ffffff', fontWeight: '700' },
-
+  dayChipActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.2)' 
+  },
+  dayChipText: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.5)', 
+    fontWeight: '500' 
+  },
+  dayChipTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
   // Repeat — duration
-  durationRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
+  durationRow: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    marginBottom: 16, 
+    flexWrap: 'wrap' 
+  },
   durationChip: {
-    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', backgroundColor: '#1a1a3e',
+    paddingVertical: 10, 
+    paddingHorizontal: 14, 
+    borderRadius: 10,
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.15)', 
+    backgroundColor: '#1a1a3e',
   },
-  durationChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
-  durationChipText: { fontSize: 12, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
-  durationChipTextActive: { color: '#ffffff', fontWeight: '700' },
-
+  durationChipActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.2)' 
+  },
+  durationChipText: { 
+    fontSize: 12, 
+    color: 'rgba(255,255,255,0.5)', 
+    fontWeight: '500' 
+  },
+  durationChipTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
   // Repeat — custom duration
-  customRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  customRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, marginBottom: 16 
+  },
   customInput: {
-    backgroundColor: '#1a1a3e', borderRadius: 10, padding: 12, color: '#ffffff',
-    fontSize: 15, width: 80, textAlign: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 10, 
+    padding: 12, 
+    color: '#ffffff',
+    fontSize: 15, 
+    width: 80, 
+    textAlign: 'center', 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  unitRow: { flexDirection: 'row', gap: 8 },
+  unitRow: { 
+    flexDirection: 'row', 
+    gap: 8 
+  },
   unitChip: {
-    paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', backgroundColor: '#1a1a3e',
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    borderRadius: 10,
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.15)', 
+    backgroundColor: '#1a1a3e',
   },
-  unitChipActive: { borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.2)' },
-  unitChipText: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
-  unitChipTextActive: { color: '#ffffff', fontWeight: '700' },
-
+  unitChipActive: { 
+    borderColor: '#a78bfa', 
+    backgroundColor: 'rgba(167,139,250,0.2)' 
+  },
+  unitChipText: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.5)', 
+    fontWeight: '500' 
+  },
+  unitChipTextActive: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
   // Repeat — per-day time overrides
   dayTimeRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#1a1a3e', borderRadius: 12, padding: 12,
-    marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10,
+    backgroundColor: '#1a1a3e', 
+    borderRadius: 12, 
+    padding: 12,
+    marginBottom: 8, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  dayTimeLabel: { color: '#ffffff', fontWeight: '600', fontSize: 14, width: 40 },
+  dayTimeLabel: { 
+    color: '#ffffff', 
+    fontWeight: '600', 
+    fontSize: 14, 
+    width: 40 
+  },
   dayTimeButton: {
-    backgroundColor: 'rgba(167,139,250,0.1)', borderRadius: 8,
-    paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1,
+    backgroundColor: 'rgba(167,139,250,0.1)', 
+    borderRadius: 8,
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
+    borderWidth: 1,
     borderColor: 'rgba(167,139,250,0.2)',
   },
-  dayTimeText: { color: '#a78bfa', fontSize: 13, fontWeight: '600' },
-  dayTimeSeparator: { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
-
+  dayTimeText: { 
+    color: '#a78bfa', 
+    fontSize: 13, 
+    fontWeight: '600' 
+  },
+  dayTimeSeparator: { 
+    color: 'rgba(255,255,255,0.4)', 
+    fontSize: 13 
+  },
   // Repeat — session preview
   sessionPreview: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(167,139,250,0.08)', borderRadius: 10,
-    padding: 12, marginTop: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(167,139,250,0.15)',
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8,
+    backgroundColor: 'rgba(167,139,250,0.08)', 
+    borderRadius: 10,
+    padding: 12, 
+    marginTop: 12, 
+    marginBottom: 8, 
+    borderWidth: 1, 
+    borderColor: 'rgba(167,139,250,0.15)',
   },
-  sessionPreviewText: { fontSize: 13, color: 'rgba(255,255,255,0.7)', flex: 1 },
+  sessionPreviewText: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.7)', 
+    flex: 1 
+  },
 });
