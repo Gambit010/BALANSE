@@ -13,9 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { useAnalytics } from '../hooks/useAnalytics';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CHART_WIDTH = SCREEN_WIDTH - 40;
+const CHART_WIDTH = SCREEN_WIDTH - 70;
 
 const chartConfig = {
   backgroundColor: '#1a1a3e',
@@ -49,6 +50,7 @@ export default function AnalyticsScreen({ navigation }) {
     insights,
     exportSummary,
   } = useAnalytics();
+   const { isDarkMode, theme } = useTheme(); // for dark mode
 
   const handleShare = async () => {
     try {
@@ -60,60 +62,64 @@ export default function AnalyticsScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, {backgroundColor:theme.background}]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7c3aed" />
-          <Text style={styles.loadingText}>Loading analytics...</Text>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={[styles.loadingText, {color:theme.text}]}>Loading analytics...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, {backgroundColor:theme.background}]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
         {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color="#ffffff" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,}]}>
+            <Ionicons name="arrow-back" size={22} color={theme.icon} />
           </TouchableOpacity>
-          <Text style={styles.screenTitle}>Analytics & Insights</Text>
+          <Text style={[styles.screenTitle, {color:theme.text}]}>Analytics & Insights</Text>
           <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
-            <Ionicons name="share-outline" size={20} color="#a78bfa" />
+            <Ionicons name="share-outline" size={20} color={theme.accent} />
           </TouchableOpacity>
         </View>
 
         {/* ─── SECTION 1: WEEKLY REPORT ─── */}
         {weeklyReport && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor:theme.card, borderColor:theme.border}]}>
             <View style={styles.cardHeader}>
-              <Ionicons name="calendar-outline" size={18} color="#a78bfa" />
-              <Text style={styles.cardTitle}>Weekly Report</Text>
+              <Ionicons name="calendar-outline" size={18} color={theme.accent} />
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Weekly Report</Text>
             </View>
-            <Text style={styles.periodText}>{weeklyReport.period}</Text>
+            <Text style={[styles.periodText, {color:theme.subtext}]}>{weeklyReport.period}</Text>
 
             <View style={styles.reportGrid}>
               <ReportMetric
                 label="Completed"
                 value={weeklyReport.thisWeek.completed}
                 delta={weeklyReport.completionDelta}
+                theme={theme}
               />
               <ReportMetric
                 label="Added"
                 value={weeklyReport.thisWeek.added}
                 delta={weeklyReport.addedDelta}
                 invertColor
+                theme={theme}
               />
               <ReportMetric
                 label="Conflicts"
                 value={weeklyReport.activeConflicts}
+                theme={theme}
               />
               <ReportMetric
                 label="Well-being"
                 value={weeklyReport.wellness.current !== null ? `${weeklyReport.wellness.current}%` : '—'}
                 delta={weeklyReport.wellness.change}
                 suffix="pts"
+                theme={theme}
               />
             </View>
           </View>
@@ -121,12 +127,14 @@ export default function AnalyticsScreen({ navigation }) {
 
         {/* ─── SECTION 2: WELLNESS TREND ─── */}
         {wellnessTrend.length >= 2 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor:theme.card, borderColor:theme.border,}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="heart-outline" size={18} color="#f472b6" />
-              <Text style={styles.cardTitle}>Wellness Trend</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Wellness Trend</Text>
             </View>
-            <LineChart
+            <View style={styles.chartContainer}>
+              <LineChart
+              style={styles.chart}
               data={{
                 labels: wellnessTrend.map(d => d.label),
                 datasets: [
@@ -139,11 +147,20 @@ export default function AnalyticsScreen({ navigation }) {
               height={200}
               chartConfig={{
                 ...chartConfig,
+                backgroundColor: theme.card,
+                backgroundGradientFrom: theme.card,
+                backgroundGradientTo: theme.card,
+
+                decimalCount: 0,
                 color: (opacity = 1) => `rgba(244, 114, 182, ${opacity})`,
+                labelColor: (opacity = 1) => isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
                 propsForDots: { r: '4', strokeWidth: '2', stroke: '#f472b6' },
+                propsForBackgroundLines: {
+                  strokeDasharray: '',
+                  stroke: theme.border,
+                }
               }}
               bezier
-              style={styles.chart}
               fromZero
               yAxisSuffix="%"
               segments={4}
@@ -151,27 +168,29 @@ export default function AnalyticsScreen({ navigation }) {
                 <>
                   {/* 50% threshold line */}
                   <View style={[styles.thresholdLine, { bottom: 200 * 0.5 + 10 }]}>
-                    <View style={[styles.thresholdDash, { backgroundColor: 'rgba(74,222,128,0.4)' }]} />
+                    <View style={[styles.thresholdDash, { backgroundColor: 'rgba(74,222,128,0.45)',}]} />
                   </View>
                   {/* 28% threshold line */}
                   <View style={[styles.thresholdLine, { bottom: 200 * 0.28 + 10 }]}>
-                    <View style={[styles.thresholdDash, { backgroundColor: 'rgba(248,113,113,0.4)' }]} />
+                    <View style={[styles.thresholdDash, { backgroundColor: isDarkMode ? 'rgba(251,191,36,0.45)' : 'rgba(245,158,11,0.35)',}]} />
                   </View>
                 </>
               )}
             />
+            </View>
+            
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#4ade80' }]} />
-                <Text style={styles.legendText}>Positive (50%+)</Text>
+                <Text style={[styles.legendText, {color:theme.subtext}]}>Positive (50%+)</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#fbbf24' }]} />
-                <Text style={styles.legendText}>At Risk (28-49%)</Text>
+                <Text style={[styles.legendText, {color:theme.subtext}]}>At Risk (28-49%)</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#f87171' }]} />
-                <Text style={styles.legendText}>Low (&lt;28%)</Text>
+                <Text style={[styles.legendText, {color:theme.subtext}]}>Low (&lt;28%)</Text>
               </View>
             </View>
           </View>
@@ -179,34 +198,41 @@ export default function AnalyticsScreen({ navigation }) {
 
         {/* ─── SECTION 3: WELLNESS-WORKLOAD CORRELATION ─── */}
         {correlation.length >= 2 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor: theme.card, borderColor:theme.border,}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="git-compare-outline" size={18} color="#60a5fa" />
-              <Text style={styles.cardTitle}>Wellness vs Workload</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Wellness vs Workload</Text>
             </View>
-            <Text style={styles.cardSubtitle}>
+            <Text style={[styles.cardSubtitle, {color:theme.subtext}]}>
               How your task count relates to your well-being
             </Text>
 
             {/* Bar chart for active tasks */}
-            <BarChart
-              data={{
-                labels: correlation.map(d => d.label),
-                datasets: [{ data: correlation.map(d => d.activeTaskCount) }],
-              }}
-              width={CHART_WIDTH}
-              height={180}
-              chartConfig={{
-                ...chartConfig,
-                color: (opacity = 1) => `rgba(96, 165, 250, ${opacity * 0.6})`,
-                barPercentage: 0.5,
-              }}
-              style={styles.chart}
-              fromZero
-              showValuesOnTopOfBars
+            <View style={styles.chartContainer}>
+              <BarChart
+                data={{
+                  labels: correlation.map(d => d.label),
+                  datasets: [{ data: correlation.map(d => d.activeTaskCount) }],
+                }}
+                width={CHART_WIDTH}
+                height={180}
+                chartConfig={{
+                  ...chartConfig,
+                  backgroundColor: theme.card,
+                  backgroundGradientFrom: theme.card,
+                  backgroundGradientTo: theme.card,
+                  color: (opacity = 1) => `rgba(96, 165, 250, ${opacity})`,
+                  labelColor: (opacity = 1) => isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
+                  propsForBackgroundLines: {stroke: theme.border, strokeDasharray: '',},
+                  barPercentage: 0.5,
+                }}
+                style={styles.chart}
+                fromZero
+                showValuesOnTopOfBars
             />
-
-            {/* Line chart overlay for wellness */}
+            </View>
+            <View style={[styles.chartContainer, {marginTop: 18}]}>
+              {/* Line chart overlay for wellness */}
             <LineChart
               data={{
                 labels: correlation.map(d => d.label),
@@ -220,24 +246,34 @@ export default function AnalyticsScreen({ navigation }) {
               height={180}
               chartConfig={{
                 ...chartConfig,
+                backgroundColor: theme.card,
+                backgroundGradientFrom: theme.card,
+                backgroundGradientTo: theme.card,
                 color: (opacity = 1) => `rgba(244, 114, 182, ${opacity})`,
+                labelColor: (opacity = 1) =>
+                isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
+                propsForBackgroundLines: {
+                  stroke: theme.border,
+                  strokeDasharray: '',
+                },
                 propsForDots: { r: '4', strokeWidth: '2', stroke: '#f472b6' },
               }}
               bezier
-              style={[styles.chart, { marginTop: -8 }]}
+              style={styles.chart}
               fromZero
               yAxisSuffix="%"
               segments={4}
             />
+            </View>
 
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#60a5fa' }]} />
-                <Text style={styles.legendText}>Active Tasks</Text>
+                <Text style={[styles.legendText, {color:theme.subtext}]}>Active Tasks</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#f472b6' }]} />
-                <Text style={styles.legendText}>WHO-5 Score</Text>
+                <Text style={[styles.legendText, {color:theme.subtext}]}>WHO-5 Score</Text>
               </View>
             </View>
           </View>
@@ -245,66 +281,78 @@ export default function AnalyticsScreen({ navigation }) {
 
         {/* ─── SECTION 4: WEEKLY COMPLETIONS ─── */}
         {weeklyCompletions.length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor: theme.card, borderColor:theme.border}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="bar-chart-outline" size={18} color="#34d399" />
-              <Text style={styles.cardTitle}>Weekly Completions</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Weekly Completions</Text>
             </View>
-            <BarChart
-              data={{
-                labels: weeklyCompletions.map(w => w.label),
-                datasets: [{ data: weeklyCompletions.map(w => w.completed || 0) }],
-              }}
-              width={CHART_WIDTH}
-              height={200}
-              chartConfig={{
-                ...chartConfig,
-                color: (opacity = 1) => `rgba(52, 211, 153, ${opacity})`,
-                barPercentage: 0.6,
-              }}
-              style={styles.chart}
-              fromZero
-              showValuesOnTopOfBars
+
+            <View style={styles.chartContainer}>
+              <BarChart
+                data={{
+                  labels: weeklyCompletions.map(w => w.label),
+                  datasets: [{ data: weeklyCompletions.map(w => w.completed || 0) }],
+                }}
+                width={CHART_WIDTH}
+                height={200}
+                chartConfig={{
+                  ...chartConfig,
+                  backgroundColor: theme.card,
+                  backgroundGradientFrom: theme.card,
+                  backgroundGradientTo: theme.card,
+                  color: (opacity = 1) => `rgba(52, 211, 153, ${opacity})`,
+                  labelColor: (opacity = 1) => isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
+                  propsForBackgroundLines: {stroke: theme.border, strokeDasharray: '',},
+                  barPercentage: 0.6,
+                }}
+                style={styles.chart}
+                fromZero
+                showValuesOnTopOfBars
+                //verticalLabelRotation={25}
             />
           </View>
+            </View>
         )}
 
         {/* ─── SECTION 5: CATEGORY DISTRIBUTION ─── */}
         {categoryBreakdown.length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor:theme.card, borderColor:theme.border}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="pie-chart-outline" size={18} color="#fbbf24" />
-              <Text style={styles.cardTitle}>Category Distribution</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Category Distribution</Text>
             </View>
 
             {categoryBreakdown.some(c => c.total > 0) ? (
               <>
-                <PieChart
-                  data={categoryBreakdown
-                    .filter(c => c.total > 0)
-                    .map((c, i) => ({
-                      name: c.category,
-                      count: c.total,
-                      color: ['#a78bfa', '#60a5fa', '#34d399'][i],
-                      legendFontColor: 'rgba(255,255,255,0.6)',
-                      legendFontSize: 12,
-                    }))}
-                  width={CHART_WIDTH}
-                  height={160}
-                  chartConfig={chartConfig}
-                  accessor="count"
-                  backgroundColor="transparent"
-                  paddingLeft="10"
-                  style={styles.chart}
-                />
+                <View style={styles.chartContainer}>
+                  <PieChart
+                    data={categoryBreakdown
+                      .filter(c => c.total > 0)
+                      .map((c, i) => ({
+                        name: c.category,
+                        count: c.total,
+                        color: ['#a78bfa', '#60a5fa', '#34d399'][i],
+                        legendFontColor: isDarkMode ? 'rgba(255,255,255,0.6)' : '#64748b',
+                        legendFontSize: 12,
+                      }))}
+                    width={CHART_WIDTH}
+                    height={160}
+                    chartConfig={chartConfig}
+                    accessor="count"
+                    backgroundColor="transparent"
+                    paddingLeft="10"
+                    style={styles.chart}
+                  />
+                </View>
+                
                 <View style={styles.categoryDetails}>
                   {categoryBreakdown.map((c, i) => (
                     <View key={c.category} style={styles.categoryRow}>
                       <View style={styles.categoryLeft}>
                         <View style={[styles.categoryDot, { backgroundColor: ['#a78bfa', '#60a5fa', '#34d399'][i] }]} />
-                        <Text style={styles.categoryName}>{c.category}</Text>
+                        <Text style={[styles.categoryName, {color:theme.text}]}>{c.category}</Text>
                       </View>
-                      <Text style={styles.categoryRate}>
+                      <Text style={[styles.categoryRate, {color:theme.subtext}]}>
                         {c.completed}/{c.total} ({c.completionRate}%)
                       </Text>
                     </View>
@@ -312,28 +360,28 @@ export default function AnalyticsScreen({ navigation }) {
                 </View>
               </>
             ) : (
-              <Text style={styles.emptyText}>No tasks yet</Text>
+              <Text style={[styles.emptyText, {color:theme.text}]}>No tasks yet</Text>
             )}
           </View>
         )}
 
         {/* ─── SECTION 6: PRIORITY DISTRIBUTION ─── */}
         {taskStats && taskStats.total > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor:theme.card, borderColor:theme.border}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="speedometer-outline" size={18} color="#ef4444" />
-              <Text style={styles.cardTitle}>Priority Distribution</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Priority Distribution</Text>
             </View>
             {priorityDistribution.map(p => {
               const total = priorityDistribution.reduce((s, x) => s + x.count, 0);
               const width = total > 0 ? (p.count / total) * 100 : 0;
               return (
                 <View key={p.label} style={styles.priorityRow}>
-                  <Text style={styles.priorityLabel}>{p.label}</Text>
-                  <View style={styles.priorityBarBg}>
+                  <Text style={[styles.priorityLabel, {color:theme.text}]}>{p.label}</Text>
+                  <View style={[styles.priorityBarBg, {backgroundColor:theme.border, borderColor:theme.border, borderWidth:1}]}>
                     <View style={[styles.priorityBarFill, { width: `${width}%`, backgroundColor: p.color }]} />
                   </View>
-                  <Text style={styles.priorityCount}>{p.count}</Text>
+                  <Text style={[styles.priorityCount, {color:theme.text}]}>{p.count}</Text>
                 </View>
               );
             })}
@@ -342,10 +390,10 @@ export default function AnalyticsScreen({ navigation }) {
 
         {/* ─── SECTION 7: WEEKDAY HEATMAP ─── */}
         {weekdayHeatmap.length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor:theme.card, borderColor:theme.border}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="grid-outline" size={18} color="#fb923c" />
-              <Text style={styles.cardTitle}>Busiest Days</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Busiest Days</Text>
             </View>
             <View style={styles.heatmapRow}>
               {weekdayHeatmap.map(d => (
@@ -355,14 +403,14 @@ export default function AnalyticsScreen({ navigation }) {
                       styles.heatmapBlock,
                       {
                         backgroundColor: d.count === 0
-                          ? 'rgba(255,255,255,0.06)'
+                          ? theme.border
                           : `rgba(167, 139, 250, ${0.2 + d.intensity * 0.8})`,
                       },
                     ]}
                   >
-                    <Text style={styles.heatmapCount}>{d.count}</Text>
+                    <Text style={[styles.heatmapCount, {color:theme.text}]}>{d.count}</Text>
                   </View>
-                  <Text style={styles.heatmapDay}>{d.day}</Text>
+                  <Text style={[styles.heatmapDay, {color:theme.subtext}]}>{d.day}</Text>
                 </View>
               ))}
             </View>
@@ -374,7 +422,7 @@ export default function AnalyticsScreen({ navigation }) {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="bulb-outline" size={18} color="#fbbf24" />
-              <Text style={styles.cardTitle}>Insights</Text>
+              <Text style={[styles.cardTitle, {color:theme.text}]}>Insights</Text>
             </View>
             {insights.map((insight, idx) => (
               <View
@@ -401,7 +449,7 @@ export default function AnalyticsScreen({ navigation }) {
                     }
                   />
                 </View>
-                <Text style={styles.insightText}>{insight.text}</Text>
+                <Text style={[styles.insightText, {color:theme.text}]}>{insight.text}</Text>
               </View>
             ))}
           </View>
@@ -420,7 +468,7 @@ export default function AnalyticsScreen({ navigation }) {
 }
 
 // ─── HELPER COMPONENT ───
-function ReportMetric({ label, value, delta, invertColor = false, suffix = '' }) {
+function ReportMetric({ theme, label, value, delta, invertColor = false, suffix = '' }) {
   const showDelta = delta !== undefined && delta !== null;
   const isPositive = delta > 0;
   const isNegative = delta < 0;
@@ -435,9 +483,13 @@ function ReportMetric({ label, value, delta, invertColor = false, suffix = '' })
   }
 
   return (
-    <View style={styles.reportMetric}>
-      <Text style={styles.reportValue}>{value}</Text>
-      <Text style={styles.reportLabel}>{label}</Text>
+    <View style={[styles.reportMetric, {
+      backgroundColor:theme.background,
+      borderColor:theme.border,
+      borderWidth:1,
+    }]}>
+      <Text style={[styles.reportValue, {color:theme.text}]}>{value}</Text>
+      <Text style={[styles.reportLabel, {color:theme.subtext}]}>{label}</Text>
       {showDelta && (
         <View style={styles.deltaRow}>
           <Ionicons
@@ -513,6 +565,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -576,7 +629,11 @@ const styles = StyleSheet.create({
   // Charts
   chart: {
     borderRadius: 12,
-    marginHorizontal: -8,
+   // marginHorizontal: -8,
+  },
+  chartContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
   },
 
   // Threshold lines (wellness trend)
@@ -584,6 +641,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 40,
     right: 10,
+    overflow: 'hidden',
   },
   thresholdDash: {
     height: 1,
