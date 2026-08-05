@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
-//  import { handleGoogleSignIn } from '../services/authService'; //a
+import { handleGoogleSignIn } from '../services/authService'; // for react native google sign in
 
 export default function SignupScreen({ navigation }) {
   const [firstName, setFirstName] = useState('');
@@ -226,9 +226,14 @@ export default function SignupScreen({ navigation }) {
                style={styles.socialButton}
                onPress={async () => {
                  try {
-                   await handleGoogleSignIn();
+                   const userCredential = await handleGoogleSignIn();
+                   Alert.alert (
+                    'Account Created',
+                    `Signed in as ${userCredential.user.displayName || 'User'}`
+                   );
                  } catch (error) {
-                   Alert.alert('Google Sign-In Failed', error.message);
+                   console.log('Google Error:', error);
+                   Alert.alert('Error', error.message || 'Google sign-in failed');
                  }
                }}
             >
