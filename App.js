@@ -39,7 +39,7 @@ export default function App() {
   if (loading) return null;
 
   return (
-    <ThemeProvider> {/* Dark mode*/}
+    <ThemeProvider> 
     <NavigationContainer>
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
