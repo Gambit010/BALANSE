@@ -56,12 +56,12 @@ export default function AppNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Tasks" component={TasksScreen} />
-      <Tab.Screen name="Calendar" component={CalendarScreen} />
-      <Tab.Screen name="Wellness" component={WellnessScreen} />
+      <Tab.Screen name="Home" component={HomeScreen}/>
+      <Tab.Screen name="Tasks" component={TasksScreen}/>
+      <Tab.Screen name="Calendar" component={CalendarScreen}/>
+      <Tab.Screen name="Wellness" component={WellnessScreen}/>
       <Tab.Screen name="Teams" component={TeamsScreen}/>
-      <Tab.Screen name="Profile" component={ProfileStackScreen} />
+      <Tab.Screen name="Profile" component={ProfileStackScreen}/>
     </Tab.Navigator>
   );
 }
