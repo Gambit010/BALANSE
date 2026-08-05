@@ -66,9 +66,16 @@ export default function ProfileScreen({ navigation }) {
     const handleLogout = async () => {
     try {
       // Expo Go: just sign out from Firebase (no native Google session to clear)
-      await signOut(auth);
+      // Now, it signs out from Google's native session first, then Firebase. 
+      // The try/catch ensures Firebase logout always happens even if Google signout fails 
+      // (e.g. user logged in with email not Google)
+      const { handleGoogleSignOut } = await import('../services/authService');
+      await handleGoogleSignOut();
+      //await signOut(auth);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Google signout:', error);
+    } finally {
+      await signOut(auth);
     }
   };
 
