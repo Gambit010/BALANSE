@@ -153,7 +153,7 @@ export default function NotificationScreen({ navigation }) {
           <View style={styles.emptyState}>
             <Ionicons name="notifications-off-outline" size={56} color={ theme.subtext } />
             <Text style={[styles.emptyTitle, { color: theme.subtext }]}>No notifications yet</Text>
-            <Text style={styles.emptySubtitle}>
+            <Text style={[styles.emptySubtitle, { color: theme.subtext }]}>
               Deadline alerts and wellness reminders will appear here
             </Text>
           </View>
