@@ -1,5 +1,6 @@
 import { getUserTasks } from './taskService';
 import { createNotification, hasRecentNotification } from './notificationService';
+import { sendImmediateNotification } from './pushNotificationServices'; 
 
 // Default task duration in minutes when no end time is specified
 const DEFAULT_TASK_DURATION = 60;
@@ -317,6 +318,10 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
     if (isDuplicate) continue;
 
     await createNotification(userId, message, 'conflict');
+    await sendImmediateNotification('Scheduling conflict', message, {
+      type: 'conflict',
+      taskId: savedTask.id,
+    });
   }
 
   return conflicts;

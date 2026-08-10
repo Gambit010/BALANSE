@@ -16,6 +16,8 @@ import NotificationScreen from './src/screens/NotificationScreen';
 import AddClassScreen from './src/screens/AddClassScreen';
 import TeamBoardScreen from './src/screens/TeamBoardScreen';
 import { upsertUserProfile } from './src/services/userService';
+import * as Notifications from 'expo-notifications';
+import { setupPushNotifications } from './src/services/pushNotificationServices';
 
 const Stack = createStackNavigator();
 
@@ -31,9 +33,19 @@ export default function App() {
       setLoading(false);
       if (currentUser) {
         upsertUserProfile(currentUser);
+        setupPushNotifications(currentUser.uid);
       }
     });
     return unsubscribe;
+  }, []);
+
+  // Handles what happens when the user taps a notification
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      console.log('Notification tapped:', data);
+    });
+    return () => subscription.remove();
   }, []);
 
   if (loading) return null;

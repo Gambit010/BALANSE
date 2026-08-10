@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { scheduleDeadlineReminder, cancelDeadlineReminder } from './pushNotificationServices';
 
 // Get all tasks for the current user
 export const getUserTasks = async (userId) => {
@@ -40,6 +41,13 @@ export const addTask = async (taskData) => {
       isCompleted: false,
       progress: 0,
     });
+
+    // Schedule a local reminder the evening before the deadline (skip for class
+    // schedules, which are recurring and handled separately to avoid over-scheduling).
+    if (!taskData.recurrence?.isClassSchedule) {
+      await scheduleDeadlineReminder({ id: docRef.id, ...taskData });
+    }
+
     return docRef.id;
   } catch (error) {
     console.error('Error adding task:', error);
@@ -55,6 +63,12 @@ export const updateTaskProgress = async (taskId, progress) => {
       progress: progress,
       isCompleted: progress === 100,
     });
+
+    // No need to keep reminding about a completed task
+    if (progress === 100) {
+      await cancelDeadlineReminder(taskId);
+    }
+
     return true;
   } catch (error) {
     console.error('Error updating task:', error);
@@ -67,6 +81,12 @@ export const updateTask = async (taskId, taskData) => {
   try {
     const taskRef = doc(db, 'tasks', taskId);
     await updateDoc(taskRef, taskData);
+
+    // Deadline may have changed — reschedule the reminder against the new value.
+    if (taskData.deadline && !taskData.recurrence?.isClassSchedule) {
+      await scheduleDeadlineReminder({ id: taskId, ...taskData });
+    }
+
     return true;
   } catch (error) {
     console.error('Error updating task:', error);
@@ -78,6 +98,7 @@ export const updateTask = async (taskId, taskData) => {
 export const deleteTask = async (taskId) => {
   try {
     await deleteDoc(doc(db, 'tasks', taskId));
+    await cancelDeadlineReminder(taskId);
     return true;
   } catch (error) {
     console.error('Error deleting task:', error);
