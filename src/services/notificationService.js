@@ -10,6 +10,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { sendImmediateNotification } from './pushNotificationServices';
 
 // Get all notifications for current user
 export const getUserNotifications = async (userId) => {
@@ -126,6 +127,10 @@ export const checkDeadlineNotifications = async (userId, tasks) => {
         const alreadyNotified = await hasRecentNotification(userId, message);
         if (!alreadyNotified) {
           await createNotification(userId, message, 'deadline');
+          await sendImmediateNotification('Deadline approaching', message, {
+            type: 'deadline',
+            taskId: task.id,
+          });
         }
       }
     }

@@ -23,7 +23,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,7 +35,14 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-web-browser",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "color": "#7c3aed",
+          "sounds": []
+        }
+      ]
     ],
     "extra": {
       "eas": {

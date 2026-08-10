@@ -5,6 +5,7 @@ import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline, get
 import { getUserTasks } from '../services/taskService';
 import { detectAllConflicts } from '../services/conflictService';
 import { createNotification, hasRecentNotification } from '../services/notificationService';
+import { sendImmediateNotification } from "../services/pushNotificationServices";
 
 
 const useWellness = () => {
@@ -76,12 +77,14 @@ const useWellness = () => {
                 const already = await hasRecentNotification(user.uid, msg);
                 if (!already) {
                     await createNotification(user.uid, msg, 'wellness');
+                    await sendImmediateNotification('Well-being check-in', msg, { type: 'wellness', percentage: percentageScore });
                 }
             } else if (percentageScore < 50) {
                 const msg = `Your well-being score is ${percentageScore}%. Review your wellness recommendations to stay on track.`;
                 const already = await hasRecentNotification(user.uid, msg);
                 if (!already) {
                     await createNotification(user.uid, msg, 'wellness');
+                    await sendImmediateNotification('Well-being check-in', msg, { type: 'wellness', percentage: percentageScore });
                 }
             }
             await fetchHistory();
