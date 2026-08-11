@@ -6,3 +6,6 @@ node_modules/
 # Ignore the google-services.json
 google-services.json
 GoogleService-Info.plist
+
+# Ignore test coverage files
+coverage/
