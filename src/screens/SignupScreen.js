@@ -11,6 +11,14 @@ import {
   ScrollView,
   Animated,
 } from 'react-native';
+import {
+  isValidEmailFormat,
+  isAllowedDomain,
+  isValidName,
+  isValidPasswordLength,
+  isValidMiddleName,
+  areSignupFieldsFilled,
+} from '../constants/validation';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
@@ -37,47 +45,44 @@ export default function SignupScreen({ navigation }) {
   }, []);
 
   const handleSignup = async () => {
-    if (!firstName || !lastName || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!areSignupFieldsFilled(firstName, lastName, email, password)) {
+      Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    // Name validation: only letters and spaces should be allowed
-    const nameRegex = /^[a-zA-Z\s]+$/;
-    if (!nameRegex.test(firstName)) {
+    if (!isValidName(firstName)) {
       Alert.alert('Error', 'First name should only contain letters');
       return;
     }
 
-    if (!nameRegex.test(lastName)) {
-      Alert.alert('Error', 'Last name should only contain letters');
-      return;
-    }
-
-    if (middleName && !nameRegex.test(middleName)) {
+    if (!isValidMiddleName(middleName)) {
       Alert.alert('Error', 'Middle name should only contain letters');
       return;
     }
 
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidName(lastName)) {
+      Alert.alert('Error', 'Last name should only contain letters');
+      return;
+    }
+
+    if (!isValidEmailFormat(email)) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
-    // Allowed domains
-    const allowedDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'sti.edu.ph'];
-    const emailDomain = email.split('@')[1]?.toLowerCase();
-    if (!allowedDomains.includes(emailDomain)) {
-      Alert.alert('Error', 'Please use a Gmail, Yahoo, Outlook, or STI email');
+    if (!isAllowedDomain(email)) {
+      Alert.alert(
+        'Error',
+        'Please use a Gmail, Yahoo, Outlook, or STI email'
+      );
       return;
     }
 
-    if (password.length < 6) {
+    if (!isValidPasswordLength(password)) {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
+    
 
     const fullName = middleName
     ? `${firstName} ${middleName} ${lastName}`
