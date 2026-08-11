@@ -16,6 +16,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/aut
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { handleGoogleSignIn } from '../services/authService'; // google signIn
+import { areLoginFieldsFilled } from '../constants/validation';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!areLoginFieldsFilled(email, password)) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
