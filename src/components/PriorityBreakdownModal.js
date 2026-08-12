@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getPriorityBreakdown } from '../constants/scoring';
+import { useTheme } from '../context/ThemeContext'; // for dark mode 
 
 export default function PriorityBreakdownModal({ visible, task, onClose }) {
   if (!task) return null;
@@ -15,6 +16,7 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
   };
 
   const ringColor = getScoreColor(breakdown.total);
+  const { theme, isDarkMode } = useTheme(); // for dark mode
 
   return (
     <Modal
@@ -32,17 +34,17 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
         {/* Inner sheet — swallow taps so they don't close the modal */}
         <TouchableOpacity
           activeOpacity={1}
-          style={styles.sheet}
+          style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}
           onPress={() => {}}
         >
           {/* HEADER */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Ionicons name="analytics-outline" size={18} color="#a78bfa" />
-              <Text style={styles.headerTitle}>Priority Breakdown</Text>
+              <Ionicons name="analytics-outline" size={18} color={theme.accent} />
+              <Text style={[styles.headerTitle, {color: theme.accent}]}>Priority Breakdown</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color="rgba(255,255,255,0.6)" />
+            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,}]}>
+              <Ionicons name="close" size={20} color={theme.icon} />
             </TouchableOpacity>
           </View>
 
@@ -53,35 +55,35 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
 
           {/* SCORE CIRCLE */}
           <View style={styles.scoreSection}>
-            <View style={[styles.scoreCircle, { borderColor: ringColor }]}>
+            <View style={[styles.scoreCircle, { borderColor: ringColor, backgroundColor: isDarkMode ? theme.card : 'rgba(204, 204, 204, 0.29)' }]}>
               <Text style={[styles.scoreNumber, { color: ringColor }]}>
                 {breakdown.total}
               </Text>
-              <Text style={styles.scoreMax}>/ 100</Text>
+              <Text style={[styles.scoreMax, { color: theme.subtext }]}>/ 100</Text>
             </View>
             <Text style={[styles.scoreLabel, { color: ringColor }]}>
               {task.priorityLabel} Priority
             </Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.border}]} />
 
           {/* FACTOR BREAKDOWN */}
-          <Text style={styles.sectionLabel}>How this score was computed</Text>
+          <Text style={[styles.sectionLabel, { color: theme.subtext }]}>How this score was computed</Text>
           <ScrollView style={styles.factorsScroll} showsVerticalScrollIndicator={false}>
             {breakdown.factors.map((factor) => {
               const pct = Math.min(100, (factor.score / factor.maxScore) * 100);
               return (
                 <View key={factor.label} style={styles.factorRow}>
                   <View style={styles.factorHeader}>
-                    <Text style={styles.factorLabel}>{factor.label}</Text>
+                    <Text style={[styles.factorLabel, { color: theme.text }]}>{factor.label}</Text>
                     <Text style={styles.factorScore}>
                       {factor.score}
-                      <Text style={styles.factorMax}> / {factor.maxScore}</Text>
+                      <Text style={[styles.factorMax, { color: theme.subtext }]}> / {factor.maxScore}</Text>
                     </Text>
                   </View>
-                  <Text style={styles.factorReason}>{factor.reason}</Text>
-                  <View style={styles.barBg}>
+                  <Text style={[styles.factorReason, { color: theme.subtext }]}>{factor.reason}</Text>
+                  <View style={[styles.barBg, { backgroundColor: theme.border}]}>
                     <View style={[styles.barFill, { width: `${pct}%` }]} />
                   </View>
                 </View>
@@ -90,9 +92,9 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
           </ScrollView>
 
           {/* FOOTER */}
-          <View style={styles.footer}>
-            <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.4)" />
-            <Text style={styles.footerText}>
+          <View style={[styles.footer, { borderTopColor: theme.border }]}>
+            <Ionicons name="information-circle-outline" size={14} color={theme.subtext} />
+            <Text style={[styles.footerText, { color: theme.subtext }]}>
               Higher scores are surfaced first in Today's Focus.
             </Text>
           </View>
