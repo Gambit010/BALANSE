@@ -419,7 +419,7 @@ export default function AnalyticsScreen({ navigation }) {
 
         {/* ─── SECTION 8: PERSONALIZED INSIGHTS ─── */}
         {insights.length > 0 && (
-          <View style={styles.card}>
+          <View style={[styles.card, {backgroundColor:theme.card, borderColor:theme.border, borderWidth:1}]}>
             <View style={styles.cardHeader}>
               <Ionicons name="bulb-outline" size={18} color="#fbbf24" />
               <Text style={[styles.cardTitle, {color:theme.text}]}>Insights</Text>
