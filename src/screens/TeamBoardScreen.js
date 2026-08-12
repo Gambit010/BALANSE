@@ -487,28 +487,28 @@ export default function TeamBoardScreen({ route, navigation }) {
       {/* ASSIGN MODAL */}
       <Modal visible={!!assignModal} transparent animationType="fade" onRequestClose={() => setAssignModal(null)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Assign Task</Text>
-            <Text style={styles.modalHint} numberOfLines={2}>
+          <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Assign Task</Text>
+            <Text style={[styles.modalHint, { color: theme.subtext }]} numberOfLines={2}>
               {assignModal?.title}
             </Text>
             {members.map((m) => (
               <TouchableOpacity
                 key={m.uid}
-                style={styles.memberRow}
+                style={[styles.memberRow, {borderBottomColor: theme.border}]}
                 onPress={() => handleAssign(m)}
               >
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberAvatarText}>{m.name.charAt(0).toUpperCase()}</Text>
                 </View>
-                <Text style={styles.memberName}>{m.name}</Text>
+                <Text style={[styles.memberName, { color: theme.text }]}>{m.name}</Text>
                 {assignModal?.assigneeId === m.uid && (
                   <Ionicons name="checkmark-circle" size={18} color="#34d399" />
                 )}
               </TouchableOpacity>
             ))}
             <TouchableOpacity
-              style={[styles.modalBtn, styles.modalCancel, { marginTop: 14 }]}
+              style={[styles.modalBtn, styles.modalCancel, { marginTop: 14, backgroundColor: theme.border }]}
               onPress={() => setAssignModal(null)}
             >
               <Text style={styles.modalCancelText}>Cancel</Text>
