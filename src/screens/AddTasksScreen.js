@@ -43,13 +43,23 @@ export default function AddTaskScreen({ navigation }) {
   const defaultEnd = { hour: 18, minute: 0 };
 
   const { tasks: existingTasks } = useTasks();
-  const { theme } = useTheme(); // for dark mode
+  const { theme, isDarkMode } = useTheme(); // for dark mode
+
+    // code block to test to fix the calendar bug
+  const formatLocalDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  };
 
   const pendingTask = useMemo(() => ({
     title: title.trim(),
     category,
     priority,
-    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+    deadline: hasTime ? deadline.toISOString() : formatLocalDate(deadline),
+    hasTime,
   }), [category, priority, deadline, hasTime]);
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
@@ -197,7 +207,7 @@ export default function AddTaskScreen({ navigation }) {
         description: description.trim(),
         category,
         priority,
-        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+        deadline: hasTime ? deadline.toISOString() : formatLocalDate(deadline),
         priorityScore: 0,
         assignments: [],
       };
@@ -433,6 +443,7 @@ export default function AddTaskScreen({ navigation }) {
 
             {showDatePicker && (
               <DateTimePicker value={deadline} mode="date"
+                themeVariant={isDarkMode ? 'dark' : 'light'}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 minimumDate={new Date()}
                 onChange={(event, selectedDate) => {
@@ -477,6 +488,7 @@ export default function AddTaskScreen({ navigation }) {
                 value={deadline}
                 mode="time"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                themeVariant={isDarkMode ? 'dark' : 'light'}
                 onChange={(event, selectedDate) => {
                   setShowTimePicker(false);
                   if (selectedDate) setDeadline(selectedDate);
@@ -484,10 +496,11 @@ export default function AddTaskScreen({ navigation }) {
               />
             )}
 
-            {/* CONFLICT ALERTS (single task) */}
-            <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
+            
           </>
         )}
+        {/* CONFLICT ALERTS (single task) */}
+            <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
 
         {/* --- REPEAT: Day selector + Duration + Per-day times --- */}
         {isRepeat && (
@@ -591,6 +604,7 @@ export default function AddTaskScreen({ navigation }) {
               <DateTimePicker
                 value={getPickerValue()}
                 mode="time"
+                themeVariant={isDarkMode ? 'dark' : 'light'}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={handleDayTimeChange}
               />
