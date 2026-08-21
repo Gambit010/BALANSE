@@ -139,9 +139,9 @@ export default function TeamBoardScreen({ route, navigation }) {
     }
   };
 
-  const handleProgress = async (task, delta) => {
-    const next = Math.max(0, Math.min(100, task.progress + delta));
-    await updateProgress(task, next);
+  const handleProgress = async (task, progress) => {
+    //const next = Math.max(0, Math.min(100, task.progress + delta));
+    await updateProgress(task, progress);
   };
 
   const handleMarkDone = async (task) => {
@@ -283,31 +283,31 @@ export default function TeamBoardScreen({ route, navigation }) {
                               ]}
                             />
                           </View>
-                          <Text style={[styles.progressLabel, {color:theme.subtext}]}>{task.progress}%</Text>
+
 
                           {/* Controls */}
                           {editable ? (
                             <View style={styles.controls}>
                               <TouchableOpacity
-                                style={[styles.ctrlBtn, {backgroundColor: theme.border}]}
-                                onPress={() => handleProgress(task, -25)}
+                                style={[styles.ctrlBtn, {backgroundColor: theme.border}, task.progress === 0 && styles.statusActive]}
+                                onPress={() => handleProgress(task, 0)}
                               >
-                                <Text style={[styles.ctrlText, {color:theme.text}]}>−25</Text>
+                                <Text style={[styles.ctrlText, {color:theme.text}]}>To Do</Text>
                               </TouchableOpacity>
+
                               <TouchableOpacity
-                                style={[styles.ctrlBtn, {backgroundColor: theme.border}]}
-                                onPress={() => handleProgress(task, 25)}
+                                style={[styles.ctrlBtn, {backgroundColor: theme.border}, task.progress === 50 && styles.statusActive]}
+                                onPress={() => handleProgress(task, 50)}
                               >
-                                <Text style={[styles.ctrlText, {color:theme.text}]}>+25</Text>
+                                <Text style={[styles.ctrlText, {color:theme.text}]}>In Progress</Text>
                               </TouchableOpacity>
-                              {task.progress < 100 && (
-                                <TouchableOpacity
-                                  style={[styles.ctrlBtn, styles.doneBtn]}
-                                  onPress={() => handleMarkDone(task)}
-                                >
-                                  <Ionicons name="checkmark" size={14} color="#34d399" />
-                                </TouchableOpacity>
-                              )}
+
+                              <TouchableOpacity 
+                                style={[ styles.ctrlBtn, { backgroundColor: theme.border }, task.progress === 100 && styles.statusActive]}
+                                onPress={() => handleProgress(task, 100)}
+                              >
+                                <Text style={[styles.ctrlText, {color:theme.text}]}>Done</Text>
+                              </TouchableOpacity>
                             </View>
                           ) : (
                             <Text style={[styles.lockedNote, {color:theme.subtext}]}>Assigned to {task.assigneeName}</Text>
@@ -508,10 +508,10 @@ export default function TeamBoardScreen({ route, navigation }) {
               </TouchableOpacity>
             ))}
             <TouchableOpacity
-              style={[styles.modalBtn, styles.modalCancel, { marginTop: 14, backgroundColor: theme.border }]}
+              style={[styles.modalBtn, styles.modalCancel, { marginTop: 14, backgroundColor: theme.border, flex: 0 }]}
               onPress={() => setAssignModal(null)}
             >
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -630,6 +630,11 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: 'center',
   },
+  statusActive: {
+  borderWidth: 1,
+  borderColor: '#7c3aed',
+},
+
   ctrlText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
   doneBtn: { backgroundColor: 'rgba(52,211,153,0.15)', flex: 0.6 },
   lockedNote: {
