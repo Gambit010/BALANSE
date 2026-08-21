@@ -242,6 +242,7 @@ export default function EditTaskScreen({ route, navigation }) {
           <DateTimePicker
             value={deadline}
             mode="date"
+            themeVariant={isDarkMode ? 'dark' : 'light'}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={(event, selectedDate) => {
               setShowDatePicker(false);
@@ -287,6 +288,7 @@ export default function EditTaskScreen({ route, navigation }) {
           <DateTimePicker
             value={deadline}
             mode="time"
+            themeVariant={isDarkMode ? 'dark' : 'light'}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={(event, selectedDate) => {
               setShowTimePicker(false);
