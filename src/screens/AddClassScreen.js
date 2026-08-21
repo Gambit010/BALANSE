@@ -447,6 +447,7 @@ export default function AddClassScreen({ navigation }) {
           <DateTimePicker
             value={getPickerValue()}
             mode="time"
+            themeVariant={isDarkMode ? 'dark' : 'light'}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handlePickerChange}
           />
