@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
+import { useTheme } from '../context/ThemeContext'; // for global dark mode
 
-export default function ProfileScreen() {
-  const [darkMode, setDarkMode] = useState(false);
+export default function ProfileScreen({ navigation }) {
+  //const [darkMode, setDarkMode] = useState(false);
+  const { isDarkMode, toggleDarkMode, theme } = useTheme(); // this replace the code above 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const { tasks } = useTasks();
 
@@ -38,6 +40,7 @@ export default function ProfileScreen() {
     ? Math.round((completedTasks / tasks.length) * 100)
     : 0;
 
+    /*
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -45,13 +48,30 @@ export default function ProfileScreen() {
       console.error(error);
     }
   };
+  */
+
+    const handleLogout = async () => {
+    try {
+      // Expo Go: just sign out from Firebase (no native Google session to clear)
+      // Now, it signs out from Google's native session first, then Firebase. 
+      // The try/catch ensures Firebase logout always happens even if Google signout fails 
+      // (e.g. user logged in with email not Google)
+      const { handleGoogleSignOut } = await import('../services/authService');
+      await handleGoogleSignOut();
+      //await signOut(auth);
+    } catch (error) {
+      console.error('Google signout:', error);
+    } finally {
+      await signOut(auth);
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background}]}> 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
         {/* HEADER */}
-        <Text style={styles.screenTitle}>Profile</Text>
+        <Text style={[styles.screenTitle, { color: theme.text }]}>Profile</Text>
 
         {/* AVATAR + USER INFO */}
         <View style={styles.profileCard}>
@@ -60,53 +80,55 @@ export default function ProfileScreen() {
               {userName.charAt(0).toUpperCase()}
             </Text>
           </View>
-          <Text style={styles.userName}>{userName}</Text>
-          <Text style={styles.userEmail}>{userEmail}</Text>
+          <Text style={[styles.userName, { color: theme.text }]}>{userName}</Text>
+          <Text style={[styles.userEmail, { color: theme.subtext }]}>{userEmail}</Text>
+          {/*}
           <View style={styles.roleTag}>
             <Text style={styles.roleText}>Student Leader</Text>
           </View>
+          */}
         </View>
 
         {/* STATS ROW */}
-        <View style={styles.statsCard}>
+        <View style={[styles.statsCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{completedTasks}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{completedTasks}</Text>
+            <Text style={[styles.statLabel, { color: theme.subtext }]}>Completed</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border},]} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{inProgressTasks}</Text>
-            <Text style={styles.statLabel}>In Progress</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{inProgressTasks}</Text>
+            <Text style={[styles.statLabel, { color: theme.subtext }]}>In Progress</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border},]} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{successRate}%</Text>
-            <Text style={styles.statLabel}>Success Rate</Text>
+            <Text style={[styles.statNumber, { color: theme.text }]}>{successRate}%</Text>
+            <Text style={[styles.statLabel, { color: theme.subtext }]}>Sucess Rate</Text>
           </View>
         </View>
 
         {/* SETTINGS */}
-        <View style={styles.settingsCard}>
+        <View style={[styles.settingsCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
 
-          {/* Dark Mode */}
+          {/* Dark Mode */} 
           <View style={styles.settingRow}>
             <View style={styles.settingLeft}>
               <View style={[styles.settingIcon, { backgroundColor: 'rgba(167,139,250,0.2)' }]}>
                 <Ionicons name="moon-outline" size={18} color="#a78bfa" />
               </View>
               <View>
-                <Text style={styles.settingTitle}>Dark Mode</Text>
-                <Text style={styles.settingSubtitle}>Easier on the eyes</Text>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Dark Mode</Text>
+                <Text style={[styles.settingSubtitle, { color: theme.subtext }]}>Easier on the eyes</Text>
               </View>
             </View>
             <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
-              trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#7c3aed' }}
-              thumbColor={darkMode ? '#ffffff' : 'rgba(255,255,255,0.5)'}
+              value={isDarkMode}
+              onValueChange={toggleDarkMode}
+              trackColor={{ false: theme.border, true: '#7c3aed' }}
+              thumbColor={isDarkMode ? '#ffffff' : '#64748b'}
             />
           </View>
-
+  
           <View style={styles.separator} />
 
           {/* Notifications */}
@@ -116,29 +138,29 @@ export default function ProfileScreen() {
                 <Ionicons name="notifications-outline" size={18} color="#fb923c" />
               </View>
               <View>
-                <Text style={styles.settingTitle}>Notifications</Text>
-                <Text style={styles.settingSubtitle}>Task reminders and alerts</Text>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Notification</Text>
+                <Text style={[styles.settingSubtitle, { color: theme.subtext }]}>Task reminders and alerts</Text>
               </View>
             </View>
             <Switch
               value={notificationsEnabled}
               onValueChange={setNotificationsEnabled}
-              trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#7c3aed' }}
-              thumbColor={notificationsEnabled ? '#ffffff' : 'rgba(255,255,255,0.5)'}
+              trackColor={{ false: theme.border, true: '#7c3aed' }}
+              thumbColor={notificationsEnabled ? '#ffffff' : '#64748b'}
             />
           </View>
 
           <View style={styles.separator} />
 
-          {/* Settings */}
+          {/* Settings 
           <TouchableOpacity style={styles.settingRow}>
             <View style={styles.settingLeft}>
               <View style={[styles.settingIcon, { backgroundColor: 'rgba(52,211,153,0.2)' }]}>
                 <Ionicons name="settings-outline" size={18} color="#34d399" />
               </View>
               <View>
-                <Text style={styles.settingTitle}>Settings</Text>
-                <Text style={styles.settingSubtitle}>App preferences</Text>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Settings</Text>
+                <Text style={[styles.settingSubtitle, { color: theme.subtext }]}>App preferences</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
@@ -146,15 +168,32 @@ export default function ProfileScreen() {
 
           <View style={styles.separator} />
 
-          {/* Help */}
+           Help 
           <TouchableOpacity style={styles.settingRow}>
             <View style={styles.settingLeft}>
               <View style={[styles.settingIcon, { backgroundColor: 'rgba(96,165,250,0.2)' }]}>
                 <Ionicons name="help-circle-outline" size={18} color="#60a5fa" />
               </View>
               <View>
-                <Text style={styles.settingTitle}>Help & Support</Text>
-                <Text style={styles.settingSubtitle}>Get assistance</Text>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Help & Support</Text>
+                <Text style={[styles.settingSubtitle, { color: theme.subtext }]}>Get assistance</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
+          </TouchableOpacity>
+          */}
+
+          <View style={styles.separator} />
+
+          {/* Analytics */}
+          <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Analytics')}>
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIcon, { backgroundColor: 'rgba(167,139,250,0.2)' }]}>
+                <Ionicons name="analytics-outline" size={18} color="#a78bfa" />
+              </View>
+              <View>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Analytics & Insights</Text>
+                <Text style={[styles.settingSubtitle, { color: theme.subtext }]}>View your trends and patterns</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
@@ -323,3 +362,4 @@ const styles = StyleSheet.create({
 
 
 
+  

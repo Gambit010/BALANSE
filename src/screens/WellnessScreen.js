@@ -10,6 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import {
   TIMEFRAME_TEXT,
   getWellnessStatus,
 } from '../constants/wellness';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_HEIGHT = 180;
@@ -33,6 +35,7 @@ export default function WellnessScreen() {
     latestStatus,
     decline,
     interventions,
+    trendInsight,
     activeTaskCount,
     canTakeAssessment,
     nextAssessmentDate,
@@ -46,6 +49,11 @@ export default function WellnessScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const { theme, isDarkMode } = useTheme(); // for dark mode
+
+  const daysUntilNext = nextAssessmentDate
+    ? Math.max(0, Math.ceil((nextAssessmentDate - new Date()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   // ─── Questionnaire Logic ───
 
@@ -115,14 +123,14 @@ export default function WellnessScreen() {
 
     return (
       <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Score History</Text>
-        <View style={[styles.chartBox, { height: CHART_HEIGHT }]}>
+        <Text style={[styles.sectionTitle, { color:theme.text}]}>Score History</Text>
+        <View style={[styles.chartBox, { height: CHART_HEIGHT }, { backgroundColor: theme.card }]}>
           {[0, 25, 50, 75, 100].map(val => {
             const y = 20 + usableHeight - (val / maxVal) * usableHeight;
             return (
               <View key={val} style={styles.gridRow}>
-                <Text style={[styles.gridLabel, { top: y - 8 }]}>{val}</Text>
-                <View style={[styles.gridLine, { top: y }]} />
+                <Text style={[styles.gridLabel, { top: y - 8, color:theme.subtext }]}>{val}</Text>
+                <View style={[styles.gridLine, { top: y, backgroundColor: theme.border }]} />
               </View>
             );
           })}
@@ -172,8 +180,8 @@ export default function WellnessScreen() {
         <View style={styles.dateRow}>
           {points.length > 0 && (
             <>
-              <Text style={styles.dateLabel}>{formatShortDate(points[0].date)}</Text>
-              <Text style={styles.dateLabel}>{formatShortDate(points[points.length - 1].date)}</Text>
+              <Text style={[styles.dateLabel, { color: theme.subtext}]}>{formatShortDate(points[0].date)}</Text>
+              <Text style={[styles.dateLabel, { color: theme.subtext}]}>{formatShortDate(points[points.length - 1].date)}</Text>
             </>
           )}
         </View>
@@ -185,9 +193,9 @@ export default function WellnessScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, {backgroundColor: theme.background}]}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#a78bfa" />
+          <ActivityIndicator size="large" color={theme.accent} />
           <Text style={styles.loadingText}>Loading wellness data...</Text>
         </View>
       </SafeAreaView>
@@ -195,36 +203,36 @@ export default function WellnessScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Well-being</Text>
-          <Text style={styles.subtitle}>WHO-5 Well-Being Index</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Well-being</Text>
+          <Text style={[styles.subtitle, { color: theme.subtext }]}>WHO-5 Well-Being Index</Text>
         </View>
 
         {/* Current Score Card */}
         {latestScore ? (
-          <View style={[styles.scoreCard, { borderLeftColor: latestStatus?.color }]}>
+          <View style={[styles.scoreCard, { borderLeftColor: latestStatus?.color, backgroundColor: theme.card, borderColor: theme.border, }]}>
             <View style={styles.scoreRow}>
               <View>
-                <Text style={styles.scoreValue}>{latestScore.percentage}%</Text>
+                <Text style={[styles.scoreValue, { color: theme.text }]}>{latestScore.percentage}%</Text>
                 <Text style={[styles.scoreLabel, { color: latestStatus?.color }]}>
                   {latestStatus?.label}
                 </Text>
               </View>
               <View style={styles.scoreRing}>
-                <Text style={styles.scoreRingText}>{latestScore.rawScore}/25</Text>
-                <Text style={styles.scoreRingLabel}>Raw</Text>
+                <Text style={[styles.scoreRingText, { color: theme.text }]}>{latestScore.rawScore}/25</Text>
+                <Text style={[styles.scoreRingLabel, { color: theme.subtext }]}>Raw</Text>
               </View>
             </View>
-            <Text style={styles.scoreDescription}>{latestStatus?.description}</Text>
+            <Text style={[styles.scoreDescription, { color: theme.text }]}>{latestStatus?.description}</Text>
           </View>
         ) : (
-          <View style={styles.emptyCard}>
-            <Ionicons name="heart-outline" size={48} color="rgba(255,255,255,0.3)" />
-            <Text style={styles.emptyText}>No assessments yet</Text>
-            <Text style={styles.emptySubtext}>
+          <View style={[styles.emptyCard, {backgroundColor: theme.card, borderColor:theme.border}]}>
+            <Ionicons name="heart-outline" size={48} color={theme.icon} />
+            <Text style={[styles.emptyText, {color:theme.text}]}>No assessments yet</Text>
+            <Text style={[styles.emptySubtext, {color:theme.subtext}]}>
               Take your first WHO-5 check-in to track your well-being over time.
             </Text>
           </View>
@@ -232,18 +240,18 @@ export default function WellnessScreen() {
 
         {/* Decline Alert */}
         {decline?.hasDrop && (
-          <View style={styles.alertCard}>
-            <Ionicons name="trending-down" size={22} color="#f87171" />
+          <View style={[styles.alertCard, { borderColor: theme.border }]}>
+            <Ionicons name="trending-down" size={22} color="#ef4444" />
             <View style={styles.alertContent}>
-              <Text style={styles.alertTitle}>Score Decline Detected</Text>
-              <Text style={styles.alertText}>{decline.message}</Text>
+              <Text style={[styles.alertTitle, { color: "#ef4444"}]}>Score Decline Detected</Text>
+              <Text style={[styles.alertText, { color: theme.text }]}>{decline.message}</Text>
             </View>
           </View>
         )}
 
         {/* Take Assessment Button */}
         <TouchableOpacity
-            style={[styles.assessButton, !canTakeAssessment && { opacity: 0.5 }]}
+            style={[styles.assessButton, { backgroundColor: theme.accent }, !canTakeAssessment && { opacity: 0.5 }]}
             onPress={startAssessment}
             disabled={!canTakeAssessment}
 >
@@ -255,25 +263,70 @@ export default function WellnessScreen() {
          </Text>
          </TouchableOpacity>
 
+        {/* Next check-in countdown */}
+        {latestScore && nextAssessmentDate && (
+          <View style={styles.nextCheckinRow}>
+            <Ionicons name="calendar-outline" size={14} color= {theme.subtext} />
+            <Text style={[styles.nextCheckinNote, { color: theme.subtext }]}>
+              {daysUntilNext > 0
+                ? `Recommended next check-in in ${daysUntilNext} day${daysUntilNext !== 1 ? 's' : ''} · ${nextAssessmentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                : 'Your next check-in is recommended now'}
+            </Text>
+          </View>
+        )}
+
         {/* Score History Chart */}
         {renderChart()}
+                {/* Workload-Wellness Trend Insight */}
+        {trendInsight && (
+          <View
+            style={[
+              styles.insightCard,
+              trendInsight.tone === 'positive' && styles.insightPositive,
+              trendInsight.tone === 'warning' && styles.insightWarning,
+              trendInsight.tone === 'neutral' && styles.insightNeutral,
+            ]}
+          >
+            <Ionicons
+              name={
+                trendInsight.tone === 'positive'
+                  ? 'trending-up'
+                  : trendInsight.tone === 'warning'
+                  ? 'trending-down'
+                  : 'remove-outline'
+              }
+              size={22}
+              color={
+                trendInsight.tone === 'positive'
+                  ? '#4ade80'
+                  : trendInsight.tone === 'warning'
+                  ? '#f87171'
+                  : '#fbbf24'
+              }
+            />
+            <View style={styles.insightContent}>
+              <Text style={[styles.insightTitle, { color: theme.text}]}>Trend Insight</Text>
+              <Text style={[styles.insightText, { color:theme.text}]}>{trendInsight.message}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Workload Correlation */}
         {latestScore && (
-          <View style={styles.correlationCard}>
-            <Text style={styles.sectionTitle}>Workload Snapshot</Text>
+          <View style={[styles.correlationCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+            <Text style={[styles.sectionTitle, {color:theme.text}]}>Workload Snapshot</Text>
             <View style={styles.correlationRow}>
               <View style={styles.correlationItem}>
-                <Text style={styles.correlationValue}>{activeTaskCount}</Text>
-                <Text style={styles.correlationLabel}>Active Tasks</Text>
+                <Text style={[styles.correlationValue, {color:theme.text}]}>{activeTaskCount}</Text>
+                <Text style={[styles.correlationLabel, {color:theme.subtext}]}>Active Tasks</Text>
               </View>
               <View style={styles.correlationItem}>
-                <Text style={styles.correlationValue}>{latestScore.percentage}%</Text>
-                <Text style={styles.correlationLabel}>Well-being</Text>
+                <Text style={[styles.correlationValue, {color:theme.text}]}>{latestScore.percentage}%</Text>
+                <Text style={[styles.correlationLabel, {color:theme.subtext}]}>Well-being</Text>
               </View>
               <View style={styles.correlationItem}>
-                <Text style={styles.correlationValue}>{history.length}</Text>
-                <Text style={styles.correlationLabel}>Check-ins</Text>
+                <Text style={[styles.correlationValue, {color:theme.text}]}>{history.length}</Text>
+                <Text style={[styles.correlationLabel, {color:theme.subtext}]}>Check-ins</Text>
               </View>
             </View>
             {activeTaskCount > 5 && latestScore.percentage < 50 && (
@@ -287,13 +340,18 @@ export default function WellnessScreen() {
         {/* Interventions / Recommendations */}
         {interventions.length > 0 && (
           <View style={styles.interventionsSection}>
-            <Text style={styles.sectionTitle}>Recommendations</Text>
+            <Text style={[styles.sectionTitle, {color:theme.text}]}>Recommendations</Text>
             {interventions.map((item, idx) => (
-              <View key={idx} style={styles.interventionCard}>
-                <Ionicons name={item.icon} size={24} color="#a78bfa" />
+              <View key={idx} style={[styles.interventionCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+                <Ionicons name={item.icon} size={24} color={theme.accent} />
                 <View style={styles.interventionContent}>
-                  <Text style={styles.interventionTitle}>{item.title}</Text>
-                  <Text style={styles.interventionText}>{item.text}</Text>
+                  <Text style={[styles.interventionTitle, {color:theme.text}]}>{item.title}</Text>
+                  <Text style={[styles.interventionText, {color:theme.subtext}]}>{item.text}</Text>
+                  {item.link && (
+                    <TouchableOpacity onPress={() => Linking.openURL(item.link)}>
+                      <Text style={styles.interventionLink}>Visit Resource</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             ))}
@@ -303,17 +361,17 @@ export default function WellnessScreen() {
         {/* History List */}
         {history.length > 0 && (
           <View style={styles.historySection}>
-            <Text style={styles.sectionTitle}>Past Assessments</Text>
+            <Text style={[styles.sectionTitle, {color:theme.text}]}>Past Assessments</Text>
             {history.slice(0, 10).map((entry, idx) => {
               const status = getWellnessStatus(entry.percentage);
               return (
-                <View key={entry.id || idx} style={styles.historyItem}>
+                <View key={entry.id || idx} style={[styles.historyItem, {backgroundColor:theme.card, borderColor:theme.border}]}>
                   <View style={[styles.historyDot, { backgroundColor: status.color }]} />
                   <View style={styles.historyInfo}>
-                    <Text style={styles.historyScore}>{entry.percentage}%</Text>
-                    <Text style={styles.historyLabel}>{status.label}</Text>
+                    <Text style={[styles.historyScore, {color:theme.text}]}>{entry.percentage}%</Text>
+                    <Text style={[styles.historyLabel, {color:theme.subtext}]}>{status.label}</Text>
                   </View>
-                  <Text style={styles.historyDate}>{formatDate(entry.date)}</Text>
+                  <Text style={[styles.historyDate, {color:theme.subtext}]}>{formatDate(entry.date)}</Text>
                 </View>
               );
             })}
@@ -325,18 +383,18 @@ export default function WellnessScreen() {
 
       {/* ─── Questionnaire Modal ─── */}
       <Modal visible={showQuestionnaire} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalContainer}>
+        <SafeAreaView style={[styles.modalContainer, {backgroundColor:theme.background}]}>
           {result ? (
-            <View style={styles.resultContainer}>
+            <View style={[styles.resultContainer, {backgroundColor:theme.background}]}>
               <View style={[styles.resultCircle, { borderColor: result.status.color }]}>
-                <Text style={styles.resultScore}>{result.percentage}%</Text>
+                <Text style={[styles.resultScore, {color:theme.text}]}>{result.percentage}%</Text>
               </View>
               <Text style={[styles.resultLabel, { color: result.status.color }]}>
                 {result.status.label}
               </Text>
-              <Text style={styles.resultRaw}>Raw Score: {result.rawScore} / 25</Text>
-              <Text style={styles.resultDescription}>{result.status.description}</Text>
-              <TouchableOpacity style={styles.doneButton} onPress={closeQuestionnaire}>
+              <Text style={[styles.resultRaw, {color:theme.text}]}>Raw Score: {result.rawScore} / 25</Text>
+              <Text style={[styles.resultDescription, {color:theme.text}]}>{result.status.description}</Text>
+              <TouchableOpacity style={[styles.doneButton, {backgroundColor:theme.accent}]} onPress={closeQuestionnaire}>
                 <Text style={styles.doneButtonText}>Done</Text>
               </TouchableOpacity>
             </View>
@@ -344,10 +402,10 @@ export default function WellnessScreen() {
             <View style={styles.questionContainer}>
               <View style={styles.modalHeader}>
                 <TouchableOpacity onPress={closeQuestionnaire}>
-                  <Ionicons name="close" size={28} color="#fff" />
+                  <Ionicons name="close" size={28} color={theme.icon} />
                 </TouchableOpacity>
-                <Text style={styles.modalTitle}>WHO-5 Check-in</Text>
-                <Text style={styles.modalProgress}>
+                <Text style={[styles.modalTitle, {color:theme.text}]}>WHO-5 Check-in</Text>
+                <Text style={[styles.modalProgress, {color:theme.subtext}]}>
                   {currentQuestion + 1} / {WHO5_QUESTIONS.length}
                 </Text>
               </View>
@@ -355,17 +413,17 @@ export default function WellnessScreen() {
               <View style={styles.progressBar}>
                 <View
                   style={[
-                    styles.progressFill,
+                    styles.progressFill, {backgroundColor:theme.accent},
                     { width: `${((currentQuestion + 1) / WHO5_QUESTIONS.length) * 100}%` },
                   ]}
                 />
               </View>
 
-              <Text style={styles.timeframe}>{TIMEFRAME_TEXT}</Text>
+              <Text style={[styles.timeframe, {color:theme.subtext}]}>{TIMEFRAME_TEXT}</Text>
 
-              <Animated.View style={[styles.questionCard, { opacity: fadeAnim }]}>
-                <Text style={styles.questionNumber}>Q{currentQuestion + 1}</Text>
-                <Text style={styles.questionText}>
+              <Animated.View style={[styles.questionCard, { backgroundColor: theme.background, borderColor: theme.border, opacity: fadeAnim }]}>
+                <Text style={[styles.questionNumber, {color:theme.accent}]}>Q{currentQuestion + 1}</Text>
+                <Text style={[styles.questionText, {color:theme.text}]}>
                   {WHO5_QUESTIONS[currentQuestion].text}
                 </Text>
 
@@ -375,16 +433,31 @@ export default function WellnessScreen() {
                   return (
                     <TouchableOpacity
                       key={option.value}
-                      style={[styles.optionButton, isSelected && styles.optionSelected]}
+                      style={[styles.optionButton, {
+                        backgroundColor: theme.card,
+                        borderColor: theme.border,
+                      }, isSelected && {
+                        borderColor: theme.accent,
+                        backgroundColor: isDarkMode ? 'rgba(167,139,250,0.08)' : '#F3E8FF',
+                      }]}
                       onPress={() => selectAnswer(questionId, option.value)}
                     >
-                      <View style={[styles.optionRadio, isSelected && styles.optionRadioFilled]}>
+                      <View style={[styles.optionRadio, {borderColor: theme.subtext}, 
+                        isSelected && {
+                            borderColor: theme.accent,
+                          },
+                        ]
+                      }>
                         {isSelected && <View style={styles.optionRadioDot} />}
                       </View>
-                      <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
+                      <Text style={[styles.optionLabel, {color:theme.text}, 
+                        isSelected && {
+                          color:theme.accent
+                        }]}>
                         {option.label}
                       </Text>
-                      <Text style={[styles.optionValue, isSelected && styles.optionValueSelected]}>
+                      <Text style={[styles.optionValue, {color:theme.subtext}, 
+                        isSelected && {color:theme.accent}]}>
                         {option.value}
                       </Text>
                     </TouchableOpacity>
@@ -398,13 +471,13 @@ export default function WellnessScreen() {
                   onPress={() => currentQuestion > 0 && setCurrentQuestion(currentQuestion - 1)}
                   disabled={currentQuestion === 0}
                 >
-                  <Ionicons name="chevron-back" size={20} color="#fff" />
-                  <Text style={styles.navButtonText}>Back</Text>
+                  <Ionicons name="chevron-back" size={20} color={theme.icon} />
+                  <Text style={[styles.navButtonText, {color:theme.text}]}>Back</Text>
                 </TouchableOpacity>
 
                 {currentQuestion === WHO5_QUESTIONS.length - 1 && Object.keys(answers).length === 5 ? (
                   <TouchableOpacity
-                    style={[styles.submitButton, submitting && { opacity: 0.6 }]}
+                    style={[styles.submitButton, {backgroundColor:theme.accent},submitting && { opacity: 0.6 }]}
                     onPress={handleSubmit}
                     disabled={submitting}
                   >
@@ -426,8 +499,8 @@ export default function WellnessScreen() {
                     }
                     disabled={currentQuestion === WHO5_QUESTIONS.length - 1}
                   >
-                    <Text style={styles.navButtonText}>Next</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#fff" />
+                    <Text style={[styles.navButtonText, {color:theme.text}]}>Next</Text>
+                    <Ionicons name="chevron-forward" size={20} color={theme.icon} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -459,7 +532,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f0f23' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: 'rgba(255,255,255,0.5)', marginTop: 12, fontSize: 14 },
-  scroll: { paddingHorizontal: 20, paddingTop: 16 },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, maxWidth: 600, alignSelf: 'center', width: '100%' },
   header: { marginBottom: 20 },
   title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff' },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
@@ -480,6 +553,8 @@ const styles = StyleSheet.create({
   alertText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 4, lineHeight: 18 },
   assessButton: { backgroundColor: '#a78bfa', borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, gap: 8, marginBottom: 24 },
   assessButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  nextCheckinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: -14, marginBottom: 24 },
+  nextCheckinNote: { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
   chartContainer: { marginBottom: 24 },
   sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '600', marginBottom: 12 },
   chartBox: { backgroundColor: '#1a1a3e', borderRadius: 12, position: 'relative', overflow: 'hidden' },
@@ -497,11 +572,19 @@ const styles = StyleSheet.create({
   correlationValue: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
   correlationLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 4 },
   correlationWarning: { color: '#fbbf24', fontSize: 12, textAlign: 'center', marginTop: 12, lineHeight: 18 },
+  insightCard: { flexDirection: 'row', borderRadius: 12, padding: 16, marginBottom: 16, alignItems: 'flex-start', gap: 12, borderWidth: 1 },
+  insightPositive: { backgroundColor: 'rgba(74, 222, 128, 0.1)', borderColor: 'rgba(74, 222, 128, 0.3)' },
+  insightWarning: { backgroundColor: 'rgba(248, 113, 113, 0.1)', borderColor: 'rgba(248, 113, 113, 0.3)' },
+  insightNeutral: { backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' },
+  insightContent: { flex: 1 },
+  insightTitle: { color: '#fff', fontWeight: '600', fontSize: 14, marginBottom: 4 },
+  insightText: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 19 },
   interventionsSection: { marginBottom: 24 },
   interventionCard: { flexDirection: 'row', backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 10, alignItems: 'flex-start', gap: 12 },
   interventionContent: { flex: 1 },
   interventionTitle: { color: '#fff', fontWeight: '600', fontSize: 14 },
   interventionText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 4, lineHeight: 18 },
+  interventionLink: { color: '#a78bfa', fontSize: 12, marginTop: 6, textDecorationLine: 'underline', fontWeight: '500' }, 
   historySection: { marginBottom: 16 },
   historyItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a3e', borderRadius: 10, padding: 14, marginBottom: 8, gap: 12 },
   historyDot: { width: 10, height: 10, borderRadius: 5 },

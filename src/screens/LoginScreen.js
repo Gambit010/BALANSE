@@ -14,6 +14,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { Ionicons } from '@expo/vector-icons';
+import { handleGoogleSignIn } from '../services/authService'; // google signIn
+import { areLoginFieldsFilled } from '../constants/validation';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -32,7 +35,7 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!areLoginFieldsFilled(email, password)) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -118,7 +121,12 @@ export default function LoginScreen({ navigation }) {
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>
+                {/*<Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>*/}
+                 <Ionicons
+                    name={showPassword ? 'eye' : 'eye-off'}
+                    size={20}
+                    color="rgba(255, 255, 255, 0.7)"
+                  />
               </TouchableOpacity>
             </View>
 
@@ -146,7 +154,16 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             {/* Social Buttons */}
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity
+               style={styles.socialButton}
+               onPress={async () => {
+                 try {
+                   await handleGoogleSignIn();
+                 } catch (error) {
+                   Alert.alert('Google Sign-In Failed', error.message);
+                 }
+               }}
+            >
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
 

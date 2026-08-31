@@ -1,8 +1,14 @@
 import { getUserTasks } from './taskService';
 import { createNotification, hasRecentNotification } from './notificationService';
+import { sendImmediateNotification } from './pushNotificationServices'; 
 
 // Default task duration in minutes when no end time is specified
 const DEFAULT_TASK_DURATION = 60;
+
+// Number of tasks on a single calendar day that triggers a "busy day" overload warning.
+// Set to 3 based on typical student daily capacity — beyond this, same-day load tends to
+// correlate with schedule strain. Adjust here to tune the heuristic.
+const SAME_DAY_OVERLOAD_THRESHOLD = 3;
 
 /**
  * Parse a task's deadline into a time range { start, end }.
@@ -33,7 +39,18 @@ const getTaskTimeRange = (task) => {
   // Timed task — parse the ISO string (gives UTC instant, comparisons use .getTime() which is timezone-agnostic)
   const start = new Date(task.deadline);
   if (isNaN(start.getTime())) return null;
-  const end = new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+
+  // Use the task's real end time when available (class schedules store endTime);
+  // otherwise fall back to the default duration.
+  let end;
+  if (task.endTime) {
+    const parsedEnd = new Date(task.endTime);
+    end = !isNaN(parsedEnd.getTime()) && parsedEnd > start
+      ? parsedEnd
+      : new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+  } else {
+    end = new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+  }
   return { start, end, isAllDay: false };
 };
 
@@ -101,12 +118,19 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
 
       if (rangesOverlap(targetRange, taskRange)) {
         const isCrossCategory = task.category !== targetTask.category;
+        const isClass = task.recurrence?.isClassSchedule;
+        const alt = suggestAlternativeTime(targetRange, otherTasks);
         conflicts.push({
           task,
-          type: 'time_overlap',
+          type: isClass ? 'class_overlap' : 'time_overlap',
           severity: 'high',
-          message: `"${task.title}" is scheduled at the same time (${formatTime(taskRange.start)} - ${formatTime(taskRange.end)})${isCrossCategory ? ` in ${task.category}` : ''}.`,
-          suggestion: suggestAlternativeTime(targetRange, otherTasks),
+          message: isClass
+            ? `Overlaps your "${task.title}" class (${formatTime(taskRange.start)} - ${formatTime(taskRange.end)}).`
+            : `"${task.title}" is scheduled at the same time (${formatTime(taskRange.start)} - ${formatTime(taskRange.end)})${isCrossCategory ? ` in ${task.category}` : ''}.`,
+          suggestion: isClass
+            ? `Classes are fixed commitments. ${alt.message}`
+            : alt.message,
+          suggestedSlot: alt.slot,
         });
       }
     }
@@ -119,17 +143,19 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
     return isSameDay(taskRange.start, targetRange.start);
   });
 
-  if (sameDayTasks.length >= 3) {
+  if (sameDayTasks.length >= SAME_DAY_OVERLOAD_THRESHOLD) {
     const highPriorityCount = sameDayTasks.filter(
       (t) => t.priorityLabel === 'High' || t.priorityScore >= 70
     ).length;
 
+    const alt = findLeastBusyDay(targetTask.deadline, otherTasks);
     conflicts.push({
       task: null,
       type: 'same_day_high_load',
       severity: highPriorityCount >= 2 ? 'high' : 'medium',
       message: `You already have ${sameDayTasks.length} task${sameDayTasks.length > 1 ? 's' : ''} on this day${highPriorityCount > 0 ? ` (${highPriorityCount} high priority)` : ''}.`,
-      suggestion: findLeastBusyDay(targetTask.deadline, otherTasks),
+      suggestion: alt.message,
+      suggestedSlot: alt.slot,
     });
   }
 
@@ -161,6 +187,7 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
         severity: 'low',
         message: `"${task.title}" (${task.category}) is scheduled within 30 minutes — tight transition between ${targetTask.category} and ${task.category}.`,
         suggestion: 'Consider adding buffer time between tasks from different domains.',
+        suggestedSlot: null,
       });
     }
   }
@@ -170,10 +197,8 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
 
 /**
  * Find an alternative time slot on the same day that doesn't conflict.
- */
-/**
- * Find an alternative time slot on the same day that doesn't conflict.
- * Checks hourly slots from 7:00 AM to 9:00 PM, skipping slots in the past.
+ * Checks 30-minute slots from 7:00 AM to 9:00 PM, skipping slots in the past.
+ * Returns { message, slot } where slot is actionable data for one-tap apply.
  */
 const suggestAlternativeTime = (targetRange, otherTasks) => {
   const targetDate = new Date(targetRange.start);
@@ -186,29 +211,35 @@ const suggestAlternativeTime = (targetRange, otherTasks) => {
     .map((t) => getTaskTimeRange(t))
     .filter((r) => r && !r.isAllDay && isSameDay(r.start, targetDate));
 
-  // Try hourly slots from 7 AM to 9 PM
-  for (let hour = 7; hour <= 21; hour++) {
+  // Try 30-minute slots from 7 AM to 9 PM
+  for (let minutes = 7 * 60; minutes <= 21 * 60; minutes += 30) {
     const slotStart = new Date(targetDate);
-    slotStart.setHours(hour, 0, 0, 0);
+    slotStart.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
     const slotEnd = new Date(slotStart.getTime() + duration);
 
     // Skip slots that are already in the past (relevant when task is for today)
-    if (isToday && slotStart < now) continue;
+    if (isToday && slotStart <= now) continue;
 
     const candidate = { start: slotStart, end: slotEnd };
     const hasConflict = sameDayTimedTasks.some((r) => rangesOverlap(candidate, r));
 
     if (!hasConflict) {
-      return `Try ${formatTime(slotStart)} instead — that slot is open.`;
+      const label = formatTime(slotStart);
+      return {
+        message: `Try ${label} instead — that slot is open.`,
+        slot: { type: 'time', value: slotStart.toISOString(), label },
+      };
     }
   }
 
-  return 'No open slots found on this day. Consider moving this task to another day.';
+  return {
+    message: 'No open slots found on this day. Consider moving this task to another day.',
+    slot: null,
+  };
 };
-
-
 /**
  * Find the least busy nearby day (within +/- 3 days).
+ * Returns { message, slot } where slot is actionable data for one-tap apply.
  */
 const findLeastBusyDay = (deadline, allTasks) => {
   const baseDate = new Date(deadline.includes('T') ? deadline : deadline + 'T12:00:00');
@@ -225,6 +256,7 @@ const findLeastBusyDay = (deadline, allTasks) => {
     if (candidate < today) continue;
 
     const count = allTasks.filter((t) => {
+      if (!t.deadline) return false;
       const d = t.deadline.includes('T') ? t.deadline : t.deadline + 'T12:00:00';
       return isSameDay(new Date(d), candidate);
     }).length;
@@ -237,10 +269,17 @@ const findLeastBusyDay = (deadline, allTasks) => {
 
   if (bestDay) {
     const dayName = bestDay.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-    return `${dayName} has ${bestCount === 0 ? 'no' : `only ${bestCount}`} task${bestCount !== 1 ? 's' : ''} — consider moving this task there.`;
+    const dateStr = bestDay.toISOString().split('T')[0];
+    return {
+      message: `${dayName} has ${bestCount === 0 ? 'no' : `only ${bestCount}`} task${bestCount !== 1 ? 's' : ''} — consider moving this task there.`,
+      slot: { type: 'date', value: dateStr, label: dayName },
+    };
   }
 
-  return 'Try spreading tasks across different days to reduce overload.';
+  return {
+    message: 'Try spreading tasks across different days to reduce overload.',
+    slot: null,
+  };
 };
 
 const formatTime = (date) => {
@@ -265,15 +304,24 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
   const highConflicts = conflicts.filter((c) => c.severity === 'high');
 
   for (const conflict of highConflicts) {
-    const message = conflict.type === 'time_overlap'
-      ? `Schedule conflict: "${savedTask.title}" overlaps with ${conflict.message}`
-      : `Busy day alert: ${conflict.message}`;
+    let message;
+    if (conflict.type === 'class_overlap') {
+      message = `Class conflict: "${savedTask.title}" overlaps your "${conflict.task.title}" class.`;
+    } else if (conflict.type === 'time_overlap') {
+      message = `Schedule conflict: "${savedTask.title}" overlaps with ${conflict.message}`;
+    } else {
+      message = `Busy day alert: ${conflict.message}`;
+    }
 
     // Dedupe: skip if the same notification was already created recently
     const isDuplicate = await hasRecentNotification(userId, message);
     if (isDuplicate) continue;
 
     await createNotification(userId, message, 'conflict');
+    await sendImmediateNotification('Scheduling conflict', message, {
+      type: 'conflict',
+      taskId: savedTask.id,
+    });
   }
 
   return conflicts;

@@ -11,12 +11,24 @@ import {
   ScrollView,
   Animated,
 } from 'react-native';
+import {
+  isValidEmailFormat,
+  isAllowedDomain,
+  isValidName,
+  isValidPasswordLength,
+  isValidMiddleName,
+  areSignupFieldsFilled,
+} from '../constants/validation';
 import { LinearGradient } from 'expo-linear-gradient';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { Ionicons } from '@expo/vector-icons';
+import { handleGoogleSignIn } from '../services/authService'; // for react native google sign in
 
 export default function SignupScreen({ navigation }) {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,51 +45,78 @@ export default function SignupScreen({ navigation }) {
   }, []);
 
   const handleSignup = async () => {
-    if (!fullName || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!areSignupFieldsFilled(firstName, lastName, email, password)) {
+      Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    // Full name validation
-    const nameRegex = /^[a-zA-Z\s]+$/;
-    if (!nameRegex.test(fullName)) {
-      Alert.alert('Error', 'Full name should only contain letters');
+    if (!isValidName(firstName)) {
+      Alert.alert('Error', 'First name should only contain letters');
       return;
     }
 
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidMiddleName(middleName)) {
+      Alert.alert('Error', 'Middle name should only contain letters');
+      return;
+    }
+
+    if (!isValidName(lastName)) {
+      Alert.alert('Error', 'Last name should only contain letters');
+      return;
+    }
+
+    if (!isValidEmailFormat(email)) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
-    // Allowed domains
-    const allowedDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'sti.edu.ph'];
-    const emailDomain = email.split('@')[1]?.toLowerCase();
-    if (!allowedDomains.includes(emailDomain)) {
-      Alert.alert('Error', 'Please use a Gmail, Yahoo, Outlook, or STI email');
+    if (!isAllowedDomain(email)) {
+      Alert.alert(
+        'Error',
+        'Please use a Gmail, Yahoo, Outlook, or STI email'
+      );
       return;
     }
 
-    if (password.length < 6) {
+    if (!isValidPasswordLength(password)) {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
+    
+
+    const fullName = middleName
+    ? `${firstName} ${middleName} ${lastName}`
+    : `${firstName} ${lastName}`;
 
     setIsLoading(true);
-    try {
+      try {
       // await createUserWithEmailAndPassword(auth, email, password);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, {
         displayName: fullName,
       });
+
+      await sendEmailVerification(userCredential.user);
+
+      await auth.signOut();
+
+      Alert.alert(
+        'Account Created',
+        `Welcome, ${firstName}! Please log in to continue`,
+        //`Welcome, ${firstName}! A verification email has been sent to ${email}. Please verify your email before logging in`,
+        [{ text: 'Go to Login', onPress: () => navigation.navigate('Login') }]
+      );
+
     } catch (error) {
-      Alert.alert('Signup Failed', error.message);
+      let message = 'Something went wrong. Please try again';
+      if (error.code === 'auth/email-already-in-use') message = 'This email is registered';
+      if (error.code === 'auth/invalid-email') message = 'Please enter a valid email address';
+      Alert.alert('Signup Failed', message);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <LinearGradient
@@ -99,15 +138,39 @@ export default function SignupScreen({ navigation }) {
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <Text style={styles.cardTitle}>Create Account</Text>
 
-            {/* Full Name */}
-            <Text style={styles.label}>Full Name</Text>
+            {/* First Name */}
+            <Text style={styles.label}>First Name <Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your name"
+                placeholder="Enter your first name"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={fullName}
-                onChangeText={setFullName}
+                value={firstName}
+                onChangeText={setFirstName}
+              />
+            </View>
+
+            {/* Middle Name */}
+            <Text style={styles.label}>Middle Name <Text style={styles.optional}>(Optional)</Text></Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your middle name"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={middleName}
+                onChangeText={setMiddleName}
+              />
+            </View>
+
+            {/* Last Name */}
+            <Text style={styles.label}>Last Name <Text style={styles.required}>*</Text></Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your last name"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={lastName}
+                onChangeText={setLastName}
               />
             </View>
 
@@ -126,7 +189,7 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Password */}
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>Password<Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
@@ -137,7 +200,11 @@ export default function SignupScreen({ navigation }) {
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>
+                <Ionicons
+                  name={showPassword ? 'eye' : 'eye-off'}
+                  size={20}
+                  color="rgba(255, 255, 255, 0.7)"
+                />
               </TouchableOpacity>
             </View>
 
@@ -160,7 +227,21 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Social Buttons */}
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity
+               style={styles.socialButton}
+               onPress={async () => {
+                 try {
+                   const userCredential = await handleGoogleSignIn();
+                   Alert.alert (
+                    'Account Created',
+                    `Signed in as ${userCredential.user.displayName || 'User'}`
+                   );
+                 } catch (error) {
+                   console.log('Google Error:', error);
+                   Alert.alert('Error', error.message || 'Google sign-in failed');
+                 }
+               }}
+            >
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
 
@@ -232,6 +313,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+
+  required:{
+    color: '#f87171',
+    textTransform: 'none',
+  },
+  optional:{
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: '400',
+    textTransform: 'none',
+    fontSize: 11,
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -253,6 +345,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#ffffff',
     fontWeight: '500',
+  },
+  showText: {
+    fontSize: 16,
+    opacity: 0.7,
   },
   createButton: {
     backgroundColor: '#ffffff',

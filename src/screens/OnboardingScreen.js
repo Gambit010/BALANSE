@@ -75,7 +75,6 @@ export default function OnboardingScreen({ navigation }) {
 
       {/* Content */}
       <View style={styles.content}>
-        {/* Icon Circle */}
         <View style={styles.iconContainer}>
           <Text style={styles.icon}>{currentSlide.icon}</Text>
         </View>

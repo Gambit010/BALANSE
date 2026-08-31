@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTasks } from '../hooks/useTasks';
 import { useAllConflicts } from '../hooks/useConflicts';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -24,7 +25,8 @@ export default function CalendarScreen({ navigation }) {
   const { hasConflictsOnDate, getConflictsForDate } = useAllConflicts(tasks);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-
+  const { theme, isDarkMode } = useTheme(); // for dark mode
+  
   useFocusEffect(
     useCallback(() => {
       refetch();
@@ -116,7 +118,7 @@ export default function CalendarScreen({ navigation }) {
   const getStatusColor = (progress) => {
     if (progress === 100) return '#34d399';
     if (progress > 0) return '#fb923c';
-    return 'rgba(255,255,255,0.4)';
+    return 'rgb(106, 103, 103)';
   };
 
   const getDeadlineUrgency = (deadline) => {
@@ -191,10 +193,10 @@ export default function CalendarScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#a78bfa" />
-          <Text style={styles.loadingText}>Loading calendar...</Text>
+          <ActivityIndicator size="large" color={ theme.accent } />
+          <Text style={[styles.loadingText, { color: theme.subtext }]}>Loading calendar...</Text>
         </View>
       </SafeAreaView>
     );
@@ -203,27 +205,38 @@ export default function CalendarScreen({ navigation }) {
   const calendarDays = buildCalendarDays();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Calendar</Text>
-          <TouchableOpacity style={styles.todayButton} onPress={goToToday}>
-            <Text style={styles.todayButtonText}>Today</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Calendar</Text>
+          <TouchableOpacity style={[styles.todayButton, {
+            backgroundColor: isDarkMode ? 'rgba(167,139,250,0.15)' : '#F3E8FF',
+            borderColor: theme.accent,
+          },]} onPress={goToToday}>
+            <Text style={[styles.todayButtonText, { color: theme.accent }]}>Today</Text>
           </TouchableOpacity>
         </View>
 
         {/* Month Navigation */}
         <View style={styles.monthNav}>
-          <TouchableOpacity onPress={goToPrevMonth} style={styles.navArrow}>
-            <Ionicons name="chevron-back" size={22} color="#ffffff" />
+          <TouchableOpacity onPress={goToPrevMonth} style={[styles.navArrow, {
+            backgroundColor: theme.card,
+            borderColor: theme.border,
+            borderWidth: 1,
+          }]}>
+            <Ionicons name="chevron-back" size={22} color= {theme.icon} />
           </TouchableOpacity>
-          <Text style={styles.monthText}>
+          <Text style={[styles.monthText, { color: theme.text }]}>
             {MONTHS[getMonth()]} {getYear()}
           </Text>
-          <TouchableOpacity onPress={goToNextMonth} style={styles.navArrow}>
-            <Ionicons name="chevron-forward" size={22} color="#ffffff" />
+          <TouchableOpacity onPress={goToNextMonth} style={[styles.navArrow, {
+            backgroundColor: theme.card,
+            borderColor: theme.border,
+            borderWidth: 1,
+          }]}>
+            <Ionicons name="chevron-forward" size={22} color={theme.icon} />
           </TouchableOpacity>
         </View>
 
@@ -232,8 +245,8 @@ export default function CalendarScreen({ navigation }) {
           {DAYS.map((day) => (
             <View key={day} style={styles.dayHeaderCell}>
               <Text style={[
-                styles.dayHeaderText,
-                (day === 'Sun' || day === 'Sat') && styles.dayHeaderWeekend,
+                styles.dayHeaderText, { color: theme.text },
+                (day === 'Sun' || day === 'Sat') && { color: theme.text },
               ]}>
                 {day}
               </Text>
@@ -255,17 +268,22 @@ export default function CalendarScreen({ navigation }) {
                 key={index}
                 style={[
                   styles.dayCell,
-                  isSelected && styles.dayCellSelected,
-                  isTodayDate && !isSelected && styles.dayCellToday,
+                  isSelected && {backgroundColor: theme.accent},
+                  isTodayDate && !isSelected && {borderWidth: 1.5, borderColor: theme.accent,},
                 ]}
                 onPress={() => setSelectedDate(item.date)}
                 activeOpacity={0.6}
               >
                 <Text style={[
-                  styles.dayText,
-                  !item.isCurrentMonth && styles.dayTextFaded,
-                  isSelected && styles.dayTextSelected,
-                  isTodayDate && !isSelected && styles.dayTextToday,
+                  styles.dayText, {
+                    color: item.isCurrentMonth ? theme.text : theme.subtext,
+                  },
+                  isSelected && {
+                    color: theme.text,
+                  },
+                  isTodayDate && !isSelected && {
+                    color: theme.accent,
+                  },
                 ]}>
                   {item.day}
                 </Text>
@@ -279,7 +297,7 @@ export default function CalendarScreen({ navigation }) {
                     {taskCount >= 1 && !dateHasConflict && (
                       <View style={[
                         styles.dot,
-                        { backgroundColor: highPriority ? '#ef4444' : '#a78bfa' },
+                        { backgroundColor: highPriority ? '#ef4444' : '#d4c9f3' },
                       ]} />
                     )}
                     {taskCount >= 2 && <View style={[styles.dot, { backgroundColor: '#fbbf24' }]} />}
@@ -295,8 +313,8 @@ export default function CalendarScreen({ navigation }) {
         {/* Selected Date Section */}
         <View style={styles.selectedSection}>
           <View style={styles.selectedHeader}>
-            <Text style={styles.selectedDate}>{formatSelectedDate()}</Text>
-            <Text style={styles.selectedCount}>
+            <Text style={[styles.selectedDate, { color: theme.text }]}>{formatSelectedDate()}</Text>
+            <Text style={[styles.selectedCount, { color: theme.subtext }]}>
               {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
             </Text>
           </View>
@@ -313,13 +331,16 @@ export default function CalendarScreen({ navigation }) {
             const firstTaskTitle = dateConflicts[0]?.task?.title || 'a task';
 
             return (
-              <View style={styles.conflictBanner}>
+              <View style={[styles.conflictBanner, {
+                backgroundColor: isDarkMode ? 'rgba(239,68,68,0.10)' : '#FEF2F2',
+                borderColor: '#ef4444',
+              }]}>
                 <Ionicons name="alert-circle" size={16} color="#ef4444" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.conflictBannerText}>
+                  <Text style={[styles.conflictBannerText, { color: "#ef4444" }]}>
                     {totalConflicts} conflict{totalConflicts !== 1 ? 's' : ''} on this day
                   </Text>
-                  <Text style={styles.conflictBannerSubtext} numberOfLines={1}>
+                  <Text style={[styles.conflictBannerSubtext, { color: theme.text }]} numberOfLines={1}>
                     Starting with "{firstTaskTitle}" — tap a task below to review
                   </Text>
                 </View>
@@ -330,14 +351,14 @@ export default function CalendarScreen({ navigation }) {
 
           {selectedTasks.length === 0 ? (
             <View style={styles.emptyDay}>
-              <Ionicons name="checkmark-circle-outline" size={40} color="rgba(255,255,255,0.15)" />
-              <Text style={styles.emptyDayText}>No tasks on this day</Text>
+              <Ionicons name="checkmark-circle-outline" size={40} color= {theme.subtext} />
+              <Text style={[styles.emptyDayText, { color: theme.subtext }]}>No tasks on this day</Text>
               <TouchableOpacity
                 style={styles.addTaskLink}
                 onPress={() => navigation.getParent()?.navigate('AddTask')}
               >
-                <Ionicons name="add-circle-outline" size={16} color="#a78bfa" />
-                <Text style={styles.addTaskLinkText}>Add a task</Text>
+                <Ionicons name="add-circle-outline" size={16} color= {theme.accent} />
+                <Text style={[styles.addTaskLinkText, { color: theme.accent }]}>Add a task</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -351,12 +372,12 @@ export default function CalendarScreen({ navigation }) {
               return (
                 <TouchableOpacity
                   key={task.id}
-                  style={[styles.taskCard, { borderLeftColor: catColor }]}
+                  style={[styles.taskCard, { borderLeftColor: catColor, backgroundColor: theme.card, borderColor: theme.border }]}
                   onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
                   activeOpacity={0.7}
                 >
                   <View style={styles.taskTopRow}>
-                    <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
+                    <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>{task.title}</Text>
                     <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
                       <Text style={[styles.prioText, { color: prioColor }]}>
                         {task.priorityLabel}
@@ -365,7 +386,7 @@ export default function CalendarScreen({ navigation }) {
                   </View>
 
                   {task.description ? (
-                    <Text style={styles.taskDesc} numberOfLines={1}>{task.description}</Text>
+                    <Text style={[styles.taskDesc, { color: theme.subtext }]} numberOfLines={1}>{task.description}</Text>
                   ) : null}
 
                   <View style={styles.taskMetaRow}>
@@ -378,13 +399,13 @@ export default function CalendarScreen({ navigation }) {
 
                     <View style={styles.statusChip}>
                       <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                      <Text style={styles.statusText}>{getStatusLabel(task.progress)}</Text>
+                      <Text style={[styles.statusText, { color: theme.subtext}]}>{getStatusLabel(task.progress)}</Text>
                     </View>
 
                     {hasTime && (
                       <View style={styles.timeChip}>
-                        <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.5)" />
-                        <Text style={styles.timeText}>
+                        <Ionicons name="time-outline" size={11} color={theme.subtext} />
+                        <Text style={[styles.timeText, { color:theme.subtext}]}>
                           {new Date(task.deadline).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
@@ -416,10 +437,27 @@ export default function CalendarScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f0f23' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: 'rgba(255,255,255,0.5)', marginTop: 12, fontSize: 14 },
-  scroll: { paddingHorizontal: 20, paddingTop: 16 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#0f0f23' 
+  },
+  center: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  loadingText: { 
+    color: 'rgba(255,255,255,0.5)', 
+    marginTop: 12, 
+    fontSize: 14 
+  },
+  scroll: { 
+    paddingHorizontal: 20, 
+    paddingTop: 16, 
+    maxWidth: 600, 
+    alignSelf: 'center', 
+    width: '100%' 
+  },
 
   // Header
   header: {
@@ -428,7 +466,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff' },
+  title: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    color: '#ffffff' 
+  },
   todayButton: {
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -437,7 +479,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(167,139,250,0.3)',
   },
-  todayButtonText: { color: '#a78bfa', fontSize: 13, fontWeight: '600' },
+  todayButtonText: { 
+    color: '#a78bfa', 
+    fontSize: 13, 
+    fontWeight: '600' 
+  },
 
   // Month nav
   monthNav: {
@@ -454,16 +500,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  monthText: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
+  monthText: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: '#ffffff' 
+  },
 
   // Day headers
-  dayHeaderRow: { flexDirection: 'row', marginBottom: 8 },
-  dayHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
-  dayHeaderText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
-  dayHeaderWeekend: { color: 'rgba(255,255,255,0.3)' },
+  dayHeaderRow: { 
+    flexDirection: 'row', 
+    marginBottom: 8 
+  },
+  dayHeaderCell: { 
+    flex: 1, 
+    alignItems: 'center', 
+    paddingVertical: 4 
+  },
+  dayHeaderText: { 
+    fontSize: 12, 
+    fontWeight: '600', 
+    color: 'rgba(255,255,255,0.5)' 
+  },
+  dayHeaderWeekend: { 
+    color: 'rgba(255,255,255,0.3)' 
+  },
 
   // Calendar grid
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24 },
+  calendarGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    marginBottom: 24 
+  },
   dayCell: {
     width: '14.28%',
     aspectRatio: 1,
@@ -471,33 +538,67 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
   },
-  dayCellSelected: { backgroundColor: '#a78bfa' },
+  dayCellSelected: { 
+    backgroundColor: '#a78bfa' 
+  },
   dayCellToday: {
     borderWidth: 1.5,
     borderColor: '#a78bfa',
   },
-  dayText: { fontSize: 14, fontWeight: '500', color: '#ffffff' },
-  dayTextFaded: { color: 'rgba(255,255,255,0.2)' },
-  dayTextSelected: { color: '#ffffff', fontWeight: '700' },
-  dayTextToday: { color: '#a78bfa', fontWeight: '700' },
+  dayText: { 
+    fontSize: 14, 
+    fontWeight: '500', 
+    color: '#ffffff' 
+  },
+  dayTextFaded: { 
+    color: 'rgba(255,255,255,0.2)' 
+  },
+  dayTextSelected: { 
+    color: '#ffffff', 
+    fontWeight: '700' 
+  },
+  dayTextToday: { 
+    color: '#a78bfa', 
+    fontWeight: '700' 
+  },
 
   // Dots
-  dotRow: { flexDirection: 'row', gap: 3, marginTop: 4 },
-  dot: { width: 5, height: 5, borderRadius: 2.5 },
+  dotRow: { 
+    flexDirection: 'row', 
+    gap: 3, 
+    marginTop: 4 
+  },
+  dot: { 
+    width: 5, 
+    height: 5, 
+    borderRadius: 2.5 
+  },
 
   // Selected date section
-  selectedSection: { marginTop: 4 },
+  selectedSection: { 
+    marginTop: 4 
+  },
   selectedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 14,
   },
-  selectedDate: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
-  selectedCount: { fontSize: 13, color: 'rgba(255,255,255,0.4)' },
+  selectedDate: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: '#ffffff' 
+  },
+  selectedCount: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.4)' 
+  },
 
   // Empty state
-  emptyDay: { alignItems: 'center', paddingVertical: 32 },
+  emptyDay: { 
+    alignItems: 'center', 
+    paddingVertical: 32 
+  },
   emptyDayText: {
     color: 'rgba(255,255,255,0.3)',
     fontSize: 14,
@@ -509,7 +610,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  addTaskLinkText: { color: '#a78bfa', fontSize: 13, fontWeight: '600' },
+  addTaskLinkText: {
+     color: '#a78bfa', 
+     fontSize: 13, 
+     fontWeight: '600' 
+    },
 
   // Task cards
   taskCard: {
@@ -540,11 +645,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     lineHeight: 16,
   },
-  prioBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  prioText: { fontSize: 10, fontWeight: '700' },
+  prioBadge: { 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 6 
+  },
+  prioText: { 
+    fontSize: 10, 
+    fontWeight: '700' 
+  },
 
   // Meta row
-  taskMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  taskMetaRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    flexWrap: 'wrap' 
+  },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -553,21 +670,38 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 5,
   },
-  categoryDot: { width: 6, height: 6, borderRadius: 3 },
-  categoryText: { fontSize: 11, fontWeight: '600' },
+  categoryDot: { 
+    width: 6, 
+    height: 6, 
+    borderRadius: 3 
+  },
+  categoryText: { 
+    fontSize: 11, 
+    fontWeight: '600' 
+  },
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
+  statusDot: { 
+    width: 6, 
+    height: 6, 
+    borderRadius: 3 
+  },
+  statusText: { 
+    fontSize: 11, 
+    color: 'rgba(255,255,255,0.5)' 
+  },
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  timeText: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
+  timeText: { 
+    fontSize: 11, 
+    color: 'rgba(255,255,255,0.5)' 
+  },
     // Conflict banner
   conflictBanner: {
     flexDirection: 'row',
@@ -603,5 +737,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 6,
   },
-  urgencyText: { fontSize: 11, fontWeight: '600' },
+  urgencyText: { 
+    fontSize: 11, 
+    fontWeight: '600' 
+  },
 });

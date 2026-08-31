@@ -16,24 +16,41 @@ import { getPriorityBreakdown } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import { deleteTask, updateTaskProgress } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
+  const { theme } = useTheme(); // for dark mode
+  const sevenDaysFromNow = new Date();
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  sevenDaysFromNow.setHours(23, 59, 59, 999);
+
+  const visibleTasks = tasks.filter((t) => {
+    if (!t.recurrence?.isClassSchedule) return true;
+    if (!t.deadline) return false;
+    const dl = new Date(t.deadline);
+    return dl <= sevenDaysFromNow;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
 
-  // Refetch tasks when screen comes into focus
+  
+  // Refetch tasks and sync filter when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [])
+      if (route.params?.filterCategory) {
+        setFilterType('category');
+        setActiveFilter(route.params.filterCategory || 'All');
+      }
+    }, [route.params?.filterCategory])
   );
 
   const categoryFilters = ['All', 'Academic', 'Organization', 'Personal'];
   const priorityFilters = ['All', 'High', 'Medium', 'Low'];
-  const statusFilters = ['All', 'To Do', 'In Progress', 'Completed'];
+    const statusFilters = ['All', 'To Do', 'In Progress', 'Done'];
 
   const getActiveFilters = () => {
     switch (filterType) {
@@ -44,7 +61,7 @@ export default function TasksScreen({ navigation, route }) {
   };
 
   // Filter tasks based on search and active filter
-  const filteredTasks = tasks.filter((task) => {
+  const filteredTasks = visibleTasks.filter((task) => {
     // Search filter
     const matchesSearch =
       searchQuery === '' ||
@@ -59,7 +76,7 @@ export default function TasksScreen({ navigation, route }) {
       } else if (filterType === 'priority') {
         matchesFilter = task.priorityLabel === activeFilter;
       } else if (filterType === 'status') {
-        if (activeFilter === 'Completed') {
+        if (activeFilter === 'Done') {
           matchesFilter = task.progress === 100;
         } else if (activeFilter === 'In Progress') {
           matchesFilter = task.progress > 0 && task.progress < 100;
@@ -115,7 +132,7 @@ export default function TasksScreen({ navigation, route }) {
   };
 
   const getStatusLabel = (progress) => {
-    if (progress === 100) return 'Completed';
+    if (progress === 100) return 'Done';
     if (progress > 0) return 'In Progress';
     return 'To Do';
   };
@@ -128,40 +145,40 @@ export default function TasksScreen({ navigation, route }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#a78bfa" />
-          <Text style={styles.loadingText}>Loading tasks...</Text>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={[styles.loadingText, { color: theme.text }]}>Loading tasks...</Text> 
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* HEADER */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>All Tasks</Text>
-          <Text style={styles.taskCount}>{filteredTasks.length} tasks</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>All Tasks</Text> 
+          <Text style={[styles.taskCount, { color: theme.text }]}>{filteredTasks.length} tasks</Text> 
         </View>
 
         {/* SEARCH BAR */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.4)" />
+        <View style={[ styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border, }, ]}>
+          <Ionicons name="search-outline" size={18} color={theme.subtext}/>
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.text }]}
             placeholder="Search tasks..."
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholderTextColor={theme.subtext}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery !== '' && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.4)" />
+              <Ionicons name="close-circle" size={18} color={theme.subtext}/>
             </TouchableOpacity>
           )}
         </View>
@@ -172,7 +189,7 @@ export default function TasksScreen({ navigation, route }) {
             <TouchableOpacity
               key={type}
               style={[
-                styles.filterTypeButton,
+                styles.filterTypeButton, { backgroundColor: theme.card, borderColor: theme.border},
                 filterType === type && styles.filterTypeButtonActive,
               ]}
               onPress={() => {
@@ -181,7 +198,7 @@ export default function TasksScreen({ navigation, route }) {
               }}
             >
               <Text style={[
-                styles.filterTypeText,
+                styles.filterTypeText, { color: theme.subtext},
                 filterType === type && styles.filterTypeTextActive,
               ]}>
                 {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -201,14 +218,14 @@ export default function TasksScreen({ navigation, route }) {
             <TouchableOpacity
               key={filter}
               style={[
-                styles.filterChip,
+                styles.filterChip, { backgroundColor: theme.card, borderColor: theme.border },
                 activeFilter === filter && styles.filterChipActive,
               ]}
               onPress={() => setActiveFilter(filter)}
             >
               <Text style={[
-                styles.filterChipText,
-                activeFilter === filter && styles.filterChipTextActive,
+                styles.filterChipText, { color: theme.subtext },
+                activeFilter === filter && { color: theme.subtext,},
               ]}>
                 {filter}
               </Text>
@@ -220,10 +237,18 @@ export default function TasksScreen({ navigation, route }) {
         {filteredTasks.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="document-text-outline" size={48} color="rgba(255,255,255,0.2)" />
-            <Text style={styles.emptyTitle}>No tasks found</Text>
+            {/* <Text style={styles.emptyTitle}>No tasks found</Text> */}
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>No tasks found</Text> 
+
+            {/*
             <Text style={styles.emptySubtitle}>
               {searchQuery ? 'Try a different search term' : 'Tap + to create your first task'}
             </Text>
+            */}
+
+            <Text style={[styles.emptySubtitle, { color: theme.text }]}> 
+              {searchQuery ? 'Try a different search term' : 'Tap + to create your first task'}
+            </Text> 
           </View>
         )}
 
@@ -232,13 +257,15 @@ export default function TasksScreen({ navigation, route }) {
   return (
     <TouchableOpacity
       key={task.id}
-      style={styles.taskCard}
+      // style={styles.taskCard} 
+      style={[ styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]}
       onPress={() => navigation.navigate('EditTask', { task })}
       activeOpacity={0.7}
     >
       {/* Top Row - Title + Priority */}
       <View style={styles.taskTopRow}>
-        <Text style={styles.taskTitle} numberOfLines={1}>
+        {/* <Text style={styles.taskTitle} numberOfLines={1}> */}
+        <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
           {task.title}
         </Text>
         <TouchableOpacity
@@ -260,7 +287,8 @@ export default function TasksScreen({ navigation, route }) {
 
       {/* Description */}
       {task.description ? (
-        <Text style={styles.taskDescription} numberOfLines={2}>
+        // <Text style={styles.taskDescription} numberOfLines={2}>
+        <Text style={[styles.taskDescription, { color: theme.subtext },]} numberOfLines={2}>
           {task.description}
         </Text>
       ) : null}
@@ -269,17 +297,20 @@ export default function TasksScreen({ navigation, route }) {
       <View style={styles.taskMidRow}>
         <View style={styles.taskMeta}>
           <View style={styles.metaChip}>
-            <Ionicons name="folder-outline" size={11} color="rgba(255,255,255,0.5)" />
-            <Text style={styles.metaText}>{task.category}</Text>
+            <Ionicons name="folder-outline" size={11} color={theme.subtext} />
+            {/*<Text style={styles.metaText}>{task.category}</Text>*/}
+            <Text style={[styles.metaText, { color: theme.subtext }]}>{task.category}</Text>
           </View>
           <View style={[styles.metaChip, { borderColor: `${getStatusColor(task.progress)}40` }]}>
             <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.progress) }]} />
-            <Text style={styles.metaText}>{getStatusLabel(task.progress)}</Text>
+            {/*<Text style={styles.metaText}>{getStatusLabel(task.progress)}</Text>*/}
+            <Text style={[styles.metaText, { color: theme.subtext }]}>{getStatusLabel(task.progress)}</Text>
           </View>
         </View>
         <View style={styles.taskDeadline}>
-          <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
-          <Text style={styles.taskDeadlineText}>
+          <Ionicons name="calendar-outline" size={11} color={theme.subtext} />
+          {/* <Text style={styles.taskDeadlineText}> */}
+          <Text style={[ styles.taskDeadlineText, { color: theme.subtext }, ]} >
               {task.deadline && task.deadline.includes('T')
               ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
               + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
@@ -290,7 +321,8 @@ export default function TasksScreen({ navigation, route }) {
       </View>
 
       {/* Progress Bar */}
-      <View style={styles.taskProgressBg}>
+      <View style={[styles.taskProgressBg, { backgroundColor: theme.border},]}>
+      {/* <View style={styles.taskProgressBg}> */}
         <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
       </View>
 
@@ -305,7 +337,8 @@ export default function TasksScreen({ navigation, route }) {
             size={20}
             color={task.progress === 100 ? '#34d399' : 'rgba(255,255,255,0.4)'}
           />
-          <Text style={styles.taskProgressText}>
+          {/* <Text style={styles.taskProgressText}> */}
+          <Text style={[ styles.taskProgressText, { color: theme.subtext }, ]} >
                  {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
           </Text>
         </TouchableOpacity>
@@ -315,7 +348,7 @@ export default function TasksScreen({ navigation, route }) {
             style={styles.actionButton}
             onPress={() => navigation.navigate('EditTask', { task })}
           >
-            <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.5)" />
+            <Ionicons name="create-outline" size={18} color={theme.subtext} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
@@ -354,9 +387,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f0f23',
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+  scrollContent: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 30, 
+    maxWidth: 600, 
+    alignSelf: 'center',
+    width: '100%' 
   },
   loadingContainer: {
     flex: 1,
@@ -378,11 +414,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#ffffff',
+    // color: '#ffffff',
   },
   taskCount: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
+    // color: 'rgba(255,255,255,0.5)',
   },
   searchBar: {
     flexDirection: 'row',
@@ -398,7 +434,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#ffffff',
+    // color: '#ffffff',
     fontSize: 14,
   },
   filterTypeRow: {
@@ -461,12 +497,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
+    // color: 'rgba(255,255,255,0.5)',
     marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
+    // color: 'rgba(255,255,255,0.3)',
     marginTop: 6,
   },
   taskCard: {
@@ -486,13 +522,13 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#ffffff',
+    // color: '#ffffff',
     flex: 1,
     marginRight: 8,
   },
   taskDescription: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
+    // color: 'rgba(255,255,255,0.4)',
     marginBottom: 10,
     lineHeight: 18,
   },
@@ -527,7 +563,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.5)',
+    // color: 'rgba(255,255,255,0.5)',
   },
   statusDot: {
     width: 6,
@@ -541,7 +577,7 @@ const styles = StyleSheet.create({
   },
   taskDeadlineText: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
+    // color: 'rgba(255,255,255,0.4)',
   },
   taskProgressBg: {
     height: 4,
@@ -567,7 +603,7 @@ const styles = StyleSheet.create({
   taskProgressText: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
+    // color: 'rgba(255,255,255,0.5)',
   },
   actionRow: {
     flexDirection: 'row',

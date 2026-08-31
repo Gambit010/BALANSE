@@ -30,10 +30,16 @@ export const useTasks = () => {
         };
       });
 
-      // Sort by priority score — highest first
-      const sortedTasks = scoredTasks.sort(
-        (a, b) => b.priorityScore - a.priorityScore
-      );
+      // Sort by priority score — highest first.
+      // Tie-breaker: tasks already in progress rank above not-yet-started ones.
+      const sortedTasks = scoredTasks.sort((a, b) => {
+        if (b.priorityScore !== a.priorityScore) {
+          return b.priorityScore - a.priorityScore;
+        }
+        const aStarted = a.progress > 0 && a.progress < 100 ? 1 : 0;
+        const bStarted = b.progress > 0 && b.progress < 100 ? 1 : 0;
+        return bStarted - aStarted;
+      });
 
       setTasks(sortedTasks);
     } catch (err) {
