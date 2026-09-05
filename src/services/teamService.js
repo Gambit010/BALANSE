@@ -13,8 +13,25 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { createNotification } from './notificationService';
+import { sendPushToToken } from './pushNotificationServices';
+import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 
 // ─── Helpers ───
+
+// Looks up a user's stored Expo push token and sends a real remote push to
+// their device. Falls back silently (no-op) if the user has no token saved —
+// e.g. they've never opened the app on a physical device, or denied permission.
+const notifyUserDevice = async (uid, title, body, data = {}) => {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid, 'private', 'pushToken'));
+    const token = snap.exists() ? snap.data().token : null;
+    if (token) {
+      await sendPushToToken(token, title, body, data);
+    }
+  } catch (error) {
+    console.error('Error notifying user device:', error);
+  }
+};
 
 // Progress is the single source of truth; status is derived for the board columns.
 export const statusFromProgress = (progress) => {
@@ -101,6 +118,12 @@ export const addTeamMember = async (team, userToAdd) => {
       `You were added to the team "${team.name}".`,
       'team'
     );
+    await notifyUserDevice(
+      userToAdd.uid,
+      'Added to a team',
+      `You were added to the team "${team.name}".`,
+      { type: 'team', teamId: team.id }
+    );
     return { success: true };
   } catch (error) {
     console.error('Error adding team member:', error);
@@ -121,14 +144,45 @@ export const deleteTeam = async (teamId) => {
 
 // ─── Board Tasks ───
 
+// Get every board task assigned to a user, across ALL teams they belong to —
+// not scoped to a single team. Used by HomeScreen to fold team assignments
+// into "Today's Focus" so they aren't invisible outside the Teams tab.
+export const getMyAssignedBoardTasks = async (uid) => {
+  try {
+    const q = query(
+      collection(db, 'boardTasks'),
+      where('assigneeId', '==', uid)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error fetching assigned board tasks:', error);
+    return [];
+  }
+};
+
 // Create a board task, optionally assigned to a member. Notifies the assignee.
 export const createBoardTask = async (team, taskData, creator) => {
   try {
+    // Score board tasks the same way personal tasks are scored, so priority
+    // is consistent across the whole app rather than team tasks being unranked.
+    const scoreInput = {
+      deadline: taskData.deadline || null,
+      priority: taskData.priority || 'Medium',
+      category: taskData.category || 'Organization',
+    };
+    const priorityScore = computePriorityScore(scoreInput);
+    const priorityLabel = getPriorityLabel(priorityScore);
+
     const docRef = await addDoc(collection(db, 'boardTasks'), {
       teamId: team.id,
       title: taskData.title.trim(),
       description: taskData.description?.trim() || '',
       deadline: taskData.deadline || null,
+      priority: scoreInput.priority,
+      category: scoreInput.category,
+      priorityScore,
+      priorityLabel,
       progress: 0,
       assigneeId: taskData.assigneeId || null,
       assigneeName: taskData.assigneeName || null,
@@ -138,11 +192,13 @@ export const createBoardTask = async (team, taskData, creator) => {
       updatedAt: serverTimestamp(),
     });
     if (taskData.assigneeId && taskData.assigneeId !== creator.uid) {
-      await createNotification(
-        taskData.assigneeId,
-        `${safeName(creator)} assigned you "${taskData.title}" in ${team.name}.`,
-        'team'
-      );
+      const msg = `${safeName(creator)} assigned you "${taskData.title}" in ${team.name}.`;
+      await createNotification(taskData.assigneeId, msg, 'team');
+      await notifyUserDevice(taskData.assigneeId, 'New task assigned', msg, {
+        type: 'team',
+        teamId: team.id,
+        taskId: docRef.id,
+      });
     }
     return docRef.id;
   } catch (error) {
@@ -178,11 +234,13 @@ export const updateBoardTaskProgress = async (team, task, newProgress, actor) =>
     if (task.assignedById && task.assignedById !== actor.uid) recipients.add(task.assignedById);
     if (task.assigneeId && task.assigneeId !== actor.uid) recipients.add(task.assigneeId);
     for (const uid of recipients) {
-      await createNotification(
-        uid,
-        `${safeName(actor)} updated "${task.title}" to ${label} (${newProgress}%) in ${team.name}.`,
-        'team'
-      );
+      const msg = `${safeName(actor)} updated "${task.title}" to ${label} (${newProgress}%) in ${team.name}.`;
+      await createNotification(uid, msg, 'team');
+      await notifyUserDevice(uid, 'Team task updated', msg, {
+        type: 'team',
+        teamId: team.id,
+        taskId: task.id,
+      });
     }
     return true;
   } catch (error) {
@@ -200,11 +258,13 @@ export const assignBoardTask = async (team, task, assignee, actor) => {
       updatedAt: serverTimestamp(),
     });
     if (assignee.uid !== actor.uid) {
-      await createNotification(
-        assignee.uid,
-        `${safeName(actor)} assigned you "${task.title}" in ${team.name}.`,
-        'team'
-      );
+      const msg = `${safeName(actor)} assigned you "${task.title}" in ${team.name}.`;
+      await createNotification(assignee.uid, msg, 'team');
+      await notifyUserDevice(assignee.uid, 'New task assigned', msg, {
+        type: 'team',
+        teamId: team.id,
+        taskId: task.id,
+      });
     }
     return true;
   } catch (error) {

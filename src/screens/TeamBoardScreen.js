@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTeamBoard } from '../hooks/useTeams';
+import { statusFromProgress } from '../services/teamService';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 const COLUMN_WIDTH = Dimensions.get('window').width * 0.78;
@@ -55,6 +56,7 @@ export default function TeamBoardScreen({ route, navigation }) {
     loading,
     isOwner,
     actor,
+    teamTaskConflicts,
     addMemberByEmail,
     addTask,
     updateProgress,
@@ -274,6 +276,19 @@ export default function TeamBoardScreen({ route, navigation }) {
                             )}
                           </View>
 
+                          {/* Conflict warning — only shown to the assignee, since the
+                              cross-check in useTeamBoard only runs against the current
+                              user's own personal tasks/classes. */}
+                          {teamTaskConflicts[task.id] && (
+                            <View style={styles.conflictWarning}>
+                              <Ionicons name="warning" size={12} color="#f87171" />
+                              <Text style={styles.conflictWarningText} numberOfLines={2}>
+                                {teamTaskConflicts[task.id][0]?.message ||
+                                  'Conflicts with your personal schedule'}
+                              </Text>
+                            </View>
+                          )}
+
                           {/* Progress */}
                           <View style={[styles.progressTrack, {backgroundColor:theme.border}]}>
                             <View
@@ -285,32 +300,38 @@ export default function TeamBoardScreen({ route, navigation }) {
                           </View>
                           <Text style={[styles.progressLabel, {color:theme.subtext}]}>{task.progress}%</Text>
 
-                          {/* Controls */}
+                         {/* NEW STATUS SELECTOR */}
                           {editable ? (
-                            <View style={styles.controls}>
-                              <TouchableOpacity
-                                style={[styles.ctrlBtn, {backgroundColor: theme.border}]}
-                                onPress={() => handleProgress(task, -25)}
-                              >
-                                <Text style={[styles.ctrlText, {color:theme.text}]}>−25</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[styles.ctrlBtn, {backgroundColor: theme.border}]}
-                                onPress={() => handleProgress(task, 25)}
-                              >
-                                <Text style={[styles.ctrlText, {color:theme.text}]}>+25</Text>
-                              </TouchableOpacity>
-                              {task.progress < 100 && (
+                            <View style={styles.statusSelector}>
+                              {COLUMNS.map((col) => (
                                 <TouchableOpacity
-                                  style={[styles.ctrlBtn, styles.doneBtn]}
-                                  onPress={() => handleMarkDone(task)}
+                                  key={col.key}
+                                  style={[
+                                    styles.statusChip,
+                                    { 
+                                      backgroundColor: statusFromProgress(task.progress) === col.key ? col.color : 'transparent',
+                                      borderColor: col.color,
+                                      borderWidth: 1
+                                    }
+                                  ]}
+                                  onPress={() => updateProgress(task, statusFromProgress(task.progress) === col.key ? task.progress : (col.key === 'done' ? 100 : col.key === 'in-progress' ? 50 : 0))}
                                 >
-                                  <Ionicons name="checkmark" size={14} color="#34d399" />
+                                  <Text style={[
+                                    styles.statusChipText,
+                                    { color: statusFromProgress(task.progress) === col.key ? '#fff' : theme.subtext }
+                                  ]}>
+                                    {col.label}
+                                  </Text>
                                 </TouchableOpacity>
-                              )}
+                              ))}
                             </View>
                           ) : (
-                            <Text style={[styles.lockedNote, {color:theme.subtext}]}>Assigned to {task.assigneeName}</Text>
+                            <View style={styles.lockedContainer}>
+                              <Ionicons name="lock-closed" size={14} color={theme.subtext} />
+                              <Text style={[styles.lockedNote, {color:theme.subtext}]}>
+                                Assigned to {task.assigneeName}
+                              </Text>
+                            </View>
                           )}
 
                           {/* Footer actions */}
@@ -609,6 +630,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   deadlineText: { fontSize: 11, color: '#fbbf24', fontWeight: '600' },
+  conflictWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: 'rgba(248,113,113,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.25)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 10,
+  },
+  conflictWarningText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#f87171',
+    fontWeight: '500',
+    lineHeight: 15,
+  },
   progressTrack: {
     height: 6,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -720,4 +760,33 @@ const styles = StyleSheet.create({
   },
   memberAvatarText: { color: '#a78bfa', fontWeight: '700' },
   memberName: { flex: 1, color: '#ffffff', fontSize: 15, fontWeight: '500' },
+   statusSelector: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 12,
+  },
+  statusChip: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  lockedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    justifyContent: 'center',
+  },
+  lockedNote: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+    fontStyle: 'italic',
+  },
 });

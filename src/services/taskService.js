@@ -35,15 +35,28 @@ export const getUserTasks = async (userId) => {
 // Add a new task
 export const addTask = async (taskData) => {
   try {
+    // Default duration to 60 mins if not provided (backward compatibility)
+    const duration = taskData.duration || 60; 
+    
+    // If user picked a start time, calculate end time automatically
+    let endTime = taskData.endTime;
+    if (taskData.startTime && !endTime) {
+      const start = new Date(taskData.startTime);
+      const end = new Date(start.getTime() + duration * 60000);
+      endTime = end.toISOString();
+    }
+
     const docRef = await addDoc(collection(db, 'tasks'), {
       ...taskData,
+      duration, // Save duration in minutes
+      startTime: taskData.startTime || null,
+      endTime: endTime || null,
       createdAt: serverTimestamp(),
       isCompleted: false,
       progress: 0,
     });
 
-    // Schedule a local reminder the evening before the deadline (skip for class
-    // schedules, which are recurring and handled separately to avoid over-scheduling).
+    // Schedule reminder (skip for class schedules)
     if (!taskData.recurrence?.isClassSchedule) {
       await scheduleDeadlineReminder({ id: docRef.id, ...taskData });
     }
@@ -54,7 +67,6 @@ export const addTask = async (taskData) => {
     return null;
   }
 };
-
 // Update task progress
 export const updateTaskProgress = async (taskId, progress) => {
   try {
@@ -79,12 +91,26 @@ export const updateTaskProgress = async (taskId, progress) => {
 // Update task fields (for editing)
 export const updateTask = async (taskId, taskData) => {
   try {
-    const taskRef = doc(db, 'tasks', taskId);
-    await updateDoc(taskRef, taskData);
+    const updateData = { ...taskData };
 
-    // Deadline may have changed — reschedule the reminder against the new value.
-    if (taskData.deadline && !taskData.recurrence?.isClassSchedule) {
-      await scheduleDeadlineReminder({ id: taskId, ...taskData });
+    // Recalculate endTime if duration or startTime changed
+    if (updateData.duration || updateData.startTime) {
+      const start = updateData.startTime ? new Date(updateData.startTime) : new Date();
+      const dur = updateData.duration || 60;
+      
+      // If we have a start time, ensure end time matches duration
+      if (updateData.startTime) {
+        const end = new Date(start.getTime() + dur * 60000);
+        updateData.endTime = end.toISOString();
+      }
+    }
+
+    const taskRef = doc(db, 'tasks', taskId);
+    await updateDoc(taskRef, updateData);
+
+    // Reschedule reminder if deadline changed
+    if (updateData.deadline && !updateData.recurrence?.isClassSchedule) {
+      await scheduleDeadlineReminder({ id: taskId, ...updateData });
     }
 
     return true;

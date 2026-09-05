@@ -14,7 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
-import { getPriorityBreakdown, getWellnessAdjustedScore } from '../constants/scoring';
+import { getPriorityBreakdown, getWellnessAdjustedScore, computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { getMyAssignedBoardTasks } from '../services/teamService';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
@@ -33,6 +34,7 @@ export default function HomeScreen({ navigation }) {
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [teamAssignedTasks, setTeamAssignedTasks] = useState([]);
   
 
   const onRefresh = useCallback(async () => {
@@ -73,6 +75,33 @@ export default function HomeScreen({ navigation }) {
       };
       checkDeadlines();
     }, [regularTasks])
+  );
+
+    // Pull in team tasks assigned to this user, across every team — otherwise
+  // an urgent team assignment never surfaces anywhere on the dashboard.
+  useFocusEffect(
+    useCallback(() => {
+      const fetchTeamTasks = async () => {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
+        const raw = await getMyAssignedBoardTasks(currentUser.uid);
+        // Recompute score fresh (same reasoning as personal tasks — deadline
+        // proximity changes daily, a stale stored score would go wrong).
+        const normalized = raw
+          .filter((t) => t.progress < 100)
+          .map((t) => {
+            const score = computePriorityScore(t);
+            return {
+              ...t,
+              priorityScore: score,
+              priorityLabel: getPriorityLabel(score),
+              isTeamTask: true,
+            };
+          });
+        setTeamAssignedTasks(normalized);
+      };
+      fetchTeamTasks();
+    }, [])
   );
 
   useEffect(() => {
@@ -116,7 +145,10 @@ export default function HomeScreen({ navigation }) {
   // When well-being is low, Personal tasks surface higher and non-urgent Low tasks
   // are de-emphasized in the "rest" bucket. Urgent tasks are never affected.
   const todaysFocus = useMemo(() => {
-    const incomplete = regularTasks.filter(task => task.progress < 100);
+    const incomplete = [
+      ...regularTasks.filter(task => task.progress < 100),
+      ...teamAssignedTasks,
+    ];
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -149,7 +181,7 @@ export default function HomeScreen({ navigation }) {
       .sort((a, b) => b.adjustedScore - a.adjustedScore);
 
     return [...urgent, ...rest].slice(0, 5);
-  }, [regularTasks, wellnessPercentage]);
+  }, [regularTasks, teamAssignedTasks, wellnessPercentage]);
 
   const throttleAdvice = useMemo(
     () => getWellnessThrottleAdvice(wellnessPercentage, regularTasks),
@@ -460,6 +492,14 @@ export default function HomeScreen({ navigation }) {
                           {task.category}
                         </Text>
                       </View>
+                      {task.isTeamTask && (
+                        <View style={styles.focusTeamTag}>
+                          <Ionicons name="people-outline" size={10} color="#a78bfa" />
+                          <Text style={styles.focusTeamTagText}>
+                            {task.assignedByName ? `From ${task.assignedByName}` : 'Team task'}
+                          </Text>
+                        </View>
+                      )}
                       <View style={styles.focusDeadlineTag}>
                         <Ionicons name="time-outline" size={11} color={urgency.color} />
                         <Text style={[styles.focusDeadlineText, { color: urgency.color }]}>
@@ -1022,9 +1062,23 @@ export default function HomeScreen({ navigation }) {
     height: 6,
     borderRadius: 3,
   },
-  focusCategoryText: {
+    focusCategoryText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  focusTeamTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  focusTeamTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#a78bfa',
   },
   focusDeadlineTag: {
     flexDirection: 'row',

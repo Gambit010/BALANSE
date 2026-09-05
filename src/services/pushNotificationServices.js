@@ -78,7 +78,11 @@ export const registerForPushNotificationsAsync = async () => {
 export const savePushTokenToFirestore = async (userId, token) => {
   if (!userId || !token) return false;
   try {
-    await setDoc(doc(db, 'users', userId), { pushToken: token }, { merge: true });
+    // Stored in a private subcollection, not on the main user doc, since
+    // users/{uid} is broadly readable (needed for team-invite email lookup)
+    // but a push token is a capability — anyone holding it can send fake
+    // notifications to that user's device via Expo's public push API.
+    await setDoc(doc(db, 'users', userId, 'private', 'pushToken'), { token }, { merge: true });
     return true;
   } catch (error) {
     console.error('Error saving push token:', error);
@@ -93,6 +97,42 @@ export const setupPushNotifications = async (userId) => {
     await savePushTokenToFirestore(userId, token);
   }
   return token;
+};
+/**
+ * Sends a REAL remote push notification to a specific Expo push token,
+ * via Expo's push API. Unlike sendImmediateNotification/scheduleDeadlineReminder
+ * (which only fire on the calling device), this reaches a DIFFERENT device —
+ * required for team features, where Person A's action (assigning a task) needs
+ * to notify Person B's phone, not Person A's.
+ */
+export const sendPushToToken = async (expoPushToken, title, body, data = {}) => {
+  if (!expoPushToken) return false;
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: expoPushToken,
+        title,
+        body,
+        data,
+        sound: 'default',
+      }),
+    });
+    const result = await response.json();
+    if (result?.data?.status === 'error') {
+      console.error('Expo push send error:', result.data.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error sending remote push:', error);
+    return false;
+  }
 };
 
 // ---------------------------------------------------------------------------

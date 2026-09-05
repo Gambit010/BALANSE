@@ -14,6 +14,9 @@ import {
   statusFromProgress,
 } from '../services/teamService';
 import { findUserByEmail } from '../services/userService';
+import { getUserTasks } from '../services/taskService';
+import { detectConflicts } from '../services/conflictService';
+import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 
 // ─── Hook: list of the current user's teams ───
 export const useTeams = () => {
@@ -53,6 +56,7 @@ export const useTeamBoard = (teamId) => {
   const [team, setTeam] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [teamTaskConflicts, setTeamTaskConflicts] = useState({}); // { [boardTaskId]: conflict[] }
 
   // Normalized current user (the "actor" performing changes)
   const actor = (() => {
@@ -66,14 +70,49 @@ export const useTeamBoard = (teamId) => {
     setLoading(true);
     const [t, bt] = await Promise.all([getTeam(teamId), getBoardTasks(teamId)]);
     setTeam(t);
-    // Sort: lower progress first, then earliest deadline
-    const sorted = [...bt].sort((a, b) => {
-      if (a.progress !== b.progress) return a.progress - b.progress;
+
+    // Recompute priority score fresh on every fetch — same as personal tasks
+    // in useTasks.js. Deadline proximity changes daily, so a score stored once
+    // at creation would silently go stale (e.g. never escalating to "High" as
+    // the deadline approaches). The value stored at creation is just a fallback
+    // for the brief window before the first fetch.
+    const scored = bt.map((task) => {
+      const score = computePriorityScore(task);
+      return { ...task, priorityScore: score, priorityLabel: getPriorityLabel(score) };
+    });
+
+    // Sort: unfinished before done, then highest priority score first, then earliest deadline
+    const sorted = [...scored].sort((a, b) => {
+      const aDone = a.progress === 100 ? 1 : 0;
+      const bDone = b.progress === 100 ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      if (b.priorityScore !== a.priorityScore) return b.priorityScore - a.priorityScore;
       const ad = a.deadline ? new Date(a.deadline).getTime() : Infinity;
       const bd = b.deadline ? new Date(b.deadline).getTime() : Infinity;
       return ad - bd;
     });
     setTasks(sorted);
+
+    // Cross-check team tasks assigned to the current user against their
+    // personal tasks/classes — without this, a team task could silently
+    // overlap a class or personal deadline with no warning anywhere.
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      try {
+        const personalTasks = await getUserTasks(currentUser.uid);
+        const myAssignedTasks = sorted.filter((bTask) => bTask.assigneeId === currentUser.uid);
+        const newConflictMap = {};
+        for (const bTask of myAssignedTasks) {
+          if (!bTask.deadline) continue;
+          const found = detectConflicts(bTask, personalTasks, null);
+          if (found.length > 0) newConflictMap[bTask.id] = found;
+        }
+        setTeamTaskConflicts(newConflictMap);
+      } catch (error) {
+        console.error('Error cross-checking team task conflicts:', error);
+      }
+    }
+
     setLoading(false);
   }, [teamId]);
 
@@ -143,6 +182,7 @@ export const useTeamBoard = (teamId) => {
     loading,
     isOwner,
     actor,
+    teamTaskConflicts,
     addMemberByEmail,
     addTask,
     updateProgress,

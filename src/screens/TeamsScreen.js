@@ -58,12 +58,31 @@ export default function TeamsScreen({ navigation }) {
             <Text style={[styles.screenTitle, {color:theme.text}]}>Teams</Text>
             <Text style={[styles.screenSubtitle, {color:theme.subtext}]}>Shared task boards for your orgs</Text>
           </View>
-          <TouchableOpacity style={[styles.newButton, {backgroundColor: theme.accent}]} onPress={() => setModalVisible(true)}>
-            <Ionicons name="add" size={20} color="#ffffff" />
-            <Text style={styles.newButtonText}>New</Text>
-          </TouchableOpacity>
-        </View>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {/* My Assignments Button */}
+            <TouchableOpacity 
+              style={[styles.iconButton, {
+                backgroundColor: theme.card, 
+                borderColor: theme.border, 
+                borderWidth: 1,
+                marginRight: 8
+              }]} 
+              onPress={() => navigation.navigate('MyAssignments')}
+            >
+              <Ionicons name="clipboard" size={20} color={theme.text} />
+            </TouchableOpacity>
 
+            {/* New Team Button */}
+            <TouchableOpacity 
+              style={[styles.newButton, {backgroundColor: theme.accent}]} 
+              onPress={() => setModalVisible(true)}
+            >
+              <Ionicons name="add" size={20} color="#ffffff" />
+              <Text style={styles.newButtonText}>New</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         {loading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : teams.length === 0 ? (
@@ -86,7 +105,7 @@ export default function TeamsScreen({ navigation }) {
                 key={team.id}
                 style={[styles.teamCard, {backgroundColor: theme.card, borderColor:theme.border}]}
                 onPress={() =>
-                  navigation.navigate('TeamBoard', { teamId: team.id, teamName: team.name })
+                  navigation.navigate('TeamBoard', { teamId: team.id, teamName: team.name }) 
                 }
               >
                 <View style={[styles.teamIcon, {backgroundColor: isDarkMode ? 'rgba(167,139,250,0.15)' : '#F3E8FF',}]}>
@@ -254,4 +273,12 @@ const styles = StyleSheet.create({
   modalCancelText: { color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   modalConfirm: { backgroundColor: '#7c3aed' },
   modalConfirmText: { color: '#ffffff', fontWeight: '700' },
+
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
