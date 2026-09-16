@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
+import TaskActionModal from '../components/TaskActionModal'; 
 import { deleteTask, updateTaskProgress } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
@@ -34,6 +35,7 @@ export default function TasksScreen({ navigation, route }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
   const [breakdownTask, setBreakdownTask] = useState(null);
+  const [actionTask, setActionTask] = useState(null); // task currently showing the action modal
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
 
   
@@ -109,17 +111,6 @@ export default function TasksScreen({ navigation, route }) {
         },
       ]
     );
-  };
-
-  const handleProgressUpdate = async (taskId, currentProgress) => {
-    let newProgress;
-    if (currentProgress === 0) newProgress = 50;
-    else if (currentProgress < 100) newProgress = 100;
-    else newProgress = 0;
-    const success = await updateTaskProgress(taskId, newProgress);
-    if (success) {
-      refetch();
-    }
   };
 
   const getPriorityColor = (priority) => {
@@ -259,7 +250,7 @@ export default function TasksScreen({ navigation, route }) {
       key={task.id}
       // style={styles.taskCard} 
       style={[ styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]}
-      onPress={() => navigation.navigate('EditTask', { task })}
+      onPress={() => setActionTask(task)}
       activeOpacity={0.7}
     >
       {/* Top Row - Title + Priority */}
@@ -326,38 +317,6 @@ export default function TasksScreen({ navigation, route }) {
         <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
       </View>
 
-      {/* Bottom Row - Actions */}
-      <View style={styles.taskBottomRow}>
-        <TouchableOpacity
-          style={styles.progressButton}
-          onPress={() => handleProgressUpdate(task.id, task.progress)}
-        >
-          <Ionicons
-            name={task.progress === 100 ? 'checkmark-circle' : 'checkmark-circle-outline'}
-            size={20}
-            color={task.progress === 100 ? '#34d399' : 'rgba(255,255,255,0.4)'}
-          />
-          {/* <Text style={styles.taskProgressText}> */}
-          <Text style={[ styles.taskProgressText, { color: theme.subtext }, ]} >
-                 {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('EditTask', { task })}
-          >
-            <Ionicons name="create-outline" size={18} color={theme.subtext} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDelete(task.id, task.title)}
-          >
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
     </TouchableOpacity>
   );
 })}
@@ -369,6 +328,38 @@ export default function TasksScreen({ navigation, route }) {
         visible={!!breakdownTask}
         task={breakdownTask}
         onClose={() => setBreakdownTask(null)}
+      />
+
+      {/* Task Action Modal — shown when a card is tapped; the only way to
+          change status, edit, or delete now that the bottom action row
+          has been removed to avoid duplicate controls. */}
+      <TaskActionModal
+        visible={!!actionTask}
+        task={actionTask}
+        theme={theme}
+        onClose={() => setActionTask(null)}
+        onSetStatus={async (newProgress) => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) {
+            const success = await updateTaskProgress(t.id, newProgress);
+            if (success) refetch();
+          }
+        }}
+        onViewBreakdown={() => {
+          setBreakdownTask(actionTask);
+          setActionTask(null);
+        }}
+        onEdit={() => {
+          const t = actionTask;
+          setActionTask(null);
+          navigation.navigate('EditTask', { task: t });
+        }}
+        onDelete={() => {
+          const t = actionTask;
+          setActionTask(null);
+          handleDelete(t.id, t.title);
+        }}
       />
 
       {/* Floating Add Button */}
@@ -703,4 +694,9 @@ const styles = StyleSheet.create({
     color: '#a78bfa',
   },
 
+    taskBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
 });
