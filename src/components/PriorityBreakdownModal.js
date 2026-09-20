@@ -8,6 +8,14 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
   if (!task) return null;
   const breakdown = getPriorityBreakdown(task);
 
+  // task.wellnessDelta/adjustedScore/adjustedLabel are only set on Home's
+  // "Today's Focus" rest-bucket tasks (see HomeScreen.js) — undefined
+  // everywhere else, so this modal renders exactly as before unless the
+  // task it was opened for was actually wellness-adjusted.
+  const hasAdjustment = !!task.wellnessDelta;
+  const effectiveTotal = task.adjustedScore ?? breakdown.total;
+  const effectiveLabel = task.adjustedLabel ?? task.priorityLabel;
+
   // Color the ring by the total score band
   const getScoreColor = (score) => {
     if (score >= 70) return '#ef4444'; // High
@@ -15,7 +23,7 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
     return '#34d399';                   // Low
   };
 
-  const ringColor = getScoreColor(breakdown.total);
+  const ringColor = getScoreColor(effectiveTotal);
   const { theme, isDarkMode } = useTheme(); // for dark mode
 
   return (
@@ -57,13 +65,18 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
           <View style={styles.scoreSection}>
             <View style={[styles.scoreCircle, { borderColor: ringColor, backgroundColor: isDarkMode ? theme.card : 'rgba(204, 204, 204, 0.29)' }]}>
               <Text style={[styles.scoreNumber, { color: ringColor }]}>
-                {breakdown.total}
+                {effectiveTotal}
               </Text>
               <Text style={[styles.scoreMax, { color: theme.subtext }]}>/ 100</Text>
             </View>
             <Text style={[styles.scoreLabel, { color: ringColor }]}>
-              {task.priorityLabel} Priority
+              {effectiveLabel} Priority
             </Text>
+            {hasAdjustment && (
+              <Text style={[styles.adjustedCaption, { color: theme.subtext }]}>
+                Base score {breakdown.total} · wellness-adjusted
+              </Text>
+            )}
           </View>
 
           <View style={[styles.divider, { backgroundColor: theme.border}]} />
@@ -89,6 +102,24 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
                 </View>
               );
             })}
+            {hasAdjustment && (
+              <View style={styles.factorRow}>
+                <View style={styles.factorHeader}>
+                  <Text style={[styles.factorLabel, { color: theme.accent }]}>Wellness Adjustment</Text>
+                  <Text style={[styles.factorScore, { color: theme.accent }]}>
+                    {task.wellnessDelta > 0 ? '+' : ''}{task.wellnessDelta}
+                  </Text>
+                </View>
+                <Text style={[styles.factorReason, { color: theme.subtext }]}>
+                  {task.wellnessDelta > 0
+                    ? 'Personal task surfaced higher for self-care while well-being is low.'
+                    : 'Non-urgent, low-priority task de-emphasized while well-being is low.'}
+                </Text>
+                <View style={[styles.barBg, { backgroundColor: theme.border }]}>
+                  <View style={[styles.barFill, { width: `${Math.min(100, (Math.abs(task.wellnessDelta) / 15) * 100)}%`, backgroundColor: theme.accent }]} />
+                </View>
+              </View>
+            )}
           </ScrollView>
 
           {/* FOOTER */}
@@ -182,6 +213,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
+  },
+  adjustedCaption: {
+    fontSize: 11,
+    marginTop: 4,
   },
   divider: {
     height: 1,

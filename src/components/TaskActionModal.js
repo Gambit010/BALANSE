@@ -63,10 +63,12 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
             <Text style={[styles.optionText, { color: '#a78bfa' }]}>View Priority Breakdown</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.option} onPress={onEdit}>
-            <Ionicons name="create-outline" size={20} color={theme.text} />
-            <Text style={[styles.optionText, { color: theme.text }]}>Edit Details</Text>
-          </TouchableOpacity>
+          {!task.isTeamTask && (
+            <TouchableOpacity style={styles.option} onPress={onEdit}>
+              <Ionicons name="create-outline" size={20} color={theme.text} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Edit Details</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.option} onPress={onDelete}>
             <Ionicons name="trash-outline" size={20} color="#ef4444" />
