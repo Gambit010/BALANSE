@@ -61,6 +61,21 @@ const getTaskTimeRange = (task) => {
   return { start, end, isAllDay: false };
 };
 
+/**
+ * True when a class-schedule task's session has already ended and its
+ * progress is still untouched (0) — i.e. nobody manually edited it. Used to
+ * derive a "Done" display/exclude-from-counts treatment for past classes
+ * without ever writing progress: 100 to Firestore, so a manual edit (e.g.
+ * repurposing a cancelled class into something else) always wins.
+ */
+export const isElapsedClass = (task) => {
+  if (!task?.recurrence?.isClassSchedule) return false;
+  if (task.progress > 0) return false;
+  const range = getTaskTimeRange(task);
+  if (!range) return false;
+  return range.end < new Date();
+};
+
 
 /**
  * Check if two time ranges overlap.
@@ -110,6 +125,7 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
   const otherTasks = existingTasks.filter((t) => {
     if (t.id === targetTaskId) return false;
     if (t.progress === 100) return false;
+    if (isElapsedClass(t)) return false;
     if (!t.deadline) return false;
     return true;
   });
@@ -341,7 +357,7 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
  */
 export const detectAllConflicts = (tasks) => {
   const conflictMap = new Map();
-  const activeTasks = tasks.filter((t) => t.progress !== 100);
+  const activeTasks = tasks.filter((t) => t.progress !== 100 && !isElapsedClass(t));
 
   for (let i = 0; i < activeTasks.length; i++) {
     const task = activeTasks[i];

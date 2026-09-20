@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { auth } from '../../firebase';
 import { getMyAssignedBoardTasks } from '../services/teamService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { isElapsedClass } from '../services/conflictService';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -176,10 +177,14 @@ export default function CalendarScreen({ navigation }) {
 
   const getTasksForDate = (date) => tasksByDateKey.get(getDateKey(date)) || [];
 
-  const getTaskCountForDate = (date) => getTasksForDate(date).length;
+  // Elapsed, untouched class sessions don't count toward "how much is on
+  // this day" — they've already happened and need no attention, matching
+  // how HomeScreen already excludes class schedules generally.
+  const getTaskCountForDate = (date) =>
+    getTasksForDate(date).filter((t) => !isElapsedClass(t)).length;
 
   const hasHighPriority = (date) => {
-    return getTasksForDate(date).some((t) => t.priorityLabel === 'High');
+    return getTasksForDate(date).some((t) => !isElapsedClass(t) && t.priorityLabel === 'High');
   };
 
   const getCategoryColor = (category) => {
@@ -211,6 +216,16 @@ export default function CalendarScreen({ navigation }) {
     if (progress > 0) return '#fb923c';
     return 'rgb(106, 103, 103)';
   };
+
+  // A class session that's already over reads as "Done" once its time has
+  // passed, without ever writing progress: 100 to Firestore — this way a
+  // manual edit (e.g. repurposing a cancelled class) always takes priority,
+  // since isElapsedClass only fires while progress is still untouched (0).
+  const getEffectiveStatusLabel = (task) =>
+    isElapsedClass(task) ? 'Done' : getStatusLabel(task.progress);
+
+  const getEffectiveStatusColor = (task) =>
+    isElapsedClass(task) ? '#34d399' : getStatusColor(task.progress);
 
   const getDeadlineUrgency = (deadline) => {
     const now = new Date();
@@ -282,8 +297,8 @@ export default function CalendarScreen({ navigation }) {
   const renderTaskCard = (task) => {
     const catColor = getCategoryColor(task.category);
     const prioColor = getPriorityColor(task.priorityLabel);
-    const statusColor = getStatusColor(task.progress);
-    const urgency = getDeadlineUrgency(task.deadline);
+    const statusColor = getEffectiveStatusColor(task);
+    const urgency = isElapsedClass(task) ? null : getDeadlineUrgency(task.deadline);
     const hasTime = task.deadline && task.deadline.includes('T');
 
     return (
@@ -319,7 +334,7 @@ export default function CalendarScreen({ navigation }) {
 
           <View style={styles.statusChip}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: theme.subtext }]}>{getStatusLabel(task.progress)}</Text>
+            <Text style={[styles.statusText, { color: theme.subtext }]}>{getEffectiveStatusLabel(task)}</Text>
           </View>
 
           {hasTime && (

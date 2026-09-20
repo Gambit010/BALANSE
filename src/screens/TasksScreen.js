@@ -16,6 +16,7 @@ import { getPriorityBreakdown } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import TaskActionModal from '../components/TaskActionModal'; 
 import { deleteTask, updateTaskProgress } from '../services/taskService';
+import { isElapsedClass } from '../services/conflictService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 
@@ -78,12 +79,14 @@ export default function TasksScreen({ navigation, route }) {
       } else if (filterType === 'priority') {
         matchesFilter = task.priorityLabel === activeFilter;
       } else if (filterType === 'status') {
+        // A past, untouched class session reads as "Done" the same way it
+        // displays — see getEffectiveStatusLabel below.
         if (activeFilter === 'Done') {
-          matchesFilter = task.progress === 100;
+          matchesFilter = task.progress === 100 || isElapsedClass(task);
         } else if (activeFilter === 'In Progress') {
           matchesFilter = task.progress > 0 && task.progress < 100;
         } else if (activeFilter === 'To Do') {
-          matchesFilter = task.progress === 0;
+          matchesFilter = task.progress === 0 && !isElapsedClass(task);
         }
       }
     }
@@ -133,6 +136,16 @@ export default function TasksScreen({ navigation, route }) {
     if (progress > 0) return '#fb923c';
     return 'rgba(255,255,255,0.4)';
   };
+
+  // A class session that's already over reads as "Done" once its time has
+  // passed, without ever writing progress: 100 to Firestore — this way a
+  // manual edit (e.g. repurposing a cancelled class) always takes priority,
+  // since isElapsedClass only fires while progress is still untouched (0).
+  const getEffectiveStatusLabel = (task) =>
+    isElapsedClass(task) ? 'Done' : getStatusLabel(task.progress);
+
+  const getEffectiveStatusColor = (task) =>
+    isElapsedClass(task) ? '#34d399' : getStatusColor(task.progress);
 
   if (loading) {
     return (
@@ -292,10 +305,9 @@ export default function TasksScreen({ navigation, route }) {
             {/*<Text style={styles.metaText}>{task.category}</Text>*/}
             <Text style={[styles.metaText, { color: theme.subtext }]}>{task.category}</Text>
           </View>
-          <View style={[styles.metaChip, { borderColor: `${getStatusColor(task.progress)}40` }]}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.progress) }]} />
-            {/*<Text style={styles.metaText}>{getStatusLabel(task.progress)}</Text>*/}
-            <Text style={[styles.metaText, { color: theme.subtext }]}>{getStatusLabel(task.progress)}</Text>
+          <View style={[styles.metaChip, { borderColor: `${getEffectiveStatusColor(task)}40` }]}>
+            <View style={[styles.statusDot, { backgroundColor: getEffectiveStatusColor(task) }]} />
+            <Text style={[styles.metaText, { color: theme.subtext }]}>{getEffectiveStatusLabel(task)}</Text>
           </View>
         </View>
         <View style={styles.taskDeadline}>
