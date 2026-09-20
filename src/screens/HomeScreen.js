@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 
 import { useTheme } from '../context/ThemeContext'; // for dark mode
@@ -15,9 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown, getWellnessAdjustedScore, computePriorityScore, getPriorityLabel } from '../constants/scoring';
-import { getMyAssignedBoardTasks } from '../services/teamService';
+import { getMyAssignedBoardTasks, getTeam, updateBoardTaskProgress, deleteBoardTask } from '../services/teamService';
+import { updateTaskProgress, deleteTask } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
+import TaskActionModal from '../components/TaskActionModal';
 import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
 import { useWellness } from '../hooks/useWellness';
 import { getWellnessThrottleAdvice } from '../constants/wellness';
@@ -35,18 +38,38 @@ export default function HomeScreen({ navigation }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [teamAssignedTasks, setTeamAssignedTasks] = useState([]);
-  
+  const [actionTask, setActionTask] = useState(null);
+
+  const fetchTeamTasks = useCallback(async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    const raw = await getMyAssignedBoardTasks(currentUser.uid);
+    // Recompute score fresh (same reasoning as personal tasks — deadline
+    // proximity changes daily, a stale stored score would go wrong).
+    const normalized = raw
+      .filter((t) => t.progress < 100)
+      .map((t) => {
+        const score = computePriorityScore(t);
+        return {
+          ...t,
+          priorityScore: score,
+          priorityLabel: getPriorityLabel(score),
+          isTeamTask: true,
+        };
+      });
+    setTeamAssignedTasks(normalized);
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), fetchTeamTasks()]);
     const currentUser = auth.currentUser;
     if (currentUser) {
       const count = await getUnreadCount(currentUser.uid);
       setUnreadCount(count);
     }
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, fetchTeamTasks]);
 
   useFocusEffect(
     useCallback(() => {
@@ -81,27 +104,8 @@ export default function HomeScreen({ navigation }) {
   // an urgent team assignment never surfaces anywhere on the dashboard.
   useFocusEffect(
     useCallback(() => {
-      const fetchTeamTasks = async () => {
-        const currentUser = auth.currentUser;
-        if (!currentUser) return;
-        const raw = await getMyAssignedBoardTasks(currentUser.uid);
-        // Recompute score fresh (same reasoning as personal tasks — deadline
-        // proximity changes daily, a stale stored score would go wrong).
-        const normalized = raw
-          .filter((t) => t.progress < 100)
-          .map((t) => {
-            const score = computePriorityScore(t);
-            return {
-              ...t,
-              priorityScore: score,
-              priorityLabel: getPriorityLabel(score),
-              isTeamTask: true,
-            };
-          });
-        setTeamAssignedTasks(normalized);
-      };
       fetchTeamTasks();
-    }, [])
+    }, [fetchTeamTasks])
   );
 
   useEffect(() => {
@@ -174,10 +178,17 @@ export default function HomeScreen({ navigation }) {
     // Everything else — wellness-adjusted ranking when well-being is low
     const rest = incomplete
       .filter(t => daysUntil(t.deadline) > 0)
-      .map(t => ({
-        ...t,
-        adjustedScore: getWellnessAdjustedScore(t, t.priorityScore, wellnessPercentage),
-      }))
+      .map(t => {
+        const adjustedScore = getWellnessAdjustedScore(t, t.priorityScore, wellnessPercentage);
+        return {
+          ...t,
+          adjustedScore,
+          // Carried through so the badge/breakdown shown to the user always
+          // matches the score that actually decided its position in the list.
+          adjustedLabel: getPriorityLabel(adjustedScore),
+          wellnessDelta: adjustedScore - t.priorityScore,
+        };
+      })
       .sort((a, b) => b.adjustedScore - a.adjustedScore);
 
     return [...urgent, ...rest].slice(0, 5);
@@ -444,14 +455,18 @@ export default function HomeScreen({ navigation }) {
             {todaysFocus.map((task, index) => {
               const urgency = getDeadlineUrgency(task.deadline);
               const catColor = getCategoryColor(task.category);
-              const prioColor = getPriorityColor(task.priorityLabel);
+              // Falls back to the raw label for urgent tasks and anything
+              // without an adjustment — this only changes for rest-bucket
+              // tasks that were actually boosted/de-emphasized.
+              const effectiveLabel = task.adjustedLabel ?? task.priorityLabel;
+              const prioColor = getPriorityColor(effectiveLabel);
               const breakdown = getPriorityBreakdown(task);
 
               return (
                 <TouchableOpacity
                   key={task.id}
                   style={[ styles.focusCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]} 
-                  onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+                  onPress={() => setActionTask(task)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.focusRank}>
@@ -473,7 +488,7 @@ export default function HomeScreen({ navigation }) {
                         activeOpacity={0.6}
                       >
                         <Text style={[styles.focusPrioText, { color: prioColor }]}>
-                          {task.priorityLabel}
+                          {effectiveLabel}
                         </Text>
                         <Ionicons
                           name="information-circle-outline"
@@ -521,6 +536,12 @@ export default function HomeScreen({ navigation }) {
                         .map(f => `${f.label}: ${f.reason} (${f.score}pts)`)
                         .join('  ·  ')}
                     </Text>
+                    {!!task.wellnessDelta && (
+                      <Text style={[styles.focusWellnessNote, { color: theme.accent }]}>
+                        Wellness: {task.wellnessDelta > 0 ? '+' : ''}{task.wellnessDelta}pts
+                        {task.wellnessDelta > 0 ? ' (surfaced for self-care)' : ' (de-emphasized, not urgent)'}
+                      </Text>
+                    )}
 
                     <View style={styles.focusProgressRow}>
                       <View style={[styles.focusProgressBg, { backgroundColor: theme.border},]}>
@@ -610,6 +631,60 @@ export default function HomeScreen({ navigation }) {
         visible={!!breakdownTask}
         task={breakdownTask}
         onClose={() => setBreakdownTask(null)}
+      />
+
+      <TaskActionModal
+        visible={!!actionTask}
+        task={actionTask}
+        theme={theme}
+        onClose={() => setActionTask(null)}
+        onSetStatus={async (newProgress) => {
+          const t = actionTask;
+          setActionTask(null);
+          if (!t) return;
+          if (t.isTeamTask) {
+            const team = await getTeam(t.teamId);
+            if (team) await updateBoardTaskProgress(team, t, newProgress, auth.currentUser);
+          } else {
+            await updateTaskProgress(t.id, newProgress);
+          }
+          await Promise.all([refetch(), fetchTeamTasks()]);
+        }}
+        onViewBreakdown={() => {
+          setBreakdownTask(actionTask);
+          setActionTask(null);
+        }}
+        onEdit={() => {
+          const t = actionTask;
+          setActionTask(null);
+          navigation.getParent()?.navigate('EditTask', { task: t });
+        }}
+        onDelete={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (!t) return;
+          Alert.alert(
+            'Delete Task',
+            `Are you sure you want to delete "${t.title}"?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  const success = t.isTeamTask
+                    ? await deleteBoardTask(t.id)
+                    : await deleteTask(t.id);
+                  if (success) {
+                    await Promise.all([refetch(), fetchTeamTasks()]);
+                  } else {
+                    Alert.alert('Error', 'Failed to delete task.');
+                  }
+                },
+              },
+            ]
+          );   
+        }}
       />
       {/* Floating Add button */}
       <TouchableOpacity
@@ -1094,6 +1169,12 @@ export default function HomeScreen({ navigation }) {
     color: 'rgba(255,255,255,0.35)',
     marginBottom: 8,
     lineHeight: 16,
+  },
+  focusWellnessNote: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -4,
+    marginBottom: 8,
   },
   focusProgressRow: {
     flexDirection: 'row',

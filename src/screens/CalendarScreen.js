@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,9 @@ import { useTasks } from '../hooks/useTasks';
 import { useAllConflicts } from '../hooks/useConflicts';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { auth } from '../../firebase';
+import { getMyAssignedBoardTasks } from '../services/teamService';
+import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -22,16 +26,48 @@ const MONTHS = [
 
 export default function CalendarScreen({ navigation }) {
   const { tasks, loading, refetch } = useTasks();
-  const { hasConflictsOnDate, getConflictsForDate } = useAllConflicts(tasks);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
+  const [weekAnchor, setWeekAnchor] = useState(new Date());
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const [teamAssignedTasks, setTeamAssignedTasks] = useState([]);
   const { theme, isDarkMode } = useTheme(); // for dark mode
-  
+
+  // Team tasks assigned to this user, merged in the same way HomeScreen does —
+  // otherwise a team deadline never shows up here at all and can't be checked
+  // against personal-task conflicts.
+  const fetchTeamTasks = useCallback(async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    const raw = await getMyAssignedBoardTasks(currentUser.uid);
+    const normalized = raw.map((t) => {
+      const score = computePriorityScore(t);
+      return {
+        ...t,
+        priorityScore: score,
+        priorityLabel: getPriorityLabel(score),
+        isTeamTask: true,
+      };
+    });
+    setTeamAssignedTasks(normalized);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       refetch();
     }, [])
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTeamTasks();
+    }, [fetchTeamTasks])
+  );
+
+  const allTasks = useMemo(() => [...tasks, ...teamAssignedTasks], [tasks, teamAssignedTasks]);
+  const { hasConflictsOnDate, getConflictsForDate } = useAllConflicts(allTasks);
 
   // ─── Calendar helpers ───
 
@@ -55,6 +91,7 @@ export default function CalendarScreen({ navigation }) {
     const today = new Date();
     setCurrentDate(today);
     setSelectedDate(today);
+    setWeekAnchor(today);
   };
 
   const isSameDay = (d1, d2) =>
@@ -64,6 +101,50 @@ export default function CalendarScreen({ navigation }) {
 
   const isToday = (date) => isSameDay(date, new Date());
 
+  // ─── Week helpers ───
+
+  const getWeekStart = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - d.getDay());
+    return d;
+  };
+
+  const getWeekDays = (anchor) => {
+    const start = getWeekStart(anchor);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  };
+
+  const goToPrevWeek = () => {
+    const prev = new Date(weekAnchor);
+    prev.setDate(prev.getDate() - 7);
+    setWeekAnchor(prev);
+  };
+
+  const goToNextWeek = () => {
+    const next = new Date(weekAnchor);
+    next.setDate(next.getDate() + 7);
+    setWeekAnchor(next);
+  };
+
+  const formatWeekRangeLabel = (anchor) => {
+    const start = getWeekStart(anchor);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const sameMonth = start.getMonth() === end.getMonth();
+    const startStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const endStr = end.toLocaleDateString('en-US', {
+      month: sameMonth ? undefined : 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    return `${startStr} – ${endStr}`;
+  };
+
   // ─── Task helpers ───
 
   const getTaskDate = (deadline) => {
@@ -72,20 +153,30 @@ export default function CalendarScreen({ navigation }) {
     return d;
   };
 
-  const getTasksForDate = (date) => {
-    return tasks.filter((task) => {
-      const taskDate = getTaskDate(task.deadline);
-      return isSameDay(taskDate, date);
-    });
-  };
-
-  const getTaskCountForDate = (date) => getTasksForDate(date).length;
-    const getDateKey = (date) => {
+  const getDateKey = (date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   };
+
+  // Precompute once per task-list change instead of re-scanning the full task
+  // array for every one of the ~42 grid cells (and now 7 week-view days) on
+  // every render.
+  const tasksByDateKey = useMemo(() => {
+    const map = new Map();
+    for (const task of allTasks) {
+      if (!task.deadline) continue;
+      const key = getDateKey(getTaskDate(task.deadline));
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(task);
+    }
+    return map;
+  }, [allTasks]);
+
+  const getTasksForDate = (date) => tasksByDateKey.get(getDateKey(date)) || [];
+
+  const getTaskCountForDate = (date) => getTasksForDate(date).length;
 
   const hasHighPriority = (date) => {
     return getTasksForDate(date).some((t) => t.priorityLabel === 'High');
@@ -144,7 +235,6 @@ export default function CalendarScreen({ navigation }) {
 
     const days = [];
 
-    // Previous month's trailing days
     for (let i = firstDay - 1; i >= 0; i--) {
       days.push({
         day: daysInPrevMonth - i,
@@ -153,7 +243,6 @@ export default function CalendarScreen({ navigation }) {
       });
     }
 
-    // Current month's days
     for (let i = 1; i <= daysInMonth; i++) {
       days.push({
         day: i,
@@ -162,7 +251,6 @@ export default function CalendarScreen({ navigation }) {
       });
     }
 
-    // Next month's leading days
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       days.push({
@@ -189,13 +277,82 @@ export default function CalendarScreen({ navigation }) {
     });
   };
 
+  // ─── Shared task card renderer (Month's selected-day list AND Week view) ───
+
+  const renderTaskCard = (task) => {
+    const catColor = getCategoryColor(task.category);
+    const prioColor = getPriorityColor(task.priorityLabel);
+    const statusColor = getStatusColor(task.progress);
+    const urgency = getDeadlineUrgency(task.deadline);
+    const hasTime = task.deadline && task.deadline.includes('T');
+
+    return (
+      <TouchableOpacity
+        key={task.id}
+        style={[styles.taskCard, { borderLeftColor: catColor, backgroundColor: theme.card, borderColor: theme.border }]}
+        onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+        activeOpacity={0.7}
+      >
+        <View style={styles.taskTopRow}>
+          <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>{task.title}</Text>
+          <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
+            <Text style={[styles.prioText, { color: prioColor }]}>{task.priorityLabel}</Text>
+          </View>
+        </View>
+
+        {task.description ? (
+          <Text style={[styles.taskDesc, { color: theme.subtext }]} numberOfLines={1}>{task.description}</Text>
+        ) : null}
+
+        <View style={styles.taskMetaRow}>
+          <View style={[styles.categoryChip, { backgroundColor: `${catColor}20` }]}>
+            <View style={[styles.categoryDot, { backgroundColor: catColor }]} />
+            <Text style={[styles.categoryText, { color: catColor }]}>{task.category}</Text>
+          </View>
+
+          {task.isTeamTask && (
+            <View style={styles.teamTag}>
+              <Ionicons name="people-outline" size={10} color="#a78bfa" />
+              <Text style={styles.teamTagText}>Team</Text>
+            </View>
+          )}
+
+          <View style={styles.statusChip}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusText, { color: theme.subtext }]}>{getStatusLabel(task.progress)}</Text>
+          </View>
+
+          {hasTime && (
+            <View style={styles.timeChip}>
+              <Ionicons name="time-outline" size={11} color={theme.subtext} />
+              <Text style={[styles.timeText, { color: theme.subtext }]}>
+                {new Date(task.deadline).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {urgency && (
+          <View style={[styles.urgencyBanner, { backgroundColor: `${urgency.color}15` }]}>
+            <Ionicons name="alert-circle" size={13} color={urgency.color} />
+            <Text style={[styles.urgencyText, { color: urgency.color }]}>{urgency.text}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   // ─── Render ───
 
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={ theme.accent } />
+          <ActivityIndicator size="large" color={theme.accent} />
           <Text style={[styles.loadingText, { color: theme.subtext }]}>Loading calendar...</Text>
         </View>
       </SafeAreaView>
@@ -211,227 +368,285 @@ export default function CalendarScreen({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Calendar</Text>
-          <TouchableOpacity style={[styles.todayButton, {
-            backgroundColor: isDarkMode ? 'rgba(167,139,250,0.15)' : '#F3E8FF',
-            borderColor: theme.accent,
-          },]} onPress={goToToday}>
-            <Text style={[styles.todayButtonText, { color: theme.accent }]}>Today</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Month Navigation */}
-        <View style={styles.monthNav}>
-          <TouchableOpacity onPress={goToPrevMonth} style={[styles.navArrow, {
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-            borderWidth: 1,
-          }]}>
-            <Ionicons name="chevron-back" size={22} color= {theme.icon} />
-          </TouchableOpacity>
-          <Text style={[styles.monthText, { color: theme.text }]}>
-            {MONTHS[getMonth()]} {getYear()}
-          </Text>
-          <TouchableOpacity onPress={goToNextMonth} style={[styles.navArrow, {
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-            borderWidth: 1,
-          }]}>
-            <Ionicons name="chevron-forward" size={22} color={theme.icon} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Day Headers */}
-        <View style={styles.dayHeaderRow}>
-          {DAYS.map((day) => (
-            <View key={day} style={styles.dayHeaderCell}>
-              <Text style={[
-                styles.dayHeaderText, { color: theme.text },
-                (day === 'Sun' || day === 'Sat') && { color: theme.text },
-              ]}>
-                {day}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Calendar Grid */}
-        <View style={styles.calendarGrid}>
-          {calendarDays.map((item, index) => {
-            const taskCount = getTaskCountForDate(item.date);
-            const isSelected = isSameDay(item.date, selectedDate);
-            const isTodayDate = isToday(item.date);
-            const highPriority = hasHighPriority(item.date);
-            const dateHasConflict = hasConflictsOnDate(getDateKey(item.date));
-
-            return (
+          <View style={styles.headerActions}>
+            <View style={[styles.viewToggle, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <TouchableOpacity
-                key={index}
-                style={[
-                  styles.dayCell,
-                  isSelected && {backgroundColor: theme.accent},
-                  isTodayDate && !isSelected && {borderWidth: 1.5, borderColor: theme.accent,},
-                ]}
-                onPress={() => setSelectedDate(item.date)}
-                activeOpacity={0.6}
+                style={[styles.viewToggleBtn, viewMode === 'month' && { backgroundColor: theme.accent }]}
+                onPress={() => setViewMode('month')}
               >
-                <Text style={[
-                  styles.dayText, {
-                    color: item.isCurrentMonth ? theme.text : theme.subtext,
-                  },
-                  isSelected && {
-                    color: theme.text,
-                  },
-                  isTodayDate && !isSelected && {
-                    color: theme.accent,
-                  },
-                ]}>
-                  {item.day}
+                <Text style={[styles.viewToggleText, { color: viewMode === 'month' ? '#ffffff' : theme.subtext }]}>
+                  Month
                 </Text>
-
-                {/* Task dots + conflict indicator */}
-                {taskCount > 0 && (
-                  <View style={styles.dotRow}>
-                    {dateHasConflict && (
-                      <View style={[styles.dot, { backgroundColor: '#ef4444', width: 6, height: 6, borderRadius: 3 }]} />
-                    )}
-                    {taskCount >= 1 && !dateHasConflict && (
-                      <View style={[
-                        styles.dot,
-                        { backgroundColor: highPriority ? '#ef4444' : '#d4c9f3' },
-                      ]} />
-                    )}
-                    {taskCount >= 2 && <View style={[styles.dot, { backgroundColor: '#fbbf24' }]} />}
-                    {taskCount >= 3 && <View style={[styles.dot, { backgroundColor: '#34d399' }]} />}
-                  </View>
-                )}
-
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Selected Date Section */}
-        <View style={styles.selectedSection}>
-          <View style={styles.selectedHeader}>
-            <Text style={[styles.selectedDate, { color: theme.text }]}>{formatSelectedDate()}</Text>
-            <Text style={[styles.selectedCount, { color: theme.subtext }]}>
-              {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-
-                    {/* Conflict banner for selected date */}
-          {(() => {
-            const dateConflicts = getConflictsForDate(getDateKey(selectedDate));
-            if (dateConflicts.length === 0) return null;
-
-            const totalConflicts = dateConflicts.reduce(
-              (sum, entry) => sum + entry.conflicts.length,
-              0
-            );
-            const firstTaskTitle = dateConflicts[0]?.task?.title || 'a task';
-
-            return (
-              <View style={[styles.conflictBanner, {
-                backgroundColor: isDarkMode ? 'rgba(239,68,68,0.10)' : '#FEF2F2',
-                borderColor: '#ef4444',
-              }]}>
-                <Ionicons name="alert-circle" size={16} color="#ef4444" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.conflictBannerText, { color: "#ef4444" }]}>
-                    {totalConflicts} conflict{totalConflicts !== 1 ? 's' : ''} on this day
-                  </Text>
-                  <Text style={[styles.conflictBannerSubtext, { color: theme.text }]} numberOfLines={1}>
-                    Starting with "{firstTaskTitle}" — tap a task below to review
-                  </Text>
-                </View>
-              </View>
-            );
-          })()}
-
-
-          {selectedTasks.length === 0 ? (
-            <View style={styles.emptyDay}>
-              <Ionicons name="checkmark-circle-outline" size={40} color= {theme.subtext} />
-              <Text style={[styles.emptyDayText, { color: theme.subtext }]}>No tasks on this day</Text>
               <TouchableOpacity
-                style={styles.addTaskLink}
-                onPress={() => navigation.getParent()?.navigate('AddTask')}
+                style={[styles.viewToggleBtn, viewMode === 'week' && { backgroundColor: theme.accent }]}
+                onPress={() => setViewMode('week')}
               >
-                <Ionicons name="add-circle-outline" size={16} color= {theme.accent} />
-                <Text style={[styles.addTaskLinkText, { color: theme.accent }]}>Add a task</Text>
+                <Text style={[styles.viewToggleText, { color: viewMode === 'week' ? '#ffffff' : theme.subtext }]}>
+                  Week
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            selectedTasks.map((task) => {
-              const catColor = getCategoryColor(task.category);
-              const prioColor = getPriorityColor(task.priorityLabel);
-              const statusColor = getStatusColor(task.progress);
-              const urgency = getDeadlineUrgency(task.deadline);
-              const hasTime = task.deadline && task.deadline.includes('T');
+            <TouchableOpacity
+              style={[styles.todayButton, {
+                backgroundColor: isDarkMode ? 'rgba(167,139,250,0.15)' : '#F3E8FF',
+                borderColor: theme.accent,
+              }]}
+              onPress={goToToday}
+            >
+              <Text style={[styles.todayButtonText, { color: theme.accent }]}>Today</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Month / Week Navigation */}
+        {viewMode === 'month' ? (
+          <View style={styles.monthNav}>
+            <TouchableOpacity onPress={goToPrevMonth} style={[styles.navArrow, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+              <Ionicons name="chevron-back" size={22} color={theme.icon} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setPickerYear(getYear()); setPickerVisible(true); }}>
+              <Text style={[styles.monthText, { color: theme.text }]}>
+                {MONTHS[getMonth()]} {getYear()}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={goToNextMonth} style={[styles.navArrow, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+              <Ionicons name="chevron-forward" size={22} color={theme.icon} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.monthNav}>
+            <TouchableOpacity onPress={goToPrevWeek} style={[styles.navArrow, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+              <Ionicons name="chevron-back" size={22} color={theme.icon} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setPickerYear(weekAnchor.getFullYear()); setPickerVisible(true); }}>
+              <Text style={[styles.monthText, { color: theme.text }]}>
+                {formatWeekRangeLabel(weekAnchor)}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={goToNextWeek} style={[styles.navArrow, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+              <Ionicons name="chevron-forward" size={22} color={theme.icon} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {viewMode === 'month' ? (
+          <>
+            {/* Day Headers */}
+            <View style={styles.dayHeaderRow}>
+              {DAYS.map((day) => (
+                <View key={day} style={styles.dayHeaderCell}>
+                  <Text style={[styles.dayHeaderText, { color: theme.text }]}>{day}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Calendar Grid */}
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((item, index) => {
+                const taskCount = getTaskCountForDate(item.date);
+                const isSelected = isSameDay(item.date, selectedDate);
+                const isTodayDate = isToday(item.date);
+                const highPriority = hasHighPriority(item.date);
+                const dateHasConflict = hasConflictsOnDate(getDateKey(item.date));
+
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.dayCell,
+                      isSelected && { backgroundColor: theme.accent },
+                      isTodayDate && !isSelected && { borderWidth: 1.5, borderColor: theme.accent },
+                    ]}
+                    onPress={() => setSelectedDate(item.date)}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={[
+                      styles.dayText,
+                      { color: item.isCurrentMonth ? theme.text : theme.subtext },
+                      isSelected && { color: theme.text },
+                      isTodayDate && !isSelected && { color: theme.accent },
+                    ]}>
+                      {item.day}
+                    </Text>
+
+                    {taskCount > 0 && (
+                      <Text
+                        style={[
+                          styles.dayTaskCount,
+                          {
+                            color: isSelected
+                              ? theme.text
+                              : dateHasConflict
+                              ? '#ef4444'
+                              : highPriority
+                              ? '#fb923c'
+                              : theme.subtext,
+                          },
+                        ]}
+                      >
+                        {taskCount} task{taskCount !== 1 ? 's' : ''}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Selected Date Section */}
+            <View style={styles.selectedSection}>
+              <View style={styles.selectedHeader}>
+                <Text style={[styles.selectedDate, { color: theme.text }]}>{formatSelectedDate()}</Text>
+                <Text style={[styles.selectedCount, { color: theme.subtext }]}>
+                  {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
+                </Text>
+              </View>
+
+              {(() => {
+                const dateConflicts = getConflictsForDate(getDateKey(selectedDate));
+                if (dateConflicts.length === 0) return null;
+
+                const totalConflicts = dateConflicts.reduce(
+                  (sum, entry) => sum + entry.conflicts.length,
+                  0
+                );
+                const firstTaskTitle = dateConflicts[0]?.task?.title || 'a task';
+
+                return (
+                  <View style={[styles.conflictBanner, {
+                    backgroundColor: isDarkMode ? 'rgba(239,68,68,0.10)' : '#FEF2F2',
+                    borderColor: '#ef4444',
+                  }]}>
+                    <Ionicons name="alert-circle" size={16} color="#ef4444" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.conflictBannerText, { color: '#ef4444' }]}>
+                        {totalConflicts} conflict{totalConflicts !== 1 ? 's' : ''} on this day
+                      </Text>
+                      <Text style={[styles.conflictBannerSubtext, { color: theme.text }]} numberOfLines={1}>
+                        Starting with "{firstTaskTitle}" — tap a task below to review
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {selectedTasks.length === 0 ? (
+                <View style={styles.emptyDay}>
+                  <Ionicons name="checkmark-circle-outline" size={40} color={theme.subtext} />
+                  <Text style={[styles.emptyDayText, { color: theme.subtext }]}>No tasks on this day</Text>
+                  <TouchableOpacity
+                    style={styles.addTaskLink}
+                    onPress={() => navigation.getParent()?.navigate('AddTask')}
+                  >
+                    <Ionicons name="add-circle-outline" size={16} color={theme.accent} />
+                    <Text style={[styles.addTaskLinkText, { color: theme.accent }]}>Add a task</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                selectedTasks.map(renderTaskCard)
+              )}
+            </View>
+          </>
+        ) : (
+          /* Week View */
+          <View style={styles.weekContainer}>
+            {getWeekDays(weekAnchor).map((date) => {
+              const dayTasks = getTasksForDate(date).sort((a, b) => b.priorityScore - a.priorityScore);
+              const dateConflicts = getConflictsForDate(getDateKey(date));
+              const totalConflicts = dateConflicts.reduce((sum, entry) => sum + entry.conflicts.length, 0);
+              const todayDate = isToday(date);
 
               return (
-                <TouchableOpacity
-                  key={task.id}
-                  style={[styles.taskCard, { borderLeftColor: catColor, backgroundColor: theme.card, borderColor: theme.border }]}
-                  onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.taskTopRow}>
-                    <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>{task.title}</Text>
-                    <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
-                      <Text style={[styles.prioText, { color: prioColor }]}>
-                        {task.priorityLabel}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {task.description ? (
-                    <Text style={[styles.taskDesc, { color: theme.subtext }]} numberOfLines={1}>{task.description}</Text>
-                  ) : null}
-
-                  <View style={styles.taskMetaRow}>
-                    <View style={[styles.categoryChip, { backgroundColor: `${catColor}20` }]}>
-                      <View style={[styles.categoryDot, { backgroundColor: catColor }]} />
-                      <Text style={[styles.categoryText, { color: catColor }]}>
-                        {task.category}
-                      </Text>
-                    </View>
-
-                    <View style={styles.statusChip}>
-                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                      <Text style={[styles.statusText, { color: theme.subtext}]}>{getStatusLabel(task.progress)}</Text>
-                    </View>
-
-                    {hasTime && (
-                      <View style={styles.timeChip}>
-                        <Ionicons name="time-outline" size={11} color={theme.subtext} />
-                        <Text style={[styles.timeText, { color:theme.subtext}]}>
-                          {new Date(task.deadline).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true,
-                          })}
+                <View key={date.toISOString()} style={styles.weekDaySection}>
+                  <View style={styles.weekDayHeader}>
+                    <Text style={[styles.weekDayName, { color: todayDate ? theme.accent : theme.text }]}>
+                      {date.toLocaleDateString('en-US', { weekday: 'long' })}
+                    </Text>
+                    <Text style={[styles.weekDayNum, { color: todayDate ? theme.accent : theme.subtext }]}>
+                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </Text>
+                    {totalConflicts > 0 && (
+                      <View style={styles.weekConflictTag}>
+                        <Ionicons name="alert-circle" size={12} color="#ef4444" />
+                        <Text style={styles.weekConflictTagText}>
+                          {totalConflicts} conflict{totalConflicts !== 1 ? 's' : ''}
                         </Text>
                       </View>
                     )}
                   </View>
 
-                  {urgency && (
-                    <View style={[styles.urgencyBanner, { backgroundColor: `${urgency.color}15` }]}>
-                      <Ionicons name="alert-circle" size={13} color={urgency.color} />
-                      <Text style={[styles.urgencyText, { color: urgency.color }]}>
-                        {urgency.text}
-                      </Text>
-                    </View>
+                  {dayTasks.length === 0 ? (
+                    <Text style={[styles.weekEmptyText, { color: theme.subtext }]}>No tasks</Text>
+                  ) : (
+                    dayTasks.map(renderTaskCard)
                   )}
-                </TouchableOpacity>
+                </View>
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* Month / Year Picker */}
+      <Modal
+        visible={pickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerVisible(false)}
+      >
+        <TouchableOpacity style={styles.pickerBackdrop} activeOpacity={1} onPress={() => setPickerVisible(false)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.pickerSheet, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onPress={() => {}}
+          >
+            <View style={styles.pickerYearRow}>
+              <TouchableOpacity
+                onPress={() => setPickerYear((y) => y - 1)}
+                style={[styles.navArrow, { backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }]}
+              >
+                <Ionicons name="chevron-back" size={20} color={theme.icon} />
+              </TouchableOpacity>
+              <Text style={[styles.pickerYearText, { color: theme.text }]}>{pickerYear}</Text>
+              <TouchableOpacity
+                onPress={() => setPickerYear((y) => y + 1)}
+                style={[styles.navArrow, { backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1 }]}
+              >
+                <Ionicons name="chevron-forward" size={20} color={theme.icon} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerMonthGrid}>
+              {MONTHS.map((m, idx) => {
+                const isActive = viewMode === 'month'
+                  ? idx === getMonth() && pickerYear === getYear()
+                  : idx === weekAnchor.getMonth() && pickerYear === weekAnchor.getFullYear();
+
+                return (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.pickerMonthCell, isActive && { backgroundColor: theme.accent }]}
+                    onPress={() => {
+                      if (viewMode === 'month') {
+                        setCurrentDate(new Date(pickerYear, idx, 1));
+                      } else {
+                        setWeekAnchor(new Date(pickerYear, idx, 1));
+                      }
+                      setPickerVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.pickerMonthText, { color: isActive ? '#ffffff' : theme.text }]}>
+                      {m.slice(0, 3)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -470,6 +685,26 @@ const styles = StyleSheet.create({
     fontSize: 28, 
     fontWeight: 'bold', 
     color: '#ffffff' 
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 2,
+  },
+  viewToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  viewToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   todayButton: {
     paddingHorizontal: 14,
@@ -533,7 +768,7 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: '14.28%',
-    aspectRatio: 1,
+    aspectRatio: 0.85,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
@@ -562,7 +797,14 @@ const styles = StyleSheet.create({
     fontWeight: '700' 
   },
 
-  // Dots
+  // Day task-count text (replaces the old dots)
+  dayTaskCount: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+
+  // Dots (unused, kept for reference)
   dotRow: { 
     flexDirection: 'row', 
     gap: 3, 
@@ -679,6 +921,20 @@ const styles = StyleSheet.create({
     fontSize: 11, 
     fontWeight: '600' 
   },
+  teamTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  teamTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#a78bfa',
+  },
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -726,7 +982,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-
   // Urgency banner
   urgencyBanner: {
     flexDirection: 'row',
@@ -740,5 +995,87 @@ const styles = StyleSheet.create({
   urgencyText: { 
     fontSize: 11, 
     fontWeight: '600' 
+  },
+
+  // Month/Year picker modal
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  pickerSheet: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+  },
+  pickerYearRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pickerYearText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  pickerMonthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  pickerMonthCell: {
+    width: '25%',
+    aspectRatio: 1.4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  pickerMonthText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Week view
+  weekContainer: {
+    marginTop: 4,
+  },
+  weekDaySection: {
+    marginBottom: 20,
+  },
+  weekDayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  weekDayName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  weekDayNum: {
+    fontSize: 13,
+  },
+  weekConflictTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 'auto',
+  },
+  weekConflictTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
+  weekEmptyText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingVertical: 8,
   },
 });
