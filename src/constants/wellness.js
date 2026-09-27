@@ -55,6 +55,19 @@ export const WELLNESS_THRESHOLDS = {
     RISK: 28,
 };
 
+// School Guidance Counseling Office contact info.
+// PLACEHOLDERS — do not ship with these values. Replace every field with
+// details confirmed directly by the actual STI College Sta. Maria Guidance
+// Counseling Office, and confirm with them first that they're aware
+// students may be referred here. Never fabricate or guess a real
+// institution's contact details.
+export const GUIDANCE_OFFICE = {
+    name: 'STI College Sta. Maria Guidance Counseling Office',
+    email: '@stamaria.sti.edu.ph',
+    location: 'TBA',
+    hours: 'TBA',
+};
+
 export const getWellnessStatus = (percentage) => {
   if (percentage >= WELLNESS_THRESHOLDS.POSITIVE) {
     return {
@@ -108,6 +121,12 @@ export const getInterventions = (percentage, taskCount = 0, conflictCount = 0) =
         icon: 'leaf-outline',
         title: 'Take a Break',
         text: 'Short breaks improve focus and mood. Try a 10-minute walk or breathing exercise.',
+        });
+        interventions.push({
+        icon: 'school-outline',
+        title: 'Talk to the Guidance Office',
+        text: `${GUIDANCE_OFFICE.name} offers confidential support for students. Reaching out is entirely your choice — this app never shares your score with them automatically.`,
+        contact: GUIDANCE_OFFICE,
         });
        }
 
