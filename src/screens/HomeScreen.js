@@ -454,13 +454,11 @@ export default function HomeScreen({ navigation }) {
 
             {todaysFocus.map((task, index) => {
               const urgency = getDeadlineUrgency(task.deadline);
-              const catColor = getCategoryColor(task.category);
               // Falls back to the raw label for urgent tasks and anything
               // without an adjustment — this only changes for rest-bucket
               // tasks that were actually boosted/de-emphasized.
               const effectiveLabel = task.adjustedLabel ?? task.priorityLabel;
               const prioColor = getPriorityColor(effectiveLabel);
-              const breakdown = getPriorityBreakdown(task);
 
               return (
                 <TouchableOpacity
@@ -475,10 +473,14 @@ export default function HomeScreen({ navigation }) {
 
                   <View style={styles.focusContent}>
                     <View style={styles.focusTitleContainer}>
-                      <Text style={[styles.focusTaskTitle, { color: theme.text}]} numberOfLines={1}>
-                      {/* </Text><Text style={styles.focusTaskTitle} numberOfLines={1}> */}
-                        {task.title}
-                      </Text>
+                      <View style={styles.focusTitleRow}>
+                        {task.isTeamTask && (
+                          <Ionicons name="people-outline" size={13} color={theme.subtext} style={{ marginRight: 5 }} />
+                        )}
+                        <Text style={[styles.focusTaskTitle, { color: theme.text}]} numberOfLines={1}>
+                          {task.title}
+                        </Text>
+                      </View>
                       <TouchableOpacity
                         onPress={(e) => {
                           e.stopPropagation?.();
@@ -499,49 +501,15 @@ export default function HomeScreen({ navigation }) {
                       </TouchableOpacity>
                     </View>
 
-
-                    <View style={styles.focusTagsRow}>
-                      <View style={[styles.focusCategoryTag, { backgroundColor: `${catColor}20` }]}>
-                        <View style={[styles.focusCategoryDot, { backgroundColor: catColor }]} />
-                        <Text style={[styles.focusCategoryText, { color: catColor }]}>
-                          {task.category}
-                        </Text>
-                      </View>
-                      {task.isTeamTask && (
-                        <View style={styles.focusTeamTag}>
-                          <Ionicons name="people-outline" size={10} color="#a78bfa" />
-                          <Text style={styles.focusTeamTagText}>
-                            {task.assignedByName ? `From ${task.assignedByName}` : 'Team task'}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.focusDeadlineTag}>
-                        <Ionicons name="time-outline" size={11} color={urgency.color} />
-                        <Text style={[styles.focusDeadlineText, { color: urgency.color }]}>
-                            {urgency.text}
-                            {task.deadline && task.deadline.includes('T')
-                            ? ` at ${new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
-                            : ''}
-                        </Text>
-                      </View>
-
-
-                    </View>
- 
-                    {/* <Text style={styles.focusReason}> */}
-                    <Text style={[styles.focusReason, { color: theme.subtext }]}> 
-                      {breakdown.factors
-                        .sort((a, b) => b.score - a.score)
-                        .slice(0, 2)
-                        .map(f => `${f.label}: ${f.reason} (${f.score}pts)`)
-                        .join('  ·  ')}
+                    {/* Plain, uncolored deadline text — priority already carries
+                        the color signal (deadline proximity is one of its three
+                        inputs), so a second red/amber here was redundant. */}
+                    <Text style={[styles.focusDeadlineText, { color: theme.subtext }]}>
+                      {urgency.text}
+                      {task.deadline && task.deadline.includes('T')
+                        ? ` at ${new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+                        : ''}
                     </Text>
-                    {!!task.wellnessDelta && (
-                      <Text style={[styles.focusWellnessNote, { color: theme.accent }]}>
-                        Wellness: {task.wellnessDelta > 0 ? '+' : ''}{task.wellnessDelta}pts
-                        {task.wellnessDelta > 0 ? ' (surfaced for self-care)' : ' (de-emphasized, not urgent)'}
-                      </Text>
-                    )}
 
                     <View style={styles.focusProgressRow}>
                       <View style={[styles.focusProgressBg, { backgroundColor: theme.border},]}>
@@ -1051,7 +1019,8 @@ export default function HomeScreen({ navigation }) {
   focusTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
+    gap: 4,
   },
   focusSectionTitle: {
     fontSize: 18,
@@ -1163,6 +1132,7 @@ export default function HomeScreen({ navigation }) {
   focusDeadlineText: {
     fontSize: 11,
     fontWeight: '500',
+    marginBottom: 8,
   },
   focusReason: {
     fontSize: 11,

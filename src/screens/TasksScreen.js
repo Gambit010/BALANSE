@@ -256,19 +256,17 @@ export default function TasksScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TASK LIST */}
+          {/* TASK LIST */}
         {filteredTasks.map((task) => {
   return (
     <TouchableOpacity
       key={task.id}
-      // style={styles.taskCard} 
       style={[ styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]}
       onPress={() => setActionTask(task)}
       activeOpacity={0.7}
     >
       {/* Top Row - Title + Priority */}
       <View style={styles.taskTopRow}>
-        {/* <Text style={styles.taskTitle} numberOfLines={1}> */}
         <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
           {task.title}
         </Text>
@@ -289,43 +287,19 @@ export default function TasksScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Description */}
-      {task.description ? (
-        // <Text style={styles.taskDescription} numberOfLines={2}>
-        <Text style={[styles.taskDescription, { color: theme.subtext },]} numberOfLines={2}>
-          {task.description}
-        </Text>
-      ) : null}
-
-      {/* Mid Row - Category, Status, Deadline */}
-      <View style={styles.taskMidRow}>
-        <View style={styles.taskMeta}>
-          <View style={styles.metaChip}>
-            <Ionicons name="folder-outline" size={11} color={theme.subtext} />
-            {/*<Text style={styles.metaText}>{task.category}</Text>*/}
-            <Text style={[styles.metaText, { color: theme.subtext }]}>{task.category}</Text>
-          </View>
-          <View style={[styles.metaChip, { borderColor: `${getEffectiveStatusColor(task)}40` }]}>
-            <View style={[styles.statusDot, { backgroundColor: getEffectiveStatusColor(task) }]} />
-            <Text style={[styles.metaText, { color: theme.subtext }]}>{getEffectiveStatusLabel(task)}</Text>
-          </View>
-        </View>
-        <View style={styles.taskDeadline}>
-          <Ionicons name="calendar-outline" size={11} color={theme.subtext} />
-          {/* <Text style={styles.taskDeadlineText}> */}
-          <Text style={[ styles.taskDeadlineText, { color: theme.subtext }, ]} >
-              {task.deadline && task.deadline.includes('T')
-              ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-              : task.deadline}
-          </Text>
-        </View>
-
-      </View>
+      {/* Plain, uncolored deadline text — priority already carries the color
+          signal, so a colored deadline/category/status row was redundant.
+          Category, status, and description are still one tap away via the
+          action sheet, the priority breakdown, and Edit Details. */}
+      <Text style={[styles.taskDeadlineText, { color: theme.subtext }]}>
+        {task.deadline && task.deadline.includes('T')
+          ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          : task.deadline}
+      </Text>
 
       {/* Progress Bar */}
       <View style={[styles.taskProgressBg, { backgroundColor: theme.border},]}>
-      {/* <View style={styles.taskProgressBg}> */}
         <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
       </View>
 
@@ -580,7 +554,7 @@ const styles = StyleSheet.create({
   },
   taskDeadlineText: {
     fontSize: 11,
-    // color: 'rgba(255,255,255,0.4)',
+    marginBottom: 10,
   },
   taskProgressBg: {
     height: 4,

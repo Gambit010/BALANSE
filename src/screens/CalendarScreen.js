@@ -295,68 +295,39 @@ export default function CalendarScreen({ navigation }) {
   // ─── Shared task card renderer (Month's selected-day list AND Week view) ───
 
   const renderTaskCard = (task) => {
-    const catColor = getCategoryColor(task.category);
     const prioColor = getPriorityColor(task.priorityLabel);
-    const statusColor = getEffectiveStatusColor(task);
     const urgency = isElapsedClass(task) ? null : getDeadlineUrgency(task.deadline);
     const hasTime = task.deadline && task.deadline.includes('T');
+    const elapsed = isElapsedClass(task);
 
     return (
       <TouchableOpacity
         key={task.id}
-        style={[styles.taskCard, { borderLeftColor: catColor, backgroundColor: theme.card, borderColor: theme.border }]}
+        style={[styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 1 }]}
         onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
         activeOpacity={0.7}
       >
         <View style={styles.taskTopRow}>
-          <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>{task.title}</Text>
+          <View style={styles.taskTitleRow}>
+            {task.isTeamTask && (
+              <Ionicons name="people-outline" size={13} color={theme.subtext} style={{ marginRight: 5 }} />
+            )}
+            <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>{task.title}</Text>
+          </View>
           <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
             <Text style={[styles.prioText, { color: prioColor }]}>{task.priorityLabel}</Text>
           </View>
         </View>
 
-        {task.description ? (
-          <Text style={[styles.taskDesc, { color: theme.subtext }]} numberOfLines={1}>{task.description}</Text>
-        ) : null}
-
-        <View style={styles.taskMetaRow}>
-          <View style={[styles.categoryChip, { backgroundColor: `${catColor}20` }]}>
-            <View style={[styles.categoryDot, { backgroundColor: catColor }]} />
-            <Text style={[styles.categoryText, { color: catColor }]}>{task.category}</Text>
-          </View>
-
-          {task.isTeamTask && (
-            <View style={styles.teamTag}>
-              <Ionicons name="people-outline" size={10} color="#a78bfa" />
-              <Text style={styles.teamTagText}>Team</Text>
-            </View>
-          )}
-
-          <View style={styles.statusChip}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: theme.subtext }]}>{getEffectiveStatusLabel(task)}</Text>
-          </View>
-
-          {hasTime && (
-            <View style={styles.timeChip}>
-              <Ionicons name="time-outline" size={11} color={theme.subtext} />
-              <Text style={[styles.timeText, { color: theme.subtext }]}>
-                {new Date(task.deadline).toLocaleTimeString('en-US', {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true,
-                })}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {urgency && (
-          <View style={[styles.urgencyBanner, { backgroundColor: `${urgency.color}15` }]}>
-            <Ionicons name="alert-circle" size={13} color={urgency.color} />
-            <Text style={[styles.urgencyText, { color: urgency.color }]}>{urgency.text}</Text>
-          </View>
-        )}
+        {/* Plain, uncolored deadline/time text — the day is already implied
+            by which day-section this card sits under (Month's selected date
+            or Week's per-day group), so only the time (or urgency wording
+            for date-only tasks) needs to show here. */}
+        <Text style={[styles.taskDesc, { color: theme.subtext }]}>
+          {elapsed ? 'Done' : hasTime
+            ? new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+            : urgency?.text || 'All day'}
+        </Text>
       </TouchableOpacity>
     );
   };
@@ -888,6 +859,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
+  },
+  taskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   taskTitle: {
     fontSize: 14,
