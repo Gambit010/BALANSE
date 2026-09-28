@@ -63,9 +63,9 @@ export const WELLNESS_THRESHOLDS = {
 // institution's contact details.
 export const GUIDANCE_OFFICE = {
     name: 'STI College Sta. Maria Guidance Counseling Office',
-    email: '@stamaria.sti.edu.ph',
-    location: 'TBA',
-    hours: 'TBA',
+    email: 'calderon.350958@stamaria.sti.edu.ph',
+    location: 'GCO',
+    hours: '8:00 AM to 5:00 PM',
 };
 
 export const getWellnessStatus = (percentage) => {

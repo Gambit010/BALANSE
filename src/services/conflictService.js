@@ -357,7 +357,7 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
  */
 export const detectAllConflicts = (tasks) => {
   const conflictMap = new Map();
-  const activeTasks = tasks.filter((t) => t.progress !== 100 && !isElapsedClass(t));
+  const activeTasks = tasks.filter((t) => t.progress !== 100 && !isElapsedClass(t));  
 
   for (let i = 0; i < activeTasks.length; i++) {
     const task = activeTasks[i];
