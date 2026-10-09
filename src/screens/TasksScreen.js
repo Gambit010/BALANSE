@@ -20,15 +20,30 @@ import TaskActionModal from '../components/TaskActionModal';
 import { deleteTask, updateTaskProgress, updateTask } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { isElapsedClass } from '../services/conflictService';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import UndoToast from '../components/UndoToast';
+
 
 export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
-  const { theme } = useTheme(); // for dark mode
+  const { theme, isDarkMode } = useTheme(); // for dark mode
+
+  // Declared before visibleTasks, which hides the pending item.
+  const { pendingDelete, scheduleDelete, undoDelete } = useUndoDelete(async (t) => {
+    const success = await deleteTask(t.id);
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', `Failed to delete "${t.title}".`);
+    }
+  });
   const sevenDaysFromNow = new Date();
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
   sevenDaysFromNow.setHours(23, 59, 59, 999);
 
   const visibleTasks = tasks.filter((t) => {
+    if (pendingDelete && t.id === pendingDelete.id) return false;
     if (!t.recurrence?.isClassSchedule) return true;
     if (!t.deadline) return false;
     const dl = new Date(t.deadline);
@@ -115,27 +130,7 @@ export default function TasksScreen({ navigation, route }) {
     }
   };
 
-  const handleDelete = (taskId, taskTitle) => {
-    Alert.alert(
-      'Delete Task',
-      `Are you sure you want to delete "${taskTitle}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await deleteTask(taskId);
-            if (success) {
-              refetch();
-            } else {
-              Alert.alert('Error', 'Failed to delete task.');
-            }
-          },
-        },
-      ]
-    );
-  };
+;
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -379,7 +374,7 @@ export default function TasksScreen({ navigation, route }) {
         onDelete={() => {
           const t = actionTask;
           setActionTask(null);
-          handleDelete(t.id, t.title);
+          scheduleDelete(t);
         }}
       />
 
@@ -397,6 +392,10 @@ export default function TasksScreen({ navigation, route }) {
             }
           }}
         />
+      )}
+
+      {pendingDelete && (
+        <UndoToast key={pendingDelete.id} onUndo={undoDelete} isDarkMode={isDarkMode} />
       )}
 
       {/* Floating Add Button */}
@@ -645,6 +644,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   addButton: {
     position: 'absolute',
     bottom: 20,

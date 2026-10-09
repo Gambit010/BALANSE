@@ -21,18 +21,32 @@ import { updateTaskProgress, deleteTask } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import TaskActionModal from '../components/TaskActionModal';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import UndoToast from '../components/UndoToast';
 import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
 import { useWellness } from '../hooks/useWellness';
 import { getWellnessThrottleAdvice } from '../constants/wellness';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
+
+  // Declared before regularTasks/todaysFocus, which hide the pending item.
+  // Team tasks and personal tasks live in different collections.
+  const { pendingDelete, scheduleDelete, undoDelete } = useUndoDelete(async (t) => {
+    const success = t.isTeamTask ? await deleteBoardTask(t.id) : await deleteTask(t.id);
+    if (success) {
+      await Promise.all([refetch(), fetchTeamTasks()]);
+    } else {
+      Alert.alert('Error', `Failed to delete "${t.title}".`);
+    }
+  });
+
   const regularTasks = useMemo(
-    () => tasks.filter(t => !t.recurrence?.isClassSchedule),
-    [tasks]
+    () => tasks.filter(t => !t.recurrence?.isClassSchedule && t.id !== pendingDelete?.id),
+    [tasks, pendingDelete]
   );
   const { latestScore, latestStatus } = useWellness();
-  const { theme } = useTheme(); // for dark mode
+  const { theme, isDarkMode } = useTheme(); // for dark mode
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -151,7 +165,7 @@ export default function HomeScreen({ navigation }) {
   const todaysFocus = useMemo(() => {
     const incomplete = [
       ...regularTasks.filter(task => task.progress < 100),
-      ...teamAssignedTasks,
+      ...teamAssignedTasks.filter(t => t.id !== pendingDelete?.id),
     ];
 
     const startOfToday = new Date();
@@ -192,7 +206,7 @@ export default function HomeScreen({ navigation }) {
       .sort((a, b) => b.adjustedScore - a.adjustedScore);
 
     return [...urgent, ...rest].slice(0, 5);
-  }, [regularTasks, teamAssignedTasks, wellnessPercentage]);
+  }, [regularTasks, teamAssignedTasks, wellnessPercentage, pendingDelete]);
 
   const throttleAdvice = useMemo(
     () => getWellnessThrottleAdvice(wellnessPercentage, regularTasks),
@@ -630,30 +644,13 @@ export default function HomeScreen({ navigation }) {
         onDelete={() => {
           const t = actionTask;
           setActionTask(null);
-          if (!t) return;
-          Alert.alert(
-            'Delete Task',
-            `Are you sure you want to delete "${t.title}"?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                  const success = t.isTeamTask
-                    ? await deleteBoardTask(t.id)
-                    : await deleteTask(t.id);
-                  if (success) {
-                    await Promise.all([refetch(), fetchTeamTasks()]);
-                  } else {
-                    Alert.alert('Error', 'Failed to delete task.');
-                  }
-                },
-              },
-            ]
-          );   
+          if (t) scheduleDelete(t);
         }}
       />
+      {pendingDelete && (
+        <UndoToast key={pendingDelete.id} onUndo={undoDelete} isDarkMode={isDarkMode} />
+      )}
+
       {/* Floating Add button */}
       <TouchableOpacity
         style={styles.addButton}

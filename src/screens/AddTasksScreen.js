@@ -16,6 +16,9 @@ import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 
+// Unfinished High-priority tasks already due that week before we warn.
+const WORKLOAD_WARNING_THRESHOLD = 3;
+
 export default function AddTaskScreen({ navigation }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -55,6 +58,24 @@ export default function AddTaskScreen({ navigation }) {
   }), [category, priority, deadline, hasTime]);
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
+
+  // Same Sun–Sat week the Calendar's Week view uses.
+  const weekWorkload = useMemo(() => {
+    if (isRepeat) return null;
+    const weekStart = new Date(deadline);
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const highCount = existingTasks.filter((t) => {
+      if (t.progress === 100 || t.recurrence?.isClassSchedule || t.priorityLabel !== 'High' || !t.deadline) return false;
+      const d = new Date(t.deadline);
+      return d >= weekStart && d < weekEnd;
+    }).length;
+
+    return { highCount, weekStart };
+  }, [existingTasks, deadline, isRepeat]);
 
   const handleApplySuggestion = (slot) => {
     if (slot.type === 'time') {
@@ -587,6 +608,17 @@ export default function AddTaskScreen({ navigation }) {
           </>
         )}
 
+        {weekWorkload && weekWorkload.highCount >= WORKLOAD_WARNING_THRESHOLD && (
+          <View style={[styles.workloadBanner, { backgroundColor: theme.card, borderColor: '#fb923c' }]}>
+            <Ionicons name="alert-circle-outline" size={18} color="#fb923c" />
+            <Text style={[styles.workloadText, { color: theme.text }]}>
+              You already have {weekWorkload.highCount} High-priority tasks due the week of{' '}
+              {weekWorkload.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.
+              Worth checking if this one can wait.
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
           onPress={handleSubmit} disabled={isLoading}>
@@ -708,6 +740,20 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: { 
     opacity: 0.6 
+  },
+  workloadBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+  },
+  workloadText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
   submitButtonText: { 
     color: '#ffffff', 
