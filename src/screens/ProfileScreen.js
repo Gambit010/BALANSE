@@ -12,13 +12,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
-import { useTheme } from '../context/ThemeContext'; // for global dark mode
+import { useTheme } from '../context/ThemeContext'; // for global dark mode 
+import { getNotificationsEnabled, setNotificationsEnabled } from '../services/pushNotificationServices';
 
 export default function ProfileScreen({ navigation }) {
   //const [darkMode, setDarkMode] = useState(false);
   const { isDarkMode, toggleDarkMode, theme } = useTheme(); // this replace the code above 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const { tasks } = useTasks();
+
+  useEffect(() => {
+    getNotificationsEnabled().then(setNotificationsEnabledState);
+  }, []);
+
+  const toggleNotifications = async (value) => {
+    setNotificationsEnabledState(value);
+    await setNotificationsEnabled(value);
+  };
 
   const [userName, setUserName] = useState('Student');
   const [userEmail, setUserEmail] = useState('');
@@ -144,7 +154,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={toggleNotifications}
               trackColor={{ false: theme.border, true: '#7c3aed' }}
               thumbColor={notificationsEnabled ? '#ffffff' : '#64748b'}
             />

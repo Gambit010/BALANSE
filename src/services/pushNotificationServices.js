@@ -19,6 +19,25 @@ Notifications.setNotificationHandler({
 });
 
 const SCHEDULED_MAP_KEY = 'balanse_scheduled_notifications'; // { [taskId]: notificationId }
+const NOTIFICATIONS_ENABLED_KEY = 'balanse_notifications_enabled';
+
+/** Whether this device should fire local notifications. Defaults to enabled. */
+export const getNotificationsEnabled = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
+    return raw === null ? true : raw === 'true';
+  } catch {
+    return true;
+  }
+};
+
+export const setNotificationsEnabled = async (enabled) => {
+  try {
+    await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, String(enabled));
+  } catch (error) {
+    console.error('Error persisting notification preference:', error);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Permissions + push token registration
@@ -144,6 +163,7 @@ export const sendPushToToken = async (expoPushToken, title, body, data = {}) => 
  * Use for events detected while the app is open: conflicts, wellness status.
  */
 export const sendImmediateNotification = async (title, body, data = {}) => {
+  if (!(await getNotificationsEnabled())) return false;
   try {
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data, sound: true },
@@ -191,6 +211,7 @@ const REMINDER_MINUTE = 0;
  */
 export const scheduleDeadlineReminder = async (task) => {
   if (!task?.id || !task?.deadline) return null;
+  if (!(await getNotificationsEnabled())) return null;
 
   await cancelDeadlineReminder(task.id);
 
