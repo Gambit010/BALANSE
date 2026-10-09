@@ -14,6 +14,7 @@ import { useTasks } from '../hooks/useTasks';
 import { useAllConflicts } from '../hooks/useConflicts';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { auth } from '../../firebase';
 import { getMyAssignedBoardTasks } from '../services/teamService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
@@ -87,6 +88,17 @@ export default function CalendarScreen({ navigation }) {
     const next = new Date(getYear(), getMonth() + 1, 1);
     setCurrentDate(next);
   };
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-15, 15])
+    .onEnd((event) => {
+      if (event.translationX < -50) {
+        viewMode === 'month' ? goToNextMonth() : goToNextWeek();
+      } else if (event.translationX > 50) {
+        viewMode === 'month' ? goToPrevMonth() : goToPrevWeek();
+      }
+    });
 
   const goToToday = () => {
     const today = new Date();
@@ -418,6 +430,8 @@ export default function CalendarScreen({ navigation }) {
 
         {viewMode === 'month' ? (
           <>
+          <GestureDetector gesture={swipeGesture}>
+          <View>
             {/* Day Headers */}
             <View style={styles.dayHeaderRow}>
               {DAYS.map((day) => (
@@ -479,6 +493,9 @@ export default function CalendarScreen({ navigation }) {
               })}
             </View>
 
+          </View>
+          </GestureDetector>
+
             {/* Selected Date Section */}
             <View style={styles.selectedSection}>
               <View style={styles.selectedHeader}>
@@ -535,6 +552,7 @@ export default function CalendarScreen({ navigation }) {
           </>
         ) : (
           /* Week View */
+          <GestureDetector gesture={swipeGesture}>
           <View style={styles.weekContainer}>
             {getWeekDays(weekAnchor).map((date) => {
               const dayTasks = getTasksForDate(date).sort((a, b) => b.priorityScore - a.priorityScore);
@@ -570,6 +588,7 @@ export default function CalendarScreen({ navigation }) {
               );
             })}
           </View>
+          </GestureDetector>
         )}
 
         <View style={{ height: 30 }} />

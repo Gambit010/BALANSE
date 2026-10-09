@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { auth } from '../../firebase';
-import { getAssignedTasks, updateTaskStatus } from '../services/taskService';
+import { getMyAssignedBoardTasks, getTeam, updateBoardTaskProgress, statusFromProgress } from '../services/teamService';
 import { useTheme } from '../context/ThemeContext';
 
 const StatusBadge = ({ status }) => {
@@ -39,8 +39,9 @@ export default function MyAssignmentsScreen({ navigation }) {
       setLoading(true);
       console.log("Fetching tasks for:", currentUser.uid); // Debug log
       
-      const data = await getAssignedTasks(currentUser.uid);
-      
+      const raw = await getMyAssignedBoardTasks(currentUser.uid);
+      const data = raw.map((t) => ({ ...t, status: statusFromProgress(t.progress) }));
+
       console.log("Found tasks:", data.length); // Debug log
 
       // Sort: In Progress first, then To Do, then Done
@@ -58,8 +59,20 @@ export default function MyAssignmentsScreen({ navigation }) {
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchTasks();
+    }, [])
+  );
+
   const handleStatusChange = async (task, newStatus) => {
-    const success = await updateTaskStatus(task.id, newStatus);
+    const team = await getTeam(task.teamId);
+    if (!team) {
+      Alert.alert('Error', "Could not find this task's team.");
+      return;
+    }
+    const newProgress = newStatus === 'done' ? 100 : newStatus === 'in-progress' ? 50 : 0;
+    const success = await updateBoardTaskProgress(team, task, newProgress, currentUser);
     if (success) {
       fetchTasks(); // Refresh list
     } else {

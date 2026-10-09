@@ -55,6 +55,7 @@ export default function WellnessScreen() {
   const [result, setResult] = useState(null);
   const [hasConsented, setHasConsented] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
+  const [consentPurpose, setConsentPurpose] = useState('gate'); // 'gate' | 'review'
   const [showAllHistory, setShowAllHistory] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const { theme, isDarkMode } = useTheme(); // for dark mode
@@ -73,6 +74,7 @@ export default function WellnessScreen() {
 
   const startAssessment = () => {
     if (!hasConsented) {
+      setConsentPurpose('gate');
       setShowConsent(true);
       return;
     }
@@ -94,6 +96,24 @@ export default function WellnessScreen() {
     setCurrentQuestion(0);
     setResult(null);
     setShowQuestionnaire(true);
+  };
+
+  const openConsentReview = () => {
+    setConsentPurpose('review');
+    setShowConsent(true);
+  };
+
+  // Withdrawal only stops future assessments from skipping the consent gate —
+  // it does not touch already-saved history. Deleting past data is a
+  // separate decision/feature, not folded into "withdraw consent" here.
+  const withdrawConsent = async () => {
+    try {
+      await AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed to clear wellness consent:', e);
+    }
+    setHasConsented(false);
+    setShowConsent(false);
   };
 
   const selectAnswer = (questionId, value) => {
@@ -255,6 +275,11 @@ export default function WellnessScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Well-being</Text>
           <Text style={[styles.subtitle, { color: theme.subtext }]}>WHO-5 Well-Being Index</Text>
+          {hasConsented && (
+            <TouchableOpacity onPress={openConsentReview} style={styles.reviewConsentLink}>
+              <Text style={[styles.reviewConsentText, { color: theme.accent }]}>Review Consent</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Always-visible Guidance Office access — not tied to score, since
@@ -494,7 +519,9 @@ export default function WellnessScreen() {
       <Modal visible={showConsent} transparent animationType="fade" onRequestClose={() => setShowConsent(false)}>
         <View style={styles.consentBackdrop}>
           <View style={[styles.consentSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.consentTitle, { color: theme.text }]}>Before You Begin</Text>
+            <Text style={[styles.consentTitle, { color: theme.text }]}>
+              {consentPurpose === 'review' ? 'Your Consent' : 'Before You Begin'}
+            </Text>
 
             <ScrollView style={styles.consentScroll} showsVerticalScrollIndicator={false}>
               <Text style={[styles.consentText, { color: theme.text }]}>
@@ -504,19 +531,32 @@ export default function WellnessScreen() {
                 • Recommendations shown here (breathing exercises, sleep tips, resource links) are general guidance, not emergency care. If you are in crisis or immediate danger, contact emergency services or a crisis hotline directly — do not rely on this app.
               </Text>
               <Text style={[styles.consentText, { color: theme.text }]}>
-                • Your responses are saved to your account so you can track your own trends over time. They are not shared with the Guidance Counseling Office, your organization, or anyone else automatically.
+                • Your responses are saved to your account so you can track your own trends over time. BALANSE has no reporting feature of its own and nothing is sent anywhere unless you choose to reach out yourself using the referral option on this screen. Keep in mind that reaching out this way may itself suggest to Guidance Office staff that you're going through something, even though your actual score is never included in the message.
               </Text>
               <Text style={[styles.consentText, { color: theme.text }]}>
                 • If a recommendation suggests contacting the Guidance Counseling Office or an outside resource, reaching out is entirely your choice — tapping a link or contact only opens it for you; it does not notify anyone on its own.
               </Text>
             </ScrollView>
 
-            <TouchableOpacity style={[styles.consentAcceptBtn, { backgroundColor: theme.accent }]} onPress={acceptConsent}>
-              <Text style={styles.consentAcceptText}>I Understand & Agree</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.consentDeclineBtn} onPress={() => setShowConsent(false)}>
-              <Text style={[styles.consentDeclineText, { color: theme.subtext }]}>Not Now</Text>
-            </TouchableOpacity>
+            {consentPurpose === 'review' ? (
+              <>
+                <TouchableOpacity style={[styles.consentAcceptBtn, { backgroundColor: theme.accent }]} onPress={() => setShowConsent(false)}>
+                  <Text style={styles.consentAcceptText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.consentDeclineBtn} onPress={withdrawConsent}>
+                  <Text style={[styles.consentDeclineText, { color: '#ef4444' }]}>Withdraw Consent</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={[styles.consentAcceptBtn, { backgroundColor: theme.accent }]} onPress={acceptConsent}>
+                  <Text style={styles.consentAcceptText}>I Understand & Agree</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.consentDeclineBtn} onPress={() => setShowConsent(false)}>
+                  <Text style={[styles.consentDeclineText, { color: theme.subtext }]}>Not Now</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -676,6 +716,8 @@ const styles = StyleSheet.create({
   header: { marginBottom: 20 },
   title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff' },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
+  reviewConsentLink: { marginTop: 8 },
+  reviewConsentText: { fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
   scoreCard: { backgroundColor: '#1a1a3e', borderRadius: 16, padding: 20, borderLeftWidth: 4, marginBottom: 16 },
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   scoreValue: { fontSize: 42, fontWeight: 'bold', color: '#ffffff' },
