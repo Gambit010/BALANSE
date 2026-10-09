@@ -25,7 +25,7 @@ const statusFromProgress = (progress) => {
  * single ambiguous "mark complete" toggle cycling through raw numbers.
  * Picking a status auto-closes the modal immediately.
  */
-export default function TaskActionModal({ visible, task, theme, onClose, onSetStatus, onViewBreakdown, onEdit, onDelete }) {
+export default function TaskActionModal({ visible, task, theme, onClose, onSetStatus, onViewBreakdown, onEdit, onSnooze, onPickDate, onDelete }) {
   if (!task) return null;
   const currentStatus = statusFromProgress(task.progress);
 
@@ -67,6 +67,20 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
             <TouchableOpacity style={styles.option} onPress={onEdit}>
               <Ionicons name="create-outline" size={20} color={theme.text} />
               <Text style={[styles.optionText, { color: theme.text }]}>Edit Details</Text>
+            </TouchableOpacity>
+          )}
+
+          {!task.isTeamTask && onSnooze && (
+            <TouchableOpacity style={styles.option} onPress={onSnooze}>
+              <Ionicons name="time-outline" size={20} color={theme.text} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Push Deadline +1 Day</Text>
+            </TouchableOpacity>
+          )}
+
+          {!task.isTeamTask && onPickDate && (
+            <TouchableOpacity style={styles.option} onPress={onPickDate}>
+              <Ionicons name="calendar-outline" size={20} color={theme.text} />
+              <Text style={[styles.optionText, { color: theme.text }]}>Pick a New Date</Text>
             </TouchableOpacity>
           )}
 

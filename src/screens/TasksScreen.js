@@ -8,15 +8,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTasks } from '../hooks/useTasks';
-import { getPriorityBreakdown } from '../constants/scoring';
+import { getPriorityBreakdown, computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import TaskActionModal from '../components/TaskActionModal'; 
-import { deleteTask, updateTaskProgress } from '../services/taskService';
-import { isElapsedClass } from '../services/conflictService';
+import { deleteTask, updateTaskProgress, updateTask } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 
@@ -38,6 +39,7 @@ export default function TasksScreen({ navigation, route }) {
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [actionTask, setActionTask] = useState(null); // task currently showing the action modal
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
+  const [reschedulePickerTask, setReschedulePickerTask] = useState(null); // task currently showing the date picker
 
   
   // Refetch tasks and sync filter when screen comes into focus
@@ -93,6 +95,25 @@ export default function TasksScreen({ navigation, route }) {
 
     return matchesSearch && matchesFilter;
   });
+
+  const handleReschedule = async (task, newDeadlineDate) => {
+    const hasTime = task.deadline && task.deadline.includes('T');
+    const newDeadline = hasTime
+      ? newDeadlineDate.toISOString()
+      : newDeadlineDate.toISOString().split('T')[0];
+
+    const score = computePriorityScore({ deadline: newDeadline, priority: task.priority, category: task.category });
+    const success = await updateTask(task.id, {
+      deadline: newDeadline,
+      priorityScore: score,
+      priorityLabel: getPriorityLabel(score),
+    });
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', 'Failed to reschedule task.');
+    }
+  };
 
   const handleDelete = (taskId, taskTitle) => {
     Alert.alert(
@@ -341,12 +362,42 @@ export default function TasksScreen({ navigation, route }) {
           setActionTask(null);
           navigation.navigate('EditTask', { task: t });
         }}
+        onSnooze={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) {
+            const newDate = new Date(t.deadline);
+            newDate.setDate(newDate.getDate() + 1);
+            handleReschedule(t, newDate);
+          }
+        }}
+        onPickDate={() => {
+          const t = actionTask;
+          setActionTask(null);
+          setReschedulePickerTask(t);
+        }}
         onDelete={() => {
           const t = actionTask;
           setActionTask(null);
           handleDelete(t.id, t.title);
         }}
       />
+
+      {/* Reschedule Date Picker — shown after picking "Pick a New Date" in TaskActionModal */}
+      {reschedulePickerTask && (
+        <DateTimePicker
+          value={new Date(reschedulePickerTask.deadline)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            const t = reschedulePickerTask;
+            setReschedulePickerTask(null);
+            if (selectedDate && t) {
+              handleReschedule(t, selectedDate);
+            }
+          }}
+        />
+      )}
 
       {/* Floating Add Button */}
       <TouchableOpacity
