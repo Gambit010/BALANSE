@@ -25,9 +25,12 @@ const statusFromProgress = (progress) => {
  * single ambiguous "mark complete" toggle cycling through raw numbers.
  * Picking a status auto-closes the modal immediately.
  */
-export default function TaskActionModal({ visible, task, theme, onClose, onSetStatus, onViewBreakdown, onEdit, onSnooze, onPickDate, onDelete }) {
+export default function TaskActionModal({ visible, task, theme, onClose, onSetStatus, onViewBreakdown, onEdit, onSnooze, onPickDate, onDelete, onDeleteSeries }) {
   if (!task) return null;
   const currentStatus = statusFromProgress(task.progress);
+  // Rescheduling moves only the start time, and a class has no meaningful
+  // priority, so those options are hidden for class sessions.
+  const isClass = !!task.recurrence?.isClassSchedule;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -58,10 +61,12 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
 
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-          <TouchableOpacity style={styles.option} onPress={onViewBreakdown}>
-            <Ionicons name="information-circle-outline" size={20} color="#a78bfa" />
-            <Text style={[styles.optionText, { color: '#a78bfa' }]}>View Priority Breakdown</Text>
-          </TouchableOpacity>
+          {!isClass && (
+            <TouchableOpacity style={styles.option} onPress={onViewBreakdown}>
+              <Ionicons name="information-circle-outline" size={20} color="#a78bfa" />
+              <Text style={[styles.optionText, { color: '#a78bfa' }]}>View Priority Breakdown</Text>
+            </TouchableOpacity>
+          )}
 
           {!task.isTeamTask && (
             <TouchableOpacity style={styles.option} onPress={onEdit}>
@@ -70,14 +75,14 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
             </TouchableOpacity>
           )}
 
-          {!task.isTeamTask && onSnooze && (
+          {!task.isTeamTask && !isClass && onSnooze && (
             <TouchableOpacity style={styles.option} onPress={onSnooze}>
               <Ionicons name="time-outline" size={20} color={theme.text} />
               <Text style={[styles.optionText, { color: theme.text }]}>Push Deadline +1 Day</Text>
             </TouchableOpacity>
           )}
 
-          {!task.isTeamTask && onPickDate && (
+          {!task.isTeamTask && !isClass && onPickDate && (
             <TouchableOpacity style={styles.option} onPress={onPickDate}>
               <Ionicons name="calendar-outline" size={20} color={theme.text} />
               <Text style={[styles.optionText, { color: theme.text }]}>Pick a New Date</Text>
@@ -86,8 +91,17 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
 
           <TouchableOpacity style={styles.option} onPress={onDelete}>
             <Ionicons name="trash-outline" size={20} color="#ef4444" />
-            <Text style={[styles.optionText, { color: '#ef4444' }]}>Delete Task</Text>
+            <Text style={[styles.optionText, { color: '#ef4444' }]}>
+              {isClass ? 'Delete This Session' : 'Delete Task'}
+            </Text>
           </TouchableOpacity>
+
+          {isClass && onDeleteSeries && (
+            <TouchableOpacity style={styles.option} onPress={onDeleteSeries}>
+              <Ionicons name="trash-bin-outline" size={20} color="#ef4444" />
+              <Text style={[styles.optionText, { color: '#ef4444' }]}>Delete All Upcoming Sessions</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: theme.border }]} onPress={onClose}>
             <Text style={[styles.cancelText, { color: theme.text }]}>Cancel</Text>

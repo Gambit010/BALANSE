@@ -15,6 +15,7 @@ import { db } from '../../firebase';
 import { createNotification } from './notificationService';
 import { sendPushToToken } from './pushNotificationServices';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { recordActiveDay } from './activityService';
 
 // ─── Helpers ───
 
@@ -229,6 +230,9 @@ export const updateBoardTaskProgress = async (team, task, newProgress, actor) =>
       progress: newProgress,
       updatedAt: serverTimestamp(),
     });
+    if (newProgress >= 100 && (task.progress ?? 0) < 100) {
+      recordActiveDay(actor.uid);
+    }
     const label = STATUS_LABELS[statusFromProgress(newProgress)];
     const recipients = new Set();
     if (task.assignedById && task.assignedById !== actor.uid) recipients.add(task.assignedById);

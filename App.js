@@ -9,7 +9,8 @@ import { ThemeProvider } from './src/context/ThemeContext'; // for dark mode
 import LandingScreen from './src/screens/LandingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
-import OnboardingScreen from './src/screens/OnboardingScreen';
+import OnboardingScreen, { ONBOARDING_KEY_PREFIX } from './src/screens/OnboardingScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './src/navigation/AppNavigator';
 import AddTaskScreen from './src/screens/AddTasksScreen';
 import EditTaskScreen from './src/screens/EditTaskScreen';
@@ -26,10 +27,19 @@ const Stack = createStackNavigator();
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+  const [onboardingSeen, setOnboardingSeen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // Read the flag before setUser, so the first screen is decided correctly.
+      if (currentUser) {
+        try {
+          const seen = await AsyncStorage.getItem(`${ONBOARDING_KEY_PREFIX}${currentUser.uid}`);
+          setOnboardingSeen(seen === 'true');
+        } catch {
+          setOnboardingSeen(false);
+        }
+      }
       setUser(currentUser);
       setLoading(false);
       if (currentUser) {
@@ -60,7 +70,7 @@ export default function App() {
       >
         {user ? (
           <>
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            {!onboardingSeen && <Stack.Screen name="Onboarding" component={OnboardingScreen} />}
             <Stack.Screen name="MainApp" component={AppNavigator} />
             <Stack.Screen name="AddTask" component={AddTaskScreen} />
             <Stack.Screen name="AddClass" component={AddClassScreen} />

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { getActiveDays, toLocalDateKey } from '../services/activityService';
 import {
   View,
   Text,
@@ -28,10 +30,28 @@ export default function ProfileScreen({ navigation }) {
   const { isDarkMode, toggleDarkMode, theme } = useTheme(); // this replace the code above 
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const { tasks } = useTasks();
+  const [activeDays, setActiveDays] = useState([]);
 
   useEffect(() => {
     getNotificationsEnabled().then(setNotificationsEnabledState);
   }, []);
+
+  // Refresh on focus so a task finished elsewhere shows up when you come back.
+  useFocusEffect(
+    useCallback(() => {
+      const uid = auth.currentUser?.uid;
+      if (uid) getActiveDays(uid).then(setActiveDays);
+    }, [])
+  );
+
+  // Oldest → today, left to right.
+  const lastSevenDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d;
+  });
+  const activeSet = new Set(activeDays);
+  const activeCount = lastSevenDays.filter((d) => activeSet.has(toLocalDateKey(d))).length;
 
   const toggleNotifications = async (value) => {
     setNotificationsEnabledState(value);
@@ -123,6 +143,41 @@ export default function ProfileScreen({ navigation }) {
             <Text style={[styles.statNumber, { color: theme.text }]}>{successRate}%</Text>
             <Text style={[styles.statLabel, { color: theme.subtext }]}>Sucess Rate</Text>
           </View>
+        </View>
+
+        {/* THIS WEEK — no streak to lose; a missed day is just an empty circle */}
+        <View style={[styles.achievementsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.achievementsTitle, { color: theme.text }]}>This Week</Text>
+          <View style={styles.weekRow}>
+            {lastSevenDays.map((d, i) => {
+              const active = activeSet.has(toLocalDateKey(d));
+              const isToday = i === 6;
+              return (
+                <View key={toLocalDateKey(d)} style={styles.weekDay}>
+                  <View style={[
+                    styles.weekDot,
+                    {
+                      backgroundColor: active ? 'rgba(167,139,250,0.2)' : 'transparent',
+                      borderColor: active ? '#a78bfa' : theme.border,
+                    },
+                  ]}>
+                    {active && <Ionicons name="checkmark" size={14} color="#a78bfa" />}
+                  </View>
+                  <Text style={[
+                    styles.weekDayLabel,
+                    { color: isToday ? theme.text : theme.subtext, fontWeight: isToday ? '700' : '500' },
+                  ]}>
+                    {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[styles.weekSummary, { color: theme.subtext }]}>
+            {activeCount > 0
+              ? `Active ${activeCount} of the last 7 days`
+              : 'Days you complete a task will show up here.'}
+          </Text>
         </View>
 
         {/* ACHIEVEMENTS */}
@@ -343,6 +398,29 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  weekDay: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  weekDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weekDayLabel: {
+    fontSize: 11,
+  },
+  weekSummary: {
+    fontSize: 13,
   },
   achievementsCard: {
     backgroundColor: '#1a1a3e',

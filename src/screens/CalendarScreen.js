@@ -196,7 +196,7 @@ export default function CalendarScreen({ navigation }) {
     getTasksForDate(date).filter((t) => !isElapsedClass(t)).length;
 
   const hasHighPriority = (date) => {
-    return getTasksForDate(date).some((t) => !isElapsedClass(t) && t.priorityLabel === 'High');
+    return getTasksForDate(date).some((t) => !t.recurrence?.isClassSchedule && t.priorityLabel === 'High');
   };
 
   const getCategoryColor = (category) => {
@@ -326,9 +326,15 @@ export default function CalendarScreen({ navigation }) {
             )}
             <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>{task.title}</Text>
           </View>
-          <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
-            <Text style={[styles.prioText, { color: prioColor }]}>{task.priorityLabel}</Text>
-          </View>
+          {task.recurrence?.isClassSchedule ? (
+            <View style={[styles.prioBadge, { backgroundColor: theme.border }]}>
+              <Text style={[styles.prioText, { color: theme.subtext }]}>Class</Text>
+            </View>
+          ) : (
+            <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
+              <Text style={[styles.prioText, { color: prioColor }]}>{task.priorityLabel}</Text>
+            </View>
+          )}
         </View>
 
         {/* Plain, uncolored deadline/time text — the day is already implied

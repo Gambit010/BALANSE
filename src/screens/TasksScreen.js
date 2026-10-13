@@ -17,7 +17,7 @@ import { useTasks } from '../hooks/useTasks';
 import { getPriorityBreakdown, computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import TaskActionModal from '../components/TaskActionModal'; 
-import { deleteTask, updateTaskProgress, updateTask } from '../services/taskService';
+import { deleteTask, updateTaskProgress, updateTask, deleteUpcomingClassSessions, getClassSessionEnd } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { isElapsedClass } from '../services/conflictService';
@@ -94,7 +94,8 @@ export default function TasksScreen({ navigation, route }) {
       if (filterType === 'category') {
         matchesFilter = task.category === activeFilter;
       } else if (filterType === 'priority') {
-        matchesFilter = task.priorityLabel === activeFilter;
+        // Classes show a "Class" badge, so they don't match a priority filter.
+        matchesFilter = !task.recurrence?.isClassSchedule && task.priorityLabel === activeFilter;
       } else if (filterType === 'status') {
         // A past, untouched class session reads as "Done" the same way it
         // displays — see getEffectiveStatusLabel below.
@@ -131,6 +132,37 @@ export default function TasksScreen({ navigation, route }) {
   };
 
 ;
+
+  const handleDeleteSeries = (task) => {
+    const templateName = task.recurrence?.templateName;
+    if (!templateName) return;
+    const now = new Date();
+    const upcomingCount = tasks.filter(
+      (t) => t.recurrence?.templateName === templateName && getClassSessionEnd(t) >= now
+    ).length;
+
+    if (upcomingCount === 0) {
+      Alert.alert('Nothing to delete', `"${task.title}" has no upcoming sessions left.`);
+      return;
+    }
+
+    Alert.alert(
+      'Delete Class Sessions',
+      `Delete ${upcomingCount} upcoming session${upcomingCount !== 1 ? 's' : ''} of "${task.title}"? Past sessions stay in your calendar.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const deleted = await deleteUpcomingClassSessions(task.userId, templateName);
+            if (deleted < 0) Alert.alert('Error', 'Failed to delete the class sessions.');
+            refetch();
+          },
+        },
+      ]
+    );
+  };
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -286,21 +318,27 @@ export default function TasksScreen({ navigation, route }) {
         <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
           {task.title}
         </Text>
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation?.();
-            setBreakdownTask(task);
-          }}
-          style={[
-            styles.priorityBadge,
-            { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
-          ]}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
-            {task.priorityLabel} ({task.priorityScore})
-          </Text>
-        </TouchableOpacity>
+        {task.recurrence?.isClassSchedule ? (
+          <View style={[styles.priorityBadge, { backgroundColor: theme.border }]}>
+            <Text style={[styles.priorityText, { color: theme.subtext }]}>Class</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              setBreakdownTask(task);
+            }}
+            style={[
+              styles.priorityBadge,
+              { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
+            ]}
+            activeOpacity={0.6}
+          >
+            <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
+              {task.priorityLabel} ({task.priorityScore})
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Plain, uncolored deadline text — priority already carries the color
@@ -375,6 +413,11 @@ export default function TasksScreen({ navigation, route }) {
           const t = actionTask;
           setActionTask(null);
           scheduleDelete(t);
+        }}
+        onDeleteSeries={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) handleDeleteSeries(t);
         }}
       />
 
