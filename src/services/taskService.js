@@ -15,6 +15,7 @@ import { db, auth } from '../../firebase';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { scheduleDeadlineReminder, cancelDeadlineReminder } from './pushNotificationServices';
 import { recordActiveDay } from './activityService';
+import { toLocalDateKey } from '../utils/dateUtils';
 
 // Get all tasks for the current user
 export const getUserTasks = async (userId) => {
@@ -204,7 +205,7 @@ export const addRecurringTask = async (templateData, selectedDays, endDate, dayT
 
         const deadlineStr = times
           ? taskDate.toISOString()
-          : taskDate.toISOString().split('T')[0];
+          : toLocalDateKey(taskDate);
 
         let description = templateData.description;
         if (times) {
@@ -235,7 +236,7 @@ export const addRecurringTask = async (templateData, selectedDays, endDate, dayT
             templateName,
             frequency: 'weekly',
             days: selectedDays,
-            instanceDate: taskDate.toISOString().split('T')[0],
+            instanceDate: toLocalDateKey(taskDate),
           },
         };
 
@@ -351,7 +352,7 @@ export const addClassSchedule = async (scheduleData) => {
             templateName,
             frequency: 'weekly',
             days: scheduleData.days,
-            instanceDate: taskDate.toISOString().split('T')[0],
+            instanceDate: toLocalDateKey(taskDate),
             isClassSchedule: true,
           },
         };
