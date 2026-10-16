@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 
 import { useTheme } from '../context/ThemeContext'; // for dark mode
@@ -14,37 +15,75 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
-import { getPriorityBreakdown, getWellnessAdjustedScore } from '../constants/scoring';
+import { getPriorityBreakdown, getWellnessAdjustedScore, computePriorityScore, getPriorityLabel } from '../constants/scoring';
+import { getMyAssignedBoardTasks, getTeam, updateBoardTaskProgress, deleteBoardTask } from '../services/teamService';
+import { updateTaskProgress, deleteTask } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
+import TaskActionModal from '../components/TaskActionModal';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import UndoToast from '../components/UndoToast';
 import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
 import { useWellness } from '../hooks/useWellness';
 import { getWellnessThrottleAdvice } from '../constants/wellness';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
+
+  // Declared before regularTasks/todaysFocus, which hide the pending item.
+  // Team tasks and personal tasks live in different collections.
+  const { pendingDelete, scheduleDelete, undoDelete } = useUndoDelete(async (t) => {
+    const success = t.isTeamTask ? await deleteBoardTask(t.id) : await deleteTask(t.id);
+    if (success) {
+      await Promise.all([refetch(), fetchTeamTasks()]);
+    } else {
+      Alert.alert('Error', `Failed to delete "${t.title}".`);
+    }
+  });
+
   const regularTasks = useMemo(
-    () => tasks.filter(t => !t.recurrence?.isClassSchedule),
-    [tasks]
+    () => tasks.filter(t => !t.recurrence?.isClassSchedule && t.id !== pendingDelete?.id),
+    [tasks, pendingDelete]
   );
   const { latestScore, latestStatus } = useWellness();
-  const { theme } = useTheme(); // for dark mode
+  const { theme, isDarkMode } = useTheme(); // for dark mode
   const [userName, setUserName] = useState('Student');
   const [breakdownTask, setBreakdownTask] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [teamAssignedTasks, setTeamAssignedTasks] = useState([]);
+  const [actionTask, setActionTask] = useState(null);
+
+  const fetchTeamTasks = useCallback(async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    const raw = await getMyAssignedBoardTasks(currentUser.uid);
+    // Recompute score fresh (same reasoning as personal tasks — deadline
+    // proximity changes daily, a stale stored score would go wrong).
+    const normalized = raw
+      .filter((t) => t.progress < 100)
+      .map((t) => {
+        const score = computePriorityScore(t);
+        return {
+          ...t,
+          priorityScore: score,
+          priorityLabel: getPriorityLabel(score),
+          isTeamTask: true,
+        };
+      });
+    setTeamAssignedTasks(normalized);
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), fetchTeamTasks()]);
     const currentUser = auth.currentUser;
     if (currentUser) {
       const count = await getUnreadCount(currentUser.uid);
       setUnreadCount(count);
     }
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, fetchTeamTasks]);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,6 +112,14 @@ export default function HomeScreen({ navigation }) {
       };
       checkDeadlines();
     }, [regularTasks])
+  );
+
+    // Pull in team tasks assigned to this user, across every team — otherwise
+  // an urgent team assignment never surfaces anywhere on the dashboard.
+  useFocusEffect(
+    useCallback(() => {
+      fetchTeamTasks();
+    }, [fetchTeamTasks])
   );
 
   useEffect(() => {
@@ -116,7 +163,10 @@ export default function HomeScreen({ navigation }) {
   // When well-being is low, Personal tasks surface higher and non-urgent Low tasks
   // are de-emphasized in the "rest" bucket. Urgent tasks are never affected.
   const todaysFocus = useMemo(() => {
-    const incomplete = regularTasks.filter(task => task.progress < 100);
+    const incomplete = [
+      ...regularTasks.filter(task => task.progress < 100),
+      ...teamAssignedTasks.filter(t => t.id !== pendingDelete?.id),
+    ];
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -142,14 +192,21 @@ export default function HomeScreen({ navigation }) {
     // Everything else — wellness-adjusted ranking when well-being is low
     const rest = incomplete
       .filter(t => daysUntil(t.deadline) > 0)
-      .map(t => ({
-        ...t,
-        adjustedScore: getWellnessAdjustedScore(t, t.priorityScore, wellnessPercentage),
-      }))
+      .map(t => {
+        const adjustedScore = getWellnessAdjustedScore(t, t.priorityScore, wellnessPercentage);
+        return {
+          ...t,
+          adjustedScore,
+          // Carried through so the badge/breakdown shown to the user always
+          // matches the score that actually decided its position in the list.
+          adjustedLabel: getPriorityLabel(adjustedScore),
+          wellnessDelta: adjustedScore - t.priorityScore,
+        };
+      })
       .sort((a, b) => b.adjustedScore - a.adjustedScore);
 
     return [...urgent, ...rest].slice(0, 5);
-  }, [regularTasks, wellnessPercentage]);
+  }, [regularTasks, teamAssignedTasks, wellnessPercentage, pendingDelete]);
 
   const throttleAdvice = useMemo(
     () => getWellnessThrottleAdvice(wellnessPercentage, regularTasks),
@@ -411,15 +468,17 @@ export default function HomeScreen({ navigation }) {
 
             {todaysFocus.map((task, index) => {
               const urgency = getDeadlineUrgency(task.deadline);
-              const catColor = getCategoryColor(task.category);
-              const prioColor = getPriorityColor(task.priorityLabel);
-              const breakdown = getPriorityBreakdown(task);
+              // Falls back to the raw label for urgent tasks and anything
+              // without an adjustment — this only changes for rest-bucket
+              // tasks that were actually boosted/de-emphasized.
+              const effectiveLabel = task.adjustedLabel ?? task.priorityLabel;
+              const prioColor = getPriorityColor(effectiveLabel);
 
               return (
                 <TouchableOpacity
                   key={task.id}
                   style={[ styles.focusCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]} 
-                  onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+                  onPress={() => setActionTask(task)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.focusRank}>
@@ -428,10 +487,14 @@ export default function HomeScreen({ navigation }) {
 
                   <View style={styles.focusContent}>
                     <View style={styles.focusTitleContainer}>
-                      <Text style={[styles.focusTaskTitle, { color: theme.text}]} numberOfLines={1}>
-                      {/* </Text><Text style={styles.focusTaskTitle} numberOfLines={1}> */}
-                        {task.title}
-                      </Text>
+                      <View style={styles.focusTitleRow}>
+                        {task.isTeamTask && (
+                          <Ionicons name="people-outline" size={13} color={theme.subtext} style={{ marginRight: 5 }} />
+                        )}
+                        <Text style={[styles.focusTaskTitle, { color: theme.text}]} numberOfLines={1}>
+                          {task.title}
+                        </Text>
+                      </View>
                       <TouchableOpacity
                         onPress={(e) => {
                           e.stopPropagation?.();
@@ -441,7 +504,7 @@ export default function HomeScreen({ navigation }) {
                         activeOpacity={0.6}
                       >
                         <Text style={[styles.focusPrioText, { color: prioColor }]}>
-                          {task.priorityLabel}
+                          {effectiveLabel}
                         </Text>
                         <Ionicons
                           name="information-circle-outline"
@@ -452,34 +515,14 @@ export default function HomeScreen({ navigation }) {
                       </TouchableOpacity>
                     </View>
 
-
-                    <View style={styles.focusTagsRow}>
-                      <View style={[styles.focusCategoryTag, { backgroundColor: `${catColor}20` }]}>
-                        <View style={[styles.focusCategoryDot, { backgroundColor: catColor }]} />
-                        <Text style={[styles.focusCategoryText, { color: catColor }]}>
-                          {task.category}
-                        </Text>
-                      </View>
-                      <View style={styles.focusDeadlineTag}>
-                        <Ionicons name="time-outline" size={11} color={urgency.color} />
-                        <Text style={[styles.focusDeadlineText, { color: urgency.color }]}>
-                            {urgency.text}
-                            {task.deadline && task.deadline.includes('T')
-                            ? ` at ${new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
-                            : ''}
-                        </Text>
-                      </View>
-
-
-                    </View>
- 
-                    {/* <Text style={styles.focusReason}> */}
-                    <Text style={[styles.focusReason, { color: theme.subtext }]}> 
-                      {breakdown.factors
-                        .sort((a, b) => b.score - a.score)
-                        .slice(0, 2)
-                        .map(f => `${f.label}: ${f.reason} (${f.score}pts)`)
-                        .join('  ·  ')}
+                    {/* Plain, uncolored deadline text — priority already carries
+                        the color signal (deadline proximity is one of its three
+                        inputs), so a second red/amber here was redundant. */}
+                    <Text style={[styles.focusDeadlineText, { color: theme.subtext }]}>
+                      {urgency.text}
+                      {task.deadline && task.deadline.includes('T')
+                        ? ` at ${new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+                        : ''}
                     </Text>
 
                     <View style={styles.focusProgressRow}>
@@ -571,6 +614,43 @@ export default function HomeScreen({ navigation }) {
         task={breakdownTask}
         onClose={() => setBreakdownTask(null)}
       />
+
+      <TaskActionModal
+        visible={!!actionTask}
+        task={actionTask}
+        theme={theme}
+        onClose={() => setActionTask(null)}
+        onSetStatus={async (newProgress) => {
+          const t = actionTask;
+          setActionTask(null);
+          if (!t) return;
+          if (t.isTeamTask) {
+            const team = await getTeam(t.teamId);
+            if (team) await updateBoardTaskProgress(team, t, newProgress, auth.currentUser);
+          } else {
+            await updateTaskProgress(t.id, newProgress);
+          }
+          await Promise.all([refetch(), fetchTeamTasks()]);
+        }}
+        onViewBreakdown={() => {
+          setBreakdownTask(actionTask);
+          setActionTask(null);
+        }}
+        onEdit={() => {
+          const t = actionTask;
+          setActionTask(null);
+          navigation.getParent()?.navigate('EditTask', { task: t });
+        }}
+        onDelete={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) scheduleDelete(t);
+        }}
+      />
+      {pendingDelete && (
+        <UndoToast key={pendingDelete.id} onUndo={undoDelete} isDarkMode={isDarkMode} />
+      )}
+
       {/* Floating Add button */}
       <TouchableOpacity
         style={styles.addButton}
@@ -936,7 +1016,8 @@ export default function HomeScreen({ navigation }) {
   focusTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
+    gap: 4,
   },
   focusSectionTitle: {
     fontSize: 18,
@@ -1022,9 +1103,23 @@ export default function HomeScreen({ navigation }) {
     height: 6,
     borderRadius: 3,
   },
-  focusCategoryText: {
+    focusCategoryText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  focusTeamTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  focusTeamTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#a78bfa',
   },
   focusDeadlineTag: {
     flexDirection: 'row',
@@ -1034,12 +1129,19 @@ export default function HomeScreen({ navigation }) {
   focusDeadlineText: {
     fontSize: 11,
     fontWeight: '500',
+    marginBottom: 8,
   },
   focusReason: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.35)',
     marginBottom: 8,
     lineHeight: 16,
+  },
+  focusWellnessNote: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -4,
+    marginBottom: 8,
   },
   focusProgressRow: {
     flexDirection: 'row',

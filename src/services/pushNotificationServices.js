@@ -19,6 +19,25 @@ Notifications.setNotificationHandler({
 });
 
 const SCHEDULED_MAP_KEY = 'balanse_scheduled_notifications'; // { [taskId]: notificationId }
+const NOTIFICATIONS_ENABLED_KEY = 'balanse_notifications_enabled';
+
+/** Whether this device should fire local notifications. Defaults to enabled. */
+export const getNotificationsEnabled = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
+    return raw === null ? true : raw === 'true';
+  } catch {
+    return true;
+  }
+};
+
+export const setNotificationsEnabled = async (enabled) => {
+  try {
+    await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, String(enabled));
+  } catch (error) {
+    console.error('Error persisting notification preference:', error);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Permissions + push token registration
@@ -78,7 +97,11 @@ export const registerForPushNotificationsAsync = async () => {
 export const savePushTokenToFirestore = async (userId, token) => {
   if (!userId || !token) return false;
   try {
-    await setDoc(doc(db, 'users', userId), { pushToken: token }, { merge: true });
+    // Stored in a private subcollection, not on the main user doc, since
+    // users/{uid} is broadly readable (needed for team-invite email lookup)
+    // but a push token is a capability — anyone holding it can send fake
+    // notifications to that user's device via Expo's public push API.
+    await setDoc(doc(db, 'users', userId, 'private', 'pushToken'), { token }, { merge: true });
     return true;
   } catch (error) {
     console.error('Error saving push token:', error);
@@ -94,6 +117,42 @@ export const setupPushNotifications = async (userId) => {
   }
   return token;
 };
+/**
+ * Sends a REAL remote push notification to a specific Expo push token,
+ * via Expo's push API. Unlike sendImmediateNotification/scheduleDeadlineReminder
+ * (which only fire on the calling device), this reaches a DIFFERENT device —
+ * required for team features, where Person A's action (assigning a task) needs
+ * to notify Person B's phone, not Person A's.
+ */
+export const sendPushToToken = async (expoPushToken, title, body, data = {}) => {
+  if (!expoPushToken) return false;
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: expoPushToken,
+        title,
+        body,
+        data,
+        sound: 'default',
+      }),
+    });
+    const result = await response.json();
+    if (result?.data?.status === 'error') {
+      console.error('Expo push send error:', result.data.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error sending remote push:', error);
+    return false;
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Immediate local notifications (conflicts, wellness alerts)
@@ -104,6 +163,7 @@ export const setupPushNotifications = async (userId) => {
  * Use for events detected while the app is open: conflicts, wellness status.
  */
 export const sendImmediateNotification = async (title, body, data = {}) => {
+  if (!(await getNotificationsEnabled())) return false;
   try {
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data, sound: true },
@@ -151,6 +211,7 @@ const REMINDER_MINUTE = 0;
  */
 export const scheduleDeadlineReminder = async (task) => {
   if (!task?.id || !task?.deadline) return null;
+  if (!(await getNotificationsEnabled())) return null;
 
   await cancelDeadlineReminder(task.id);
 

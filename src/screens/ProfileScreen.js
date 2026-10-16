@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { getActiveDays, toLocalDateKey } from '../services/activityService';
 import {
   View,
   Text,
@@ -12,13 +14,49 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
-import { useTheme } from '../context/ThemeContext'; // for global dark mode
+import { useTheme } from '../context/ThemeContext'; // for global dark mode 
+import { getNotificationsEnabled, setNotificationsEnabled } from '../services/pushNotificationServices';
+
+// Simple task-completion milestones — no new data to track, just thresholds
+// against the completed-task count already computed below.
+const MILESTONES = [
+  { threshold: 10, label: '10 Tasks', icon: 'ribbon-outline' },
+  { threshold: 50, label: '50 Tasks', icon: 'medal-outline' },
+  { threshold: 100, label: '100 Tasks', icon: 'trophy-outline' },
+];
 
 export default function ProfileScreen({ navigation }) {
   //const [darkMode, setDarkMode] = useState(false);
   const { isDarkMode, toggleDarkMode, theme } = useTheme(); // this replace the code above 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const { tasks } = useTasks();
+  const [activeDays, setActiveDays] = useState([]);
+
+  useEffect(() => {
+    getNotificationsEnabled().then(setNotificationsEnabledState);
+  }, []);
+
+  // Refresh on focus so a task finished elsewhere shows up when you come back.
+  useFocusEffect(
+    useCallback(() => {
+      const uid = auth.currentUser?.uid;
+      if (uid) getActiveDays(uid).then(setActiveDays);
+    }, [])
+  );
+
+  // Oldest → today, left to right.
+  const lastSevenDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d;
+  });
+  const activeSet = new Set(activeDays);
+  const activeCount = lastSevenDays.filter((d) => activeSet.has(toLocalDateKey(d))).length;
+
+  const toggleNotifications = async (value) => {
+    setNotificationsEnabledState(value);
+    await setNotificationsEnabled(value);
+  };
 
   const [userName, setUserName] = useState('Student');
   const [userEmail, setUserEmail] = useState('');
@@ -107,6 +145,67 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
+        {/* THIS WEEK — no streak to lose; a missed day is just an empty circle */}
+        <View style={[styles.achievementsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.achievementsTitle, { color: theme.text }]}>This Week</Text>
+          <View style={styles.weekRow}>
+            {lastSevenDays.map((d, i) => {
+              const active = activeSet.has(toLocalDateKey(d));
+              const isToday = i === 6;
+              return (
+                <View key={toLocalDateKey(d)} style={styles.weekDay}>
+                  <View style={[
+                    styles.weekDot,
+                    {
+                      backgroundColor: active ? 'rgba(167,139,250,0.2)' : 'transparent',
+                      borderColor: active ? '#a78bfa' : theme.border,
+                    },
+                  ]}>
+                    {active && <Ionicons name="checkmark" size={14} color="#a78bfa" />}
+                  </View>
+                  <Text style={[
+                    styles.weekDayLabel,
+                    { color: isToday ? theme.text : theme.subtext, fontWeight: isToday ? '700' : '500' },
+                  ]}>
+                    {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[styles.weekSummary, { color: theme.subtext }]}>
+            {activeCount > 0
+              ? `Active ${activeCount} of the last 7 days`
+              : 'Days you complete a task will show up here.'}
+          </Text>
+        </View>
+
+        {/* ACHIEVEMENTS */}
+        <View style={[styles.achievementsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.achievementsTitle, { color: theme.text }]}>Achievements</Text>
+          <View style={styles.achievementsRow}>
+            {MILESTONES.map((m) => {
+              const earned = completedTasks >= m.threshold;
+              return (
+                <View key={m.threshold} style={styles.achievementItem}>
+                  <View style={[
+                    styles.achievementIcon,
+                    {
+                      backgroundColor: earned ? 'rgba(167,139,250,0.2)' : theme.background,
+                      borderColor: earned ? '#a78bfa' : theme.border,
+                    },
+                  ]}>
+                    <Ionicons name={m.icon} size={22} color={earned ? '#a78bfa' : theme.subtext} />
+                  </View>
+                  <Text style={[styles.achievementLabel, { color: earned ? theme.text : theme.subtext }]}>
+                    {m.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
         {/* SETTINGS */}
         <View style={[styles.settingsCard, { backgroundColor: theme.card, borderColor: theme.border }]}> 
 
@@ -144,7 +243,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={toggleNotifications}
               trackColor={{ false: theme.border, true: '#7c3aed' }}
               thumbColor={notificationsEnabled ? '#ffffff' : '#64748b'}
             />
@@ -299,6 +398,63 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  weekDay: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  weekDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weekDayLabel: {
+    fontSize: 11,
+  },
+  weekSummary: {
+    fontSize: 13,
+  },
+  achievementsCard: {
+    backgroundColor: '#1a1a3e',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  achievementsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 14,
+  },
+  achievementsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  achievementItem: {
+    alignItems: 'center',
+  },
+  achievementIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  achievementLabel: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   settingsCard: {
     backgroundColor: '#1a1a3e',

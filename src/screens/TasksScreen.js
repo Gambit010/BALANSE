@@ -8,24 +8,42 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTasks } from '../hooks/useTasks';
-import { getPriorityBreakdown } from '../constants/scoring';
+import { getPriorityBreakdown, computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
-import { deleteTask, updateTaskProgress } from '../services/taskService';
+import TaskActionModal from '../components/TaskActionModal'; 
+import { deleteTask, updateTaskProgress, updateTask, deleteUpcomingClassSessions, getClassSessionEnd } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { isElapsedClass } from '../services/conflictService';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import UndoToast from '../components/UndoToast';
+
 
 export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
-  const { theme } = useTheme(); // for dark mode
+  const { theme, isDarkMode } = useTheme(); // for dark mode
+
+  // Declared before visibleTasks, which hides the pending item.
+  const { pendingDelete, scheduleDelete, undoDelete } = useUndoDelete(async (t) => {
+    const success = await deleteTask(t.id);
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', `Failed to delete "${t.title}".`);
+    }
+  });
   const sevenDaysFromNow = new Date();
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
   sevenDaysFromNow.setHours(23, 59, 59, 999);
 
   const visibleTasks = tasks.filter((t) => {
+    if (pendingDelete && t.id === pendingDelete.id) return false;
     if (!t.recurrence?.isClassSchedule) return true;
     if (!t.deadline) return false;
     const dl = new Date(t.deadline);
@@ -34,7 +52,9 @@ export default function TasksScreen({ navigation, route }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
   const [breakdownTask, setBreakdownTask] = useState(null);
+  const [actionTask, setActionTask] = useState(null); // task currently showing the action modal
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
+  const [reschedulePickerTask, setReschedulePickerTask] = useState(null); // task currently showing the date picker
 
   
   // Refetch tasks and sync filter when screen comes into focus
@@ -74,14 +94,17 @@ export default function TasksScreen({ navigation, route }) {
       if (filterType === 'category') {
         matchesFilter = task.category === activeFilter;
       } else if (filterType === 'priority') {
-        matchesFilter = task.priorityLabel === activeFilter;
+        // Classes show a "Class" badge, so they don't match a priority filter.
+        matchesFilter = !task.recurrence?.isClassSchedule && task.priorityLabel === activeFilter;
       } else if (filterType === 'status') {
+        // A past, untouched class session reads as "Done" the same way it
+        // displays — see getEffectiveStatusLabel below.
         if (activeFilter === 'Done') {
-          matchesFilter = task.progress === 100;
+          matchesFilter = task.progress === 100 || isElapsedClass(task);
         } else if (activeFilter === 'In Progress') {
           matchesFilter = task.progress > 0 && task.progress < 100;
         } else if (activeFilter === 'To Do') {
-          matchesFilter = task.progress === 0;
+          matchesFilter = task.progress === 0 && !isElapsedClass(task);
         }
       }
     }
@@ -89,37 +112,56 @@ export default function TasksScreen({ navigation, route }) {
     return matchesSearch && matchesFilter;
   });
 
-  const handleDelete = (taskId, taskTitle) => {
+  const handleReschedule = async (task, newDeadlineDate) => {
+    const hasTime = task.deadline && task.deadline.includes('T');
+    const newDeadline = hasTime
+      ? newDeadlineDate.toISOString()
+      : newDeadlineDate.toISOString().split('T')[0];
+
+    const score = computePriorityScore({ deadline: newDeadline, priority: task.priority, category: task.category });
+    const success = await updateTask(task.id, {
+      deadline: newDeadline,
+      priorityScore: score,
+      priorityLabel: getPriorityLabel(score),
+    });
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', 'Failed to reschedule task.');
+    }
+  };
+
+;
+
+  const handleDeleteSeries = (task) => {
+    const templateName = task.recurrence?.templateName;
+    if (!templateName) return;
+    const now = new Date();
+    const upcomingCount = tasks.filter(
+      (t) => t.recurrence?.templateName === templateName && getClassSessionEnd(t) >= now
+    ).length;
+
+    if (upcomingCount === 0) {
+      Alert.alert('Nothing to delete', `"${task.title}" has no upcoming sessions left.`);
+      return;
+    }
+
     Alert.alert(
-      'Delete Task',
-      `Are you sure you want to delete "${taskTitle}"?`,
+      'Delete Class Sessions',
+      `Delete ${upcomingCount} upcoming session${upcomingCount !== 1 ? 's' : ''} of "${task.title}"? Past sessions stay in your calendar.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const success = await deleteTask(taskId);
-            if (success) {
-              refetch();
-            } else {
-              Alert.alert('Error', 'Failed to delete task.');
-            }
+            const deleted = await deleteUpcomingClassSessions(task.userId, templateName);
+            if (deleted < 0) Alert.alert('Error', 'Failed to delete the class sessions.');
+            refetch();
           },
         },
       ]
     );
-  };
-
-  const handleProgressUpdate = async (taskId, currentProgress) => {
-    let newProgress;
-    if (currentProgress === 0) newProgress = 50;
-    else if (currentProgress < 100) newProgress = 100;
-    else newProgress = 0;
-    const success = await updateTaskProgress(taskId, newProgress);
-    if (success) {
-      refetch();
-    }
   };
 
   const getPriorityColor = (priority) => {
@@ -142,6 +184,16 @@ export default function TasksScreen({ navigation, route }) {
     if (progress > 0) return '#fb923c';
     return 'rgba(255,255,255,0.4)';
   };
+
+  // A class session that's already over reads as "Done" once its time has
+  // passed, without ever writing progress: 100 to Firestore — this way a
+  // manual edit (e.g. repurposing a cancelled class) always takes priority,
+  // since isElapsedClass only fires while progress is still untouched (0).
+  const getEffectiveStatusLabel = (task) =>
+    isElapsedClass(task) ? 'Done' : getStatusLabel(task.progress);
+
+  const getEffectiveStatusColor = (task) =>
+    isElapsedClass(task) ? '#34d399' : getStatusColor(task.progress);
 
   if (loading) {
     return (
@@ -252,112 +304,59 @@ export default function TasksScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* TASK LIST */}
+          {/* TASK LIST */}
         {filteredTasks.map((task) => {
   return (
     <TouchableOpacity
       key={task.id}
-      // style={styles.taskCard} 
       style={[ styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]}
-      onPress={() => navigation.navigate('EditTask', { task })}
+      onPress={() => setActionTask(task)}
       activeOpacity={0.7}
     >
       {/* Top Row - Title + Priority */}
       <View style={styles.taskTopRow}>
-        {/* <Text style={styles.taskTitle} numberOfLines={1}> */}
         <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
           {task.title}
         </Text>
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation?.();
-            setBreakdownTask(task);
-          }}
-          style={[
-            styles.priorityBadge,
-            { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
-          ]}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
-            {task.priorityLabel} ({task.priorityScore})
-          </Text>
-        </TouchableOpacity>
+        {task.recurrence?.isClassSchedule ? (
+          <View style={[styles.priorityBadge, { backgroundColor: theme.border }]}>
+            <Text style={[styles.priorityText, { color: theme.subtext }]}>Class</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              setBreakdownTask(task);
+            }}
+            style={[
+              styles.priorityBadge,
+              { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
+            ]}
+            activeOpacity={0.6}
+          >
+            <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
+              {task.priorityLabel} ({task.priorityScore})
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Description */}
-      {task.description ? (
-        // <Text style={styles.taskDescription} numberOfLines={2}>
-        <Text style={[styles.taskDescription, { color: theme.subtext },]} numberOfLines={2}>
-          {task.description}
-        </Text>
-      ) : null}
-
-      {/* Mid Row - Category, Status, Deadline */}
-      <View style={styles.taskMidRow}>
-        <View style={styles.taskMeta}>
-          <View style={styles.metaChip}>
-            <Ionicons name="folder-outline" size={11} color={theme.subtext} />
-            {/*<Text style={styles.metaText}>{task.category}</Text>*/}
-            <Text style={[styles.metaText, { color: theme.subtext }]}>{task.category}</Text>
-          </View>
-          <View style={[styles.metaChip, { borderColor: `${getStatusColor(task.progress)}40` }]}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.progress) }]} />
-            {/*<Text style={styles.metaText}>{getStatusLabel(task.progress)}</Text>*/}
-            <Text style={[styles.metaText, { color: theme.subtext }]}>{getStatusLabel(task.progress)}</Text>
-          </View>
-        </View>
-        <View style={styles.taskDeadline}>
-          <Ionicons name="calendar-outline" size={11} color={theme.subtext} />
-          {/* <Text style={styles.taskDeadlineText}> */}
-          <Text style={[ styles.taskDeadlineText, { color: theme.subtext }, ]} >
-              {task.deadline && task.deadline.includes('T')
-              ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-              : task.deadline}
-          </Text>
-        </View>
-
-      </View>
+      {/* Plain, uncolored deadline text — priority already carries the color
+          signal, so a colored deadline/category/status row was redundant.
+          Category, status, and description are still one tap away via the
+          action sheet, the priority breakdown, and Edit Details. */}
+      <Text style={[styles.taskDeadlineText, { color: theme.subtext }]}>
+        {task.deadline && task.deadline.includes('T')
+          ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          : task.deadline}
+      </Text>
 
       {/* Progress Bar */}
       <View style={[styles.taskProgressBg, { backgroundColor: theme.border},]}>
-      {/* <View style={styles.taskProgressBg}> */}
         <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
       </View>
 
-      {/* Bottom Row - Actions */}
-      <View style={styles.taskBottomRow}>
-        <TouchableOpacity
-          style={styles.progressButton}
-          onPress={() => handleProgressUpdate(task.id, task.progress)}
-        >
-          <Ionicons
-            name={task.progress === 100 ? 'checkmark-circle' : 'checkmark-circle-outline'}
-            size={20}
-            color={task.progress === 100 ? '#34d399' : 'rgba(255,255,255,0.4)'}
-          />
-          {/* <Text style={styles.taskProgressText}> */}
-          <Text style={[ styles.taskProgressText, { color: theme.subtext }, ]} >
-                 {task.progress === 0 ? 'To Do' : task.progress === 100 ? 'Done' : 'In Progress'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('EditTask', { task })}
-          >
-            <Ionicons name="create-outline" size={18} color={theme.subtext} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDelete(task.id, task.title)}
-          >
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
     </TouchableOpacity>
   );
 })}
@@ -370,6 +369,77 @@ export default function TasksScreen({ navigation, route }) {
         task={breakdownTask}
         onClose={() => setBreakdownTask(null)}
       />
+
+      {/* Task Action Modal — shown when a card is tapped; the only way to
+          change status, edit, or delete now that the bottom action row
+          has been removed to avoid duplicate controls. */}
+      <TaskActionModal
+        visible={!!actionTask}
+        task={actionTask}
+        theme={theme}
+        onClose={() => setActionTask(null)}
+        onSetStatus={async (newProgress) => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) {
+            const success = await updateTaskProgress(t.id, newProgress);
+            if (success) refetch();
+          }
+        }}
+        onViewBreakdown={() => {
+          setBreakdownTask(actionTask);
+          setActionTask(null);
+        }}
+        onEdit={() => {
+          const t = actionTask;
+          setActionTask(null);
+          navigation.navigate('EditTask', { task: t });
+        }}
+        onSnooze={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) {
+            const newDate = new Date(t.deadline);
+            newDate.setDate(newDate.getDate() + 1);
+            handleReschedule(t, newDate);
+          }
+        }}
+        onPickDate={() => {
+          const t = actionTask;
+          setActionTask(null);
+          setReschedulePickerTask(t);
+        }}
+        onDelete={() => {
+          const t = actionTask;
+          setActionTask(null);
+          scheduleDelete(t);
+        }}
+        onDeleteSeries={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) handleDeleteSeries(t);
+        }}
+      />
+
+      {/* Reschedule Date Picker — shown after picking "Pick a New Date" in TaskActionModal */}
+      {reschedulePickerTask && (
+        <DateTimePicker
+          value={new Date(reschedulePickerTask.deadline)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            const t = reschedulePickerTask;
+            setReschedulePickerTask(null);
+            if (selectedDate && t) {
+              handleReschedule(t, selectedDate);
+            }
+          }}
+        />
+      )}
+
+      {pendingDelete && (
+        <UndoToast key={pendingDelete.id} onUndo={undoDelete} isDarkMode={isDarkMode} />
+      )}
 
       {/* Floating Add Button */}
       <TouchableOpacity
@@ -577,7 +647,7 @@ const styles = StyleSheet.create({
   },
   taskDeadlineText: {
     fontSize: 11,
-    // color: 'rgba(255,255,255,0.4)',
+    marginBottom: 10,
   },
   taskProgressBg: {
     height: 4,
@@ -617,6 +687,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   addButton: {
     position: 'absolute',
     bottom: 20,
@@ -703,4 +774,9 @@ const styles = StyleSheet.create({
     color: '#a78bfa',
   },
 
+    taskBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
 });

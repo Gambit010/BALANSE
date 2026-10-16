@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,14 +14,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from '../../firebase';
 import { useWellness } from '../hooks/useWellness';
 import {
   WHO5_QUESTIONS,
   LIKERT_OPTIONS,
   TIMEFRAME_TEXT,
   getWellnessStatus,
+  GUIDANCE_OFFICE,
 } from '../constants/wellness';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+
+const CONSENT_STORAGE_KEY = 'wellness_consent_accepted_v1';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_HEIGHT = 180;
@@ -48,8 +53,18 @@ export default function WellnessScreen() {
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [hasConsented, setHasConsented] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+  const [consentPurpose, setConsentPurpose] = useState('gate'); // 'gate' | 'review'
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const { theme, isDarkMode } = useTheme(); // for dark mode
+
+  useEffect(() => {
+    AsyncStorage.getItem(CONSENT_STORAGE_KEY).then((value) => {
+      if (value === 'true') setHasConsented(true);
+    });
+  }, []);
 
   const daysUntilNext = nextAssessmentDate
     ? Math.max(0, Math.ceil((nextAssessmentDate - new Date()) / (1000 * 60 * 60 * 24)))
@@ -58,10 +73,47 @@ export default function WellnessScreen() {
   // ─── Questionnaire Logic ───
 
   const startAssessment = () => {
+    if (!hasConsented) {
+      setConsentPurpose('gate');
+      setShowConsent(true);
+      return;
+    }
     setAnswers({});
     setCurrentQuestion(0);
     setResult(null);
     setShowQuestionnaire(true);
+  };
+
+  const acceptConsent = async () => {
+    try {
+      await AsyncStorage.setItem(CONSENT_STORAGE_KEY, 'true');
+    } catch (e) {
+      console.error('Failed to persist wellness consent:', e);
+    }
+    setHasConsented(true);
+    setShowConsent(false);
+    setAnswers({});
+    setCurrentQuestion(0);
+    setResult(null);
+    setShowQuestionnaire(true);
+  };
+
+  const openConsentReview = () => {
+    setConsentPurpose('review');
+    setShowConsent(true);
+  };
+
+  // Withdrawal only stops future assessments from skipping the consent gate —
+  // it does not touch already-saved history. Deleting past data is a
+  // separate decision/feature, not folded into "withdraw consent" here.
+  const withdrawConsent = async () => {
+    try {
+      await AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed to clear wellness consent:', e);
+    }
+    setHasConsented(false);
+    setShowConsent(false);
   };
 
   const selectAnswer = (questionId, value) => {
@@ -95,6 +147,20 @@ export default function WellnessScreen() {
   const closeQuestionnaire = () => {
     setShowQuestionnaire(false);
     setResult(null);
+  };
+
+  // Pre-fills a draft so the student isn't starting from a blank compose
+  // screen — deliberately leaves out the actual score/answers so nothing
+  // sensitive goes out until the student reviews and edits it themselves.
+  const buildGuidanceEmailDraft = (contact) => {
+    const studentName = auth.currentUser?.displayName || '';
+    const subject = 'Wellness Check-in — Requesting Support';
+    const body =
+      `Hi,\n\n` +
+      `I'm a student at STI College Sta. Maria and I'd like to talk to someone about how I've been feeling lately.\n\n` +
+      `[Feel free to add anything you'd like to share before sending.]\n\n` +
+      `Thank you,\n${studentName}`;
+    return `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   // ─── Simple Line Chart ───
@@ -209,6 +275,40 @@ export default function WellnessScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Well-being</Text>
           <Text style={[styles.subtitle, { color: theme.subtext }]}>WHO-5 Well-Being Index</Text>
+          {hasConsented && (
+            <TouchableOpacity onPress={openConsentReview} style={styles.reviewConsentLink}>
+              <Text style={[styles.reviewConsentText, { color: theme.accent }]}>Review Consent</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Always-visible Guidance Office access — not tied to score, since
+            low-key support access shouldn't require the app to first flag
+            you as at-risk. WHO-5 only measures two weeks of mood; it can't
+            rule out something else going on. */}
+        <View style={[styles.interventionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Ionicons name="school-outline" size={24} color={theme.accent} />
+          <View style={styles.interventionContent}>
+            <Text style={[styles.interventionTitle, {color:theme.text}]}>Need to Talk to Someone?</Text>
+            <Text style={[styles.interventionText, {color:theme.subtext}]}>
+              {GUIDANCE_OFFICE.name} is here for any student — you don't need a low score to reach out.
+            </Text>
+            {!!GUIDANCE_OFFICE.location && (
+              <Text style={[styles.contactLine, {color:theme.subtext}]}>{GUIDANCE_OFFICE.location} · {GUIDANCE_OFFICE.hours}</Text>
+            )}
+            <View style={styles.contactLinkRow}>
+              {!!GUIDANCE_OFFICE.email && (
+                <TouchableOpacity onPress={() => Linking.openURL(buildGuidanceEmailDraft(GUIDANCE_OFFICE))}>
+                  <Text style={styles.interventionLink}>Email</Text>
+                </TouchableOpacity>
+              )}
+              {!!GUIDANCE_OFFICE.phone && (
+                <TouchableOpacity onPress={() => Linking.openURL(`tel:${GUIDANCE_OFFICE.phone}`)}>
+                  <Text style={styles.interventionLink}>Call</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Current Score Card */}
@@ -352,6 +452,25 @@ export default function WellnessScreen() {
                       <Text style={styles.interventionLink}>Visit Resource</Text>
                     </TouchableOpacity>
                   )}
+                  {item.contact && (
+                    <View style={styles.contactBlock}>
+                      {!!item.contact.location && (
+                        <Text style={[styles.contactLine, {color:theme.subtext}]}>{item.contact.location} · {item.contact.hours}</Text>
+                      )}
+                      <View style={styles.contactLinkRow}>
+                        {!!item.contact.email && (
+                          <TouchableOpacity onPress={() => Linking.openURL(buildGuidanceEmailDraft(item.contact))}>
+                            <Text style={styles.interventionLink}>Email</Text>
+                          </TouchableOpacity>
+                        )}
+                        {!!item.contact.phone && (
+                          <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.contact.phone}`)}>
+                            <Text style={styles.interventionLink}>Call</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )}
                 </View>
               </View>
             ))}
@@ -362,7 +481,7 @@ export default function WellnessScreen() {
         {history.length > 0 && (
           <View style={styles.historySection}>
             <Text style={[styles.sectionTitle, {color:theme.text}]}>Past Assessments</Text>
-            {history.slice(0, 10).map((entry, idx) => {
+            {(showAllHistory ? history : history.slice(0, 5)).map((entry, idx) => {
               const status = getWellnessStatus(entry.percentage);
               return (
                 <View key={entry.id || idx} style={[styles.historyItem, {backgroundColor:theme.card, borderColor:theme.border}]}>
@@ -375,11 +494,72 @@ export default function WellnessScreen() {
                 </View>
               );
             })}
+            {history.length > 5 && (
+              <TouchableOpacity
+                style={styles.seeMoreBtn}
+                onPress={() => setShowAllHistory((prev) => !prev)}
+              >
+                <Text style={[styles.seeMoreText, { color: theme.accent }]}>
+                  {showAllHistory ? 'Show Less' : `See More (${history.length - 5})`}
+                </Text>
+                <Ionicons
+                  name={showAllHistory ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={theme.accent}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* ─── Consent Modal — shown once, before the first assessment ─── */}
+      <Modal visible={showConsent} transparent animationType="fade" onRequestClose={() => setShowConsent(false)}>
+        <View style={styles.consentBackdrop}>
+          <View style={[styles.consentSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.consentTitle, { color: theme.text }]}>
+              {consentPurpose === 'review' ? 'Your Consent' : 'Before You Begin'}
+            </Text>
+
+            <ScrollView style={styles.consentScroll} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.consentText, { color: theme.text }]}>
+                • The WHO-5 Well-Being Index is a self-monitoring tool for your own awareness. It is not a clinical diagnosis and does not replace a professional evaluation.
+              </Text>
+              <Text style={[styles.consentText, { color: theme.text }]}>
+                • Recommendations shown here (breathing exercises, sleep tips, resource links) are general guidance, not emergency care. If you are in crisis or immediate danger, contact emergency services or a crisis hotline directly — do not rely on this app.
+              </Text>
+              <Text style={[styles.consentText, { color: theme.text }]}>
+                • Your responses are saved to your account so you can track your own trends over time. BALANSE has no reporting feature of its own and nothing is sent anywhere unless you choose to reach out yourself using the referral option on this screen. Keep in mind that reaching out this way may itself suggest to Guidance Office staff that you're going through something, even though your actual score is never included in the message.
+              </Text>
+              <Text style={[styles.consentText, { color: theme.text }]}>
+                • If a recommendation suggests contacting the Guidance Counseling Office or an outside resource, reaching out is entirely your choice — tapping a link or contact only opens it for you; it does not notify anyone on its own.
+              </Text>
+            </ScrollView>
+
+            {consentPurpose === 'review' ? (
+              <>
+                <TouchableOpacity style={[styles.consentAcceptBtn, { backgroundColor: theme.accent }]} onPress={() => setShowConsent(false)}>
+                  <Text style={styles.consentAcceptText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.consentDeclineBtn} onPress={withdrawConsent}>
+                  <Text style={[styles.consentDeclineText, { color: '#ef4444' }]}>Withdraw Consent</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={[styles.consentAcceptBtn, { backgroundColor: theme.accent }]} onPress={acceptConsent}>
+                  <Text style={styles.consentAcceptText}>I Understand & Agree</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.consentDeclineBtn} onPress={() => setShowConsent(false)}>
+                  <Text style={[styles.consentDeclineText, { color: theme.subtext }]}>Not Now</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* ─── Questionnaire Modal ─── */}
       <Modal visible={showQuestionnaire} animationType="slide" presentationStyle="pageSheet">
@@ -536,6 +716,8 @@ const styles = StyleSheet.create({
   header: { marginBottom: 20 },
   title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff' },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
+  reviewConsentLink: { marginTop: 8 },
+  reviewConsentText: { fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
   scoreCard: { backgroundColor: '#1a1a3e', borderRadius: 16, padding: 20, borderLeftWidth: 4, marginBottom: 16 },
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   scoreValue: { fontSize: 42, fontWeight: 'bold', color: '#ffffff' },
@@ -592,6 +774,8 @@ const styles = StyleSheet.create({
   historyScore: { color: '#fff', fontSize: 16, fontWeight: '600' },
   historyLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
   historyDate: { color: 'rgba(255,255,255,0.4)', fontSize: 12 },
+  seeMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10 },
+  seeMoreText: { fontSize: 13, fontWeight: '600' },
   modalContainer: { flex: 1, backgroundColor: '#0f0f23' },
   questionContainer: { flex: 1, paddingHorizontal: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
@@ -626,4 +810,16 @@ const styles = StyleSheet.create({
   resultDescription: { color: 'rgba(255,255,255,0.7)', fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 40 },
   doneButton: { backgroundColor: '#a78bfa', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 48 },
   doneButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  consentBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  consentSheet: { width: '100%', maxWidth: 420, maxHeight: '80%', borderRadius: 20, padding: 22, borderWidth: 1 },
+  consentTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14 },
+  consentScroll: { marginBottom: 18 },
+  consentText: { fontSize: 13, lineHeight: 20, marginBottom: 12 },
+  consentAcceptBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  consentAcceptText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  consentDeclineBtn: { alignItems: 'center', paddingVertical: 8 },
+  consentDeclineText: { fontSize: 13, fontWeight: '600' },
+  contactBlock: { marginTop: 8 },
+  contactLine: { fontSize: 12, marginBottom: 6 },
+  contactLinkRow: { flexDirection: 'row', gap: 16 },
 });

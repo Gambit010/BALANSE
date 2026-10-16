@@ -159,12 +159,17 @@ export default function AddClassScreen({ navigation }) {
         const dt = getDayTime(dayName);
         const taskDate = new Date(cursor);
         taskDate.setHours(dt.start.getHours(), dt.start.getMinutes(), 0, 0);
+        // Without endTime the conflict check assumes 60 minutes, missing
+        // overlaps in the rest of a longer class.
+        const sessionEnd = new Date(cursor);
+        sessionEnd.setHours(dt.end.getHours(), dt.end.getMinutes(), 0, 0);
 
         sessions.push({
           title: className.trim(),
           category,
           priority: 'Medium',
           deadline: taskDate.toISOString(),
+          endTime: sessionEnd.toISOString(),
         });
       }
       cursor.setDate(cursor.getDate() + 1);

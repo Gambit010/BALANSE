@@ -8,11 +8,13 @@ import {
   query, 
   where,
   orderBy,
+  writeBatch,
   serverTimestamp 
 } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db, auth } from '../../firebase';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { scheduleDeadlineReminder, cancelDeadlineReminder } from './pushNotificationServices';
+import { recordActiveDay } from './activityService';
 
 // Get all tasks for the current user
 export const getUserTasks = async (userId) => {
@@ -35,15 +37,28 @@ export const getUserTasks = async (userId) => {
 // Add a new task
 export const addTask = async (taskData) => {
   try {
+    // Default duration to 60 mins if not provided (backward compatibility)
+    const duration = taskData.duration || 60; 
+    
+    // If user picked a start time, calculate end time automatically
+    let endTime = taskData.endTime;
+    if (taskData.startTime && !endTime) {
+      const start = new Date(taskData.startTime);
+      const end = new Date(start.getTime() + duration * 60000);
+      endTime = end.toISOString();
+    }
+
     const docRef = await addDoc(collection(db, 'tasks'), {
       ...taskData,
+      duration, // Save duration in minutes
+      startTime: taskData.startTime || null,
+      endTime: endTime || null,
       createdAt: serverTimestamp(),
       isCompleted: false,
       progress: 0,
     });
 
-    // Schedule a local reminder the evening before the deadline (skip for class
-    // schedules, which are recurring and handled separately to avoid over-scheduling).
+    // Schedule reminder (skip for class schedules)
     if (!taskData.recurrence?.isClassSchedule) {
       await scheduleDeadlineReminder({ id: docRef.id, ...taskData });
     }
@@ -54,7 +69,6 @@ export const addTask = async (taskData) => {
     return null;
   }
 };
-
 // Update task progress
 export const updateTaskProgress = async (taskId, progress) => {
   try {
@@ -67,6 +81,7 @@ export const updateTaskProgress = async (taskId, progress) => {
     // No need to keep reminding about a completed task
     if (progress === 100) {
       await cancelDeadlineReminder(taskId);
+      recordActiveDay(auth.currentUser?.uid); // not awaited; never blocks the status change
     }
 
     return true;
@@ -79,12 +94,26 @@ export const updateTaskProgress = async (taskId, progress) => {
 // Update task fields (for editing)
 export const updateTask = async (taskId, taskData) => {
   try {
-    const taskRef = doc(db, 'tasks', taskId);
-    await updateDoc(taskRef, taskData);
+    const updateData = { ...taskData };
 
-    // Deadline may have changed — reschedule the reminder against the new value.
-    if (taskData.deadline && !taskData.recurrence?.isClassSchedule) {
-      await scheduleDeadlineReminder({ id: taskId, ...taskData });
+    // Recalculate endTime if duration or startTime changed
+    if (updateData.duration || updateData.startTime) {
+      const start = updateData.startTime ? new Date(updateData.startTime) : new Date();
+      const dur = updateData.duration || 60;
+      
+      // If we have a start time, ensure end time matches duration
+      if (updateData.startTime) {
+        const end = new Date(start.getTime() + dur * 60000);
+        updateData.endTime = end.toISOString();
+      }
+    }
+
+    const taskRef = doc(db, 'tasks', taskId);
+    await updateDoc(taskRef, updateData);
+
+    // Reschedule reminder if deadline changed
+    if (updateData.deadline && !updateData.recurrence?.isClassSchedule) {
+      await scheduleDeadlineReminder({ id: taskId, ...updateData });
     }
 
     return true;
@@ -243,6 +272,39 @@ export const deleteRecurringTasks = async (templateName) => {
     return 0;
   }
 };
+// When a class session ends; falls back to 60 minutes like conflictService.
+export const getClassSessionEnd = (task) =>
+  task.endTime
+    ? new Date(task.endTime)
+    : new Date(new Date(task.deadline).getTime() + 60 * 60000);
+
+// Deletes the sessions of one class that haven't ended yet; past sessions
+// stay as Calendar history. Returns how many were deleted, or -1 on error.
+export const deleteUpcomingClassSessions = async (userId, templateName) => {
+  try {
+    const q = query(
+      collection(db, 'tasks'),
+      where('userId', '==', userId),
+      where('recurrence.templateName', '==', templateName)
+    );
+    const snapshot = await getDocs(q);
+    const now = new Date();
+    const upcoming = snapshot.docs.filter((d) => getClassSessionEnd(d.data()) >= now);
+
+    // Firestore batches are capped at 500 writes.
+    for (let i = 0; i < upcoming.length; i += 450) {
+      const batch = writeBatch(db);
+      upcoming.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    await Promise.all(upcoming.map((d) => cancelDeadlineReminder(d.id)));
+    return upcoming.length;
+  } catch (error) {
+    console.error('Error deleting class sessions:', error);
+    return -1;
+  }
+};
+
 export const addClassSchedule = async (scheduleData) => {
   try {
     const dayMap = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 0 };
