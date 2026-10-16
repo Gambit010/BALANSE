@@ -16,6 +16,9 @@ import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 
+// Unfinished High-priority tasks already due that week before we warn.
+const WORKLOAD_WARNING_THRESHOLD = 3;
+
 export default function AddTaskScreen({ navigation }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -26,6 +29,8 @@ export default function AddTaskScreen({ navigation }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hasTime, setHasTime] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [duration, setDuration] = useState(60); // Default 60 mins
+  const [showDurationSelector, setShowDurationSelector] = useState(false);
 
   // Repeat state
   const [isRepeat, setIsRepeat] = useState(false);
@@ -43,26 +48,34 @@ export default function AddTaskScreen({ navigation }) {
   const defaultEnd = { hour: 18, minute: 0 };
 
   const { tasks: existingTasks } = useTasks();
-  const { theme, isDarkMode } = useTheme(); // for dark mode
-
-    // code block to test to fix the calendar bug
-  const formatLocalDate = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-  };
+  const { theme } = useTheme(); // for dark mode
 
   const pendingTask = useMemo(() => ({
     title: title.trim(),
     category,
     priority,
-    deadline: hasTime ? deadline.toISOString() : formatLocalDate(deadline),
-    hasTime,
+    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
   }), [category, priority, deadline, hasTime]);
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
+
+  // Same Sun–Sat week the Calendar's Week view uses.
+  const weekWorkload = useMemo(() => {
+    if (isRepeat) return null;
+    const weekStart = new Date(deadline);
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const highCount = existingTasks.filter((t) => {
+      if (t.progress === 100 || t.recurrence?.isClassSchedule || t.priorityLabel !== 'High' || !t.deadline) return false;
+      const d = new Date(t.deadline);
+      return d >= weekStart && d < weekEnd;
+    }).length;
+
+    return { highCount, weekStart };
+  }, [existingTasks, deadline, isRepeat]);
 
   const handleApplySuggestion = (slot) => {
     if (slot.type === 'time') {
@@ -207,7 +220,8 @@ export default function AddTaskScreen({ navigation }) {
         description: description.trim(),
         category,
         priority,
-        deadline: hasTime ? deadline.toISOString() : formatLocalDate(deadline),
+        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+        duration: duration,
         priorityScore: 0,
         assignments: [],
       };
@@ -443,7 +457,6 @@ export default function AddTaskScreen({ navigation }) {
 
             {showDatePicker && (
               <DateTimePicker value={deadline} mode="date"
-                themeVariant={isDarkMode ? 'dark' : 'light'}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 minimumDate={new Date()}
                 onChange={(event, selectedDate) => {
@@ -488,7 +501,6 @@ export default function AddTaskScreen({ navigation }) {
                 value={deadline}
                 mode="time"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                themeVariant={isDarkMode ? 'dark' : 'light'}
                 onChange={(event, selectedDate) => {
                   setShowTimePicker(false);
                   if (selectedDate) setDeadline(selectedDate);
@@ -496,78 +508,53 @@ export default function AddTaskScreen({ navigation }) {
               />
             )}
 
+            {/* CONFLICT ALERTS (single task) */}
             
-          </>
-        )}
-        {/* CONFLICT ALERTS (single task) */}
-            <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
+            {/* --- DURATION SELECTOR (Single Task Only) --- */}
+            <TouchableOpacity
+              style={[styles.durationToggleRow, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => setShowDurationSelector(!showDurationSelector)}
+            >
+              <View style={styles.timeToggleLeft}>
+                <Ionicons name="hourglass-outline" size={18} color={theme.subtext} />
+                <Text style={[styles.timeToggleText, { color: theme.subtext }]}>
+                  Set Duration: {duration >= 60 ? `${Math.floor(duration/60)}h ${duration%60}m` : `${duration}m`}
+                </Text>
+              </View>
+              <Ionicons name={showDurationSelector ? "chevron-up-outline" : "chevron-down-outline"} size={18} color={theme.subtext} />
+            </TouchableOpacity>
 
-        {/* --- REPEAT: Day selector + Duration + Per-day times --- */}
-        {isRepeat && (
-          <>
-            <Text style={[styles.label, {color: theme.text}]}>Repeat On</Text>
-            <View style={styles.dayRow}>
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                <TouchableOpacity
-                  key={day}
-                  style={[styles.dayChip, { backgroundColor: theme.card, borderColor: theme.border }, selectedDays.includes(day) && styles.dayChipActive]}
-                  onPress={() => toggleDay(day)}
-                >
-                  <Text style={[styles.dayChipText, { color: selectedDays.includes(day) ? theme.text : theme.subtext}, selectedDays.includes(day) && {color: theme.text, fontWeight: '700',},]}>
-                    {day}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.label, {color: theme.text}]}>Duration</Text>
-            <View style={styles.durationRow}>
-              {[
-                { key: '4weeks', label: '4 Weeks' },
-                { key: '8weeks', label: '8 Weeks' },
-                { key: '4months', label: '4 Months' },
-                { key: 'custom', label: 'Custom' },
-              ].map((opt) => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, durationPreset === opt.key && styles.durationChipActive]}
-                  onPress={() => setDurationPreset(opt.key)}
-                >
-                  <Text style={[styles.durationChipText, { color: durationPreset === opt.key ? theme.text : theme.subtext }, durationPreset === opt.key && {color: theme.text, fontWeight: '700',},]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {durationPreset === 'custom' && (
-              <View style={styles.customRow}>
-                <TextInput
-                  style={[styles.customInput, {
-                    backgroundColor: theme.card,
-                    color: theme.text,
-                    borderColor: theme.border,
-                  }]}
-                  placeholder="e.g. 6"
-                  placeholderTextColor= { theme.subtext }
-                  keyboardType="number-pad"
-                  value={customValue}
-                  onChangeText={setCustomValue}
-                  maxLength={3}
-                />
-                <View style={styles.unitRow}>
-                  {['weeks', 'months'].map((u) => (
+            {showDurationSelector && (
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                  {[15, 30, 45, 60, 90, 120, 180, 240].map((mins) => (
                     <TouchableOpacity
-                      key={u}
-                      style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border }, customUnit === u && styles.unitChipActive]}
-                      onPress={() => setCustomUnit(u)}
+                      key={mins}
+                      onPress={() => setDuration(mins)}
+                      style={[
+                        styles.durationChipSmall,
+                        { 
+                          backgroundColor: duration === mins ? theme.accent : theme.card,
+                          borderColor: theme.border,
+                          borderWidth: 1
+                        }
+                      ]}
                     >
-                      <Text style={[styles.unitChipText, { color: customUnit === u ? theme.text : theme.subtext }, customUnit === u && {color: theme.text, fontWeight: '700',},]}>
-                        {u.charAt(0).toUpperCase() + u.slice(1)}
+                      <Text style={{ 
+                        color: duration === mins ? '#fff' : theme.text, 
+                        fontWeight: duration === mins ? '700' : '500',
+                        fontSize: 12
+                      }}>
+                        {mins >= 60 
+                          ? `${mins / 60}h${mins % 60 !== 0 ? ` ${mins % 60}m` : ''}` 
+                          : `${mins}m`}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+                <Text style={{ fontSize: 12, color: theme.subtext, marginTop: 8, fontStyle: 'italic' }}>
+                  Helps us detect scheduling conflicts accurately.
+                </Text>
               </View>
             )}
 
@@ -604,7 +591,6 @@ export default function AddTaskScreen({ navigation }) {
               <DateTimePicker
                 value={getPickerValue()}
                 mode="time"
-                themeVariant={isDarkMode ? 'dark' : 'light'}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={handleDayTimeChange}
               />
@@ -620,6 +606,17 @@ export default function AddTaskScreen({ navigation }) {
               </View>
             )}
           </>
+        )}
+
+        {weekWorkload && weekWorkload.highCount >= WORKLOAD_WARNING_THRESHOLD && (
+          <View style={[styles.workloadBanner, { backgroundColor: theme.card, borderColor: '#fb923c' }]}>
+            <Ionicons name="alert-circle-outline" size={18} color="#fb923c" />
+            <Text style={[styles.workloadText, { color: theme.text }]}>
+              You already have {weekWorkload.highCount} High-priority tasks due the week of{' '}
+              {weekWorkload.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.
+              Worth checking if this one can wait.
+            </Text>
+          </View>
         )}
 
         <TouchableOpacity
@@ -743,6 +740,20 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: { 
     opacity: 0.6 
+  },
+  workloadBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+  },
+  workloadText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
   submitButtonText: { 
     color: '#ffffff', 
@@ -952,5 +963,24 @@ const styles = StyleSheet.create({
     fontSize: 13, 
     color: 'rgba(255,255,255,0.7)', 
     flex: 1 
+  },
+  
+  durationToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  durationChipSmall: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

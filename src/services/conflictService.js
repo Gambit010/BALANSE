@@ -28,7 +28,7 @@ const getTaskTimeRange = (task) => {
   const hasTime = task.deadline.includes('T');
 
   if (!hasTime) {
-    // Date-only string like "2026-04-05" — interpret as local calendar day
+    // Date-only string: All day task
     const [year, month, day] = task.deadline.split('-').map(Number);
     if (!year || !month || !day) return null;
     const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -36,22 +36,44 @@ const getTaskTimeRange = (task) => {
     return { start: dayStart, end: dayEnd, isAllDay: true };
   }
 
-  // Timed task — parse the ISO string (gives UTC instant, comparisons use .getTime() which is timezone-agnostic)
+  // Timed task
   const start = new Date(task.deadline);
   if (isNaN(start.getTime())) return null;
 
-  // Use the task's real end time when available (class schedules store endTime);
-  // otherwise fall back to the default duration.
   let end;
+  
+  // PRIORITY 1: Use explicit endTime (from class schedules or calculated start+dur)
   if (task.endTime) {
     const parsedEnd = new Date(task.endTime);
-    end = !isNaN(parsedEnd.getTime()) && parsedEnd > start
-      ? parsedEnd
-      : new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
-  } else {
-    end = new Date(start.getTime() + DEFAULT_TASK_DURATION * 60 * 1000);
+    end = !isNaN(parsedEnd.getTime()) && parsedEnd > start ? parsedEnd : null;
   }
+  
+  // PRIORITY 2: If no endTime, calculate from duration field
+  if (!end && task.duration) {
+    end = new Date(start.getTime() + task.duration * 60000);
+  }
+  
+  // PRIORITY 3: Fallback to default 60 mins
+  if (!end) {
+    end = new Date(start.getTime() + DEFAULT_TASK_DURATION * 60000);
+  }
+
   return { start, end, isAllDay: false };
+};
+
+/**
+ * True when a class-schedule task's session has already ended and its
+ * progress is still untouched (0) — i.e. nobody manually edited it. Used to
+ * derive a "Done" display/exclude-from-counts treatment for past classes
+ * without ever writing progress: 100 to Firestore, so a manual edit (e.g.
+ * repurposing a cancelled class into something else) always wins.
+ */
+export const isElapsedClass = (task) => {
+  if (!task?.recurrence?.isClassSchedule) return false;
+  if (task.progress > 0) return false;
+  const range = getTaskTimeRange(task);
+  if (!range) return false;
+  return range.end < new Date();
 };
 
 
@@ -103,6 +125,7 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
   const otherTasks = existingTasks.filter((t) => {
     if (t.id === targetTaskId) return false;
     if (t.progress === 100) return false;
+    if (isElapsedClass(t)) return false;
     if (!t.deadline) return false;
     return true;
   });
@@ -334,7 +357,7 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
  */
 export const detectAllConflicts = (tasks) => {
   const conflictMap = new Map();
-  const activeTasks = tasks.filter((t) => t.progress !== 100);
+  const activeTasks = tasks.filter((t) => t.progress !== 100 && !isElapsedClass(t));  
 
   for (let i = 0; i < activeTasks.length; i++) {
     const task = activeTasks[i];

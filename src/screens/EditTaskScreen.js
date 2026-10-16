@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { updateTask } from '../services/taskService';
+import { recordActiveDay } from '../services/activityService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { checkAndNotifyConflicts } from '../services/conflictService';
 import { useTaskConflicts } from '../hooks/useConflicts';
@@ -82,6 +83,10 @@ export default function EditTaskScreen({ route, navigation }) {
       const success = await updateTask(task.id, updatedData);
 
       if (success) {
+        // Only when it changes to Done, so editing an already-done task doesn't count.
+        if (progress === 100 && task.progress !== 100) {
+          recordActiveDay(task.userId);
+        }
         updatedData.id = task.id;
         updatedData.userId = task.userId;
         await checkAndNotifyConflicts(task.userId, updatedData, existingTasks);

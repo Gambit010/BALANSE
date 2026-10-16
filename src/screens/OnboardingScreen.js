@@ -8,6 +8,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from '../../firebase';
+
+// Per account, so a different user on the same phone still sees it once.
+export const ONBOARDING_KEY_PREFIX = 'onboarding_seen_';
 
 const { width } = Dimensions.get('window');
 
@@ -22,7 +27,7 @@ const slides = [
     id: '2',
     icon: '🧠', 
     title: 'Smart Priorities',
-    description: 'Automatic task prioritization based on deadlines and importance.',
+    description: 'Each task gets a score from its deadline, the priority you set, and its category, so the most urgent work rises to the top. Tap any task to see how its score was worked out.',
   },
   {
     id: '3',
@@ -42,16 +47,29 @@ export default function OnboardingScreen({ navigation }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
 
+  // replace (not navigate) so Android's back button can't return here.
+  const finishOnboarding = async () => {
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      try {
+        await AsyncStorage.setItem(`${ONBOARDING_KEY_PREFIX}${uid}`, 'true');
+      } catch (e) {
+        console.error('Failed to save onboarding flag:', e);
+      }
+    }
+    navigation.replace('MainApp');
+  };
+
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      navigation.navigate('MainApp'); // or 'Dashboard'
+      finishOnboarding();
     }
   };
 
   const handleSkip = () => {
-    navigation.navigate('MainApp');
+    finishOnboarding();
   };
 
   const currentSlide = slides[currentIndex];
