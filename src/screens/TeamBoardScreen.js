@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTeamBoard } from '../hooks/useTeams';
 import { statusFromProgress } from '../services/teamService';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { toLocalDateKey } from '../utils/dateUtils';
 
 const COLUMN_WIDTH = Dimensions.get('window').width * 0.78;
 
@@ -38,7 +39,7 @@ const toISODate = (days) => {
   if (days === null) return null;
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return toLocalDateKey(d);
 };
 
 const formatDeadline = (iso) => {

@@ -23,7 +23,7 @@ import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { isElapsedClass } from '../services/conflictService';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import UndoToast from '../components/UndoToast';
-
+import { toLocalDateKey } from '../utils/dateUtils';
 
 export default function TasksScreen({ navigation, route }) {
   const { tasks, loading, refetch } = useTasks();
@@ -116,7 +116,7 @@ export default function TasksScreen({ navigation, route }) {
     const hasTime = task.deadline && task.deadline.includes('T');
     const newDeadline = hasTime
       ? newDeadlineDate.toISOString()
-      : newDeadlineDate.toISOString().split('T')[0];
+      : toLocalDateKey(newDeadlineDate);
 
     const score = computePriorityScore({ deadline: newDeadline, priority: task.priority, category: task.category });
     const success = await updateTask(task.id, {
