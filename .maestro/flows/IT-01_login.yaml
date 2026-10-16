@@ -1,0 +1,34 @@
+appId: com.balanseapp.app
+---
+
+# Integration Testing 01: Authentication Flow
+# Tests: Login with valid credentials navigates to homescreen
+
+- launchApp
+  
+# Verify landing screen is visible
+- assertVisible: "BALANSE"
+- assertVisible: "Smart Task Management for Student Leaders"
+- assertVisible: "Get Started"
+- assertVisible: "Log In"
+
+# Navigate to login screen
+- tapOn: "Log In"
+
+# Enter credentials
+- tapOn:
+    text: "Enter your email"
+- inputText: "kobe@gmail.com"
+
+- tapOn:
+    text: "Enter your password"
+- inputText: "kyleaundry03"
+
+# Click login button
+- tapOn: "Log In"
+
+- extendedWaitUntil:
+    visible: "Smart Task Management"
+    timeout: 10000
+
+- assertVisible: "Smart Task Management"
