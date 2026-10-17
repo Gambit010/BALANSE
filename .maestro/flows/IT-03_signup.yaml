@@ -1,0 +1,46 @@
+appId: com.balanseapp.app
+---
+
+- launchApp:
+    clearState: true
+
+# Open signup from the landing screen.
+- assertVisible: "BALANSE"
+- assertVisible: "Smart Task Management for Student Leaders"
+- assertVisible: "Get Started"
+- tapOn: "Get Started"
+- assertVisible: "Create Account"
+
+- tapOn:
+    text: "Enter your first name"
+- inputText: "Kyle"
+
+- tapOn:
+    text: "Enter your middle name"
+- inputText: "Aundry"
+
+- scrollUntilVisible:
+    element:
+      text: "Enter your last name"
+    direction: DOWN
+    timeout: 10000
+    
+- tapOn:
+    text: "Enter your last name"
+- inputText: "Santos"
+
+- tapOn:
+    text: "Enter your email"  
+- inputText: "dkyleaundry@yahoo.com"
+
+- tapOn:
+    text: "Create a strong password"
+- inputText: "kyleaundry03"
+
+- tapOn: "Create Account"
+
+- extendedWaitUntil:
+    visible: "Account Created"
+    timeout: 50000
+
+- tapOn: "GO TO LOGIN"
