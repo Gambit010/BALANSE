@@ -1,0 +1,40 @@
+appId: com.balanseapp.app
+---
+
+- launchApp:
+    clearState: true
+
+# Open signup from the landing screen.
+- assertVisible: "BALANSE"
+- assertVisible: "Smart Task Management for Student Leaders"
+- assertVisible: "Get Started"
+- tapOn: "Get Started"
+- assertVisible: "Create Account"
+
+- scrollUntilVisible:
+    element:
+      text: "Continue with Google"
+    direction: DOWN
+    timeout: 10000
+
+- tapOn: "Continue with Google"
+
+- assertVisible: "Choose an account"
+- assertVisible: "Kyle Aundry Delos Santos (Kyle aundry)"
+- tapOn: "Kyle Aundry Delos Santos (Kyle aundry)"
+
+- extendedWaitUntil:
+    visible: "Account Created"
+    timeout: 50000
+
+- tapOn: "OK"
+
+- assertVisible: "BALANSE"
+- assertVisible: "Smart Task Management"
+- assertVisible: "Skip"
+- assertVisible: "Next"
+
+- tapOn: "Next"
+- tapOn: "Next"
+- tapOn: "Next"
+- tapOn: "Get Started"
