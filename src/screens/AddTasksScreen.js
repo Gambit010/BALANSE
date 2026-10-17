@@ -14,7 +14,7 @@ import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
+import { toLocalDateKey } from '../utils/dateUtils';
 
 // Unfinished High-priority tasks already due that week before we warn.
 const WORKLOAD_WARNING_THRESHOLD = 3;
@@ -54,7 +54,7 @@ export default function AddTaskScreen({ navigation }) {
     title: title.trim(),
     category,
     priority,
-    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+    deadline: hasTime ? deadline.toISOString() : toLocalDateKey(deadline),
   }), [category, priority, deadline, hasTime]);
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
@@ -220,7 +220,7 @@ export default function AddTaskScreen({ navigation }) {
         description: description.trim(),
         category,
         priority,
-        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+        deadline: hasTime ? deadline.toISOString() : toLocalDateKey(deadline),
         duration: duration,
         priorityScore: 0,
         assignments: [],
@@ -555,6 +555,79 @@ export default function AddTaskScreen({ navigation }) {
                 <Text style={{ fontSize: 12, color: theme.subtext, marginTop: 8, fontStyle: 'italic' }}>
                   Helps us detect scheduling conflicts accurately.
                 </Text>
+              </View>
+            )}
+                        {/* CONFLICT ALERTS (single task) */}
+            <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion} />
+          </>
+        )}
+
+        {/* --- REPEAT: Day selector + Duration + Per-day times --- */}
+        {isRepeat && (
+          <>
+            <Text style={[styles.label, {color: theme.text}]}>Repeat On</Text>
+            <View style={styles.dayRow}>
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.dayChip, { backgroundColor: theme.card, borderColor: theme.border }, selectedDays.includes(day) && styles.dayChipActive]}
+                  onPress={() => toggleDay(day)}
+                >
+                  <Text style={[styles.dayChipText, { color: selectedDays.includes(day) ? theme.text : theme.subtext}, selectedDays.includes(day) && {color: theme.text, fontWeight: '700',},]}>
+                    {day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.label, {color: theme.text}]}>Duration</Text>
+            <View style={styles.durationRow}>
+              {[
+                { key: '4weeks', label: '4 Weeks' },
+                { key: '8weeks', label: '8 Weeks' },
+                { key: '4months', label: '4 Months' },
+                { key: 'custom', label: 'Custom' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, durationPreset === opt.key && styles.durationChipActive]}
+                  onPress={() => setDurationPreset(opt.key)}
+                >
+                  <Text style={[styles.durationChipText, { color: durationPreset === opt.key ? theme.text : theme.subtext }, durationPreset === opt.key && {color: theme.text, fontWeight: '700',},]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {durationPreset === 'custom' && (
+              <View style={styles.customRow}>
+                <TextInput
+                  style={[styles.customInput, {
+                    backgroundColor: theme.card,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  }]}
+                  placeholder="e.g. 6"
+                  placeholderTextColor= { theme.subtext }
+                  keyboardType="number-pad"
+                  value={customValue}
+                  onChangeText={setCustomValue}
+                  maxLength={3}
+                />
+                <View style={styles.unitRow}>
+                  {['weeks', 'months'].map((u) => (
+                    <TouchableOpacity
+                      key={u}
+                      style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border }, customUnit === u && styles.unitChipActive]}
+                      onPress={() => setCustomUnit(u)}
+                    >
+                      <Text style={[styles.unitChipText, { color: customUnit === u ? theme.text : theme.subtext }, customUnit === u && {color: theme.text, fontWeight: '700',},]}>
+                        {u.charAt(0).toUpperCase() + u.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             )}
 

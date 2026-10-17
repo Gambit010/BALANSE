@@ -1,6 +1,7 @@
 import { getUserTasks } from './taskService';
 import { createNotification, hasRecentNotification } from './notificationService';
 import { sendImmediateNotification } from './pushNotificationServices'; 
+import { toLocalDateKey } from '../utils/dateUtils';
 
 // Default task duration in minutes when no end time is specified
 const DEFAULT_TASK_DURATION = 60;
@@ -292,7 +293,7 @@ const findLeastBusyDay = (deadline, allTasks) => {
 
   if (bestDay) {
     const dayName = bestDay.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-    const dateStr = bestDay.toISOString().split('T')[0];
+    const dateStr = toLocalDateKey(bestDay);
     return {
       message: `${dayName} has ${bestCount === 0 ? 'no' : `only ${bestCount}`} task${bestCount !== 1 ? 's' : ''} — consider moving this task there.`,
       slot: { type: 'date', value: dateStr, label: dayName },
