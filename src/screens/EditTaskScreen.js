@@ -13,7 +13,7 @@ import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import ConflictAlert from '../components/ConflictAlert';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
+import { toLocalDateKey } from '../utils/dateUtils';
 
 export default function EditTaskScreen({ route, navigation }) {
   const { task } = route.params;
@@ -38,7 +38,7 @@ export default function EditTaskScreen({ route, navigation }) {
     title: title.trim(),
     category,
     priority,
-    deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+    deadline: hasTime ? deadline.toISOString() : toLocalDateKey(deadline),
   }), [category, priority, deadline, hasTime]);
 
   const { conflicts, hasHighConflicts } = useTaskConflicts(pendingTask, existingTasks);
@@ -71,7 +71,7 @@ export default function EditTaskScreen({ route, navigation }) {
         description: description.trim(),
         category,
         priority,
-        deadline: hasTime ? deadline.toISOString() : deadline.toISOString().split('T')[0],
+        deadline: hasTime ? deadline.toISOString() : toLocalDateKey(deadline),
         progress,
         isCompleted: progress === 100,
       };
