@@ -2,20 +2,24 @@ appId: com.balanseapp.app
 ---
 
 # Integration Testing 01: Authentication Flow
-# Tests: Login with valid credentials navigates to homescreen
+# Tests: A valid email/password login opens the authenticated onboarding screen.
 
-- launchApp
-  
-# Verify landing screen is visible
+- launchApp:
+    clearState: true
+
+# Verify the unauthenticated landing screen.
 - assertVisible: "BALANSE"
 - assertVisible: "Smart Task Management for Student Leaders"
 - assertVisible: "Get Started"
 - assertVisible: "Log In"
 
-# Navigate to login screen
+# Open the login screen.
 - tapOn: "Log In"
+- assertVisible: "Welcome back!"
+- assertVisible: "Log In"
+- assertVisible: "Forgot Password?"
 
-# Enter credentials
+# Enter valid credentials. The selectors use the exact placeholders in LoginScreen.js.
 - tapOn:
     text: "Enter your email"
 - inputText: "kobe@gmail.com"
@@ -24,11 +28,21 @@ appId: com.balanseapp.app
     text: "Enter your password"
 - inputText: "kyleaundry03"
 
-# Click login button
+# Submit the form.
 - tapOn: "Log In"
 
+# App.js displays Onboarding for an authenticated account whose onboarding flag
+# has not been stored yet. Wait for Firebase auth/navigation to finish.
 - extendedWaitUntil:
-    visible: "Smart Task Management"
-    timeout: 10000
+    visible: "Skip"
+    timeout: 50000
 
+- assertVisible: "BALANSE"
 - assertVisible: "Smart Task Management"
+- assertVisible: "Skip"
+- assertVisible: "Next"
+
+- tapOn: "Next"
+- tapOn: "Next"
+- tapOn: "Next"
+- tapOn: "Get Started"
