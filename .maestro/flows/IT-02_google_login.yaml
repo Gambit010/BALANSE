@@ -1,0 +1,42 @@
+appId: com.balanseapp.app
+---
+
+# Integration Testing 02: Google Authentication Flow
+# Tests: Google sign-in opens the authenticated onboarding screen.
+#
+# This flow must run on an Android development build, not Expo Go. GoogleSignin
+# is a native module and the account picker is intentionally left for the
+# tester to select the account configured on the test device.
+
+- launchApp:
+    clearState: true
+
+# Open Login from the landing screen.
+- assertVisible: "BALANSE"
+- tapOn: "Log In"
+- assertVisible: "Welcome back!"
+- assertVisible: "Continue with Google"
+
+# This opens the native Google account picker. Select the test Google account
+# manually, then Maestro continues with the Firebase authentication checks.
+- tapOn: "Continue with Google"
+- assertVisible: "Choose an account"
+- assertVisible: "Kyle Aundry Delos Santos (Kyle aundry)"
+- tapOn: "Kyle Aundry Delos Santos (Kyle aundry)"
+
+# LoginScreen catches Google sign-in errors and displays an alert. A successful
+# token exchange causes App.js to render Onboarding for a new account.
+- extendedWaitUntil:
+    visible: "Skip"
+    timeout: 50000
+
+- assertVisible: "BALANSE"
+- assertVisible: "Smart Task Management"
+- assertVisible: "Skip"
+- assertVisible: "Next"
+
+- tapOn: "Next"
+- tapOn: "Next"
+- tapOn: "Next"
+- tapOn: "Get Started"
+
