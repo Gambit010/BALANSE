@@ -159,7 +159,7 @@ export default function TasksScreen({ navigation, route }) {
     }
 
     Alert.alert(
-      'Delete Class Sessions',
+      'Delete Upcoming Sessions',
       `Delete ${upcomingCount} upcoming session${upcomingCount !== 1 ? 's' : ''} of "${task.title}"? Past sessions stay in your calendar.`,
       [
         { text: 'Cancel', style: 'cancel' },

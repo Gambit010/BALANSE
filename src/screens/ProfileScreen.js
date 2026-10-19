@@ -16,6 +16,7 @@ import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../context/ThemeContext'; // for global dark mode 
 import { getNotificationsEnabled, setNotificationsEnabled } from '../services/pushNotificationServices';
+import UserAvatar from '../components/UserAvatar';
 
 // Task-completion milestones, counted over every task ever finished (see
 // lifetimeCompleted below), so a badge stays earned after a task is deleted.
@@ -131,10 +132,8 @@ export default function ProfileScreen({ navigation }) {
 
         {/* AVATAR + USER INFO */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {userName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={{ marginBottom: 12 }}>
+            <UserAvatar name={userName} photoURL={auth.currentUser?.photoURL} size={80} />
           </View>
           <Text style={[styles.userName, { color: theme.text }]}>{userName}</Text>
           <Text style={[styles.userEmail, { color: theme.subtext }]}>{userEmail}</Text>

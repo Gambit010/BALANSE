@@ -385,6 +385,9 @@ export default function AddTaskScreen({ navigation }) {
           multiline numberOfLines={4} 
           maxLength={500} 
         />
+        <Text style={{ alignSelf: 'flex-end', marginTop: -14, marginBottom: 16, fontSize: 11, color: theme.subtext }}>
+          {description.length}/500
+        </Text>
 
         {/*}
         <TextInput style={[styles.input, styles.textArea]} placeholder="Enter task description"

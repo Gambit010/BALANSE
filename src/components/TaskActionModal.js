@@ -65,6 +65,8 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
   // Rescheduling moves only the start time, and a class has no meaningful
   // priority, so those options are hidden for class sessions.
   const isClass = !!task.recurrence?.isClassSchedule;
+  // Classes and "Repeat weekly" tasks are both a series of sessions.
+  const isRecurring = !!task.recurrence?.templateName;
   const overdue = isOverdue(task);
   const meta = [
     task.isTeamTask && 'Team task',
@@ -161,11 +163,11 @@ export default function TaskActionModal({ visible, task, theme, onClose, onSetSt
           <TouchableOpacity style={styles.option} onPress={onDelete}>
             <Ionicons name="trash-outline" size={20} color="#ef4444" />
             <Text style={[styles.optionText, { color: '#ef4444' }]}>
-              {isClass ? 'Delete This Session' : 'Delete Task'}
+              {isRecurring ? 'Delete This Session' : 'Delete Task'}
             </Text>
           </TouchableOpacity>
 
-          {isClass && onDeleteSeries && (
+          {isRecurring && onDeleteSeries && (
             <TouchableOpacity style={styles.option} onPress={onDeleteSeries}>
               <Ionicons name="trash-bin-outline" size={20} color="#ef4444" />
               <Text style={[styles.optionText, { color: '#ef4444' }]}>Delete All Upcoming Sessions</Text>
