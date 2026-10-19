@@ -26,6 +26,8 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.POST_NOTIFICATIONS"
       ]
     },
@@ -48,6 +50,12 @@
       "eas": {
         "projectId": "f0b28aaf-0dbc-404b-83ab-7d534e8d63c1"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f0b28aaf-0dbc-404b-83ab-7d534e8d63c1"
     }
   }
 }
