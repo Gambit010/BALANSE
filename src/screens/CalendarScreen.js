@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +18,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { auth } from '../../firebase';
-import { getMyAssignedBoardTasks } from '../services/teamService';
+import { getMyAssignedBoardTasks, getTeam, updateBoardTaskProgress, deleteBoardTask } from '../services/teamService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { isElapsedClass } from '../services/conflictService';
+import { updateTaskProgress, updateTask, deleteTask, deleteUpcomingClassSessions, getClassSessionEnd } from '../services/taskService';
+import { toLocalDateKey } from '../utils/dateUtils';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import TaskActionModal from '../components/TaskActionModal';
+import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import UndoToast from '../components/UndoToast';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -68,7 +77,28 @@ export default function CalendarScreen({ navigation }) {
     }, [fetchTeamTasks])
   );
 
-  const allTasks = useMemo(() => [...tasks, ...teamAssignedTasks], [tasks, teamAssignedTasks]);
+  // Same tap actions as Home and Tasks: one action sheet for every task card.
+  const [actionTask, setActionTask] = useState(null);
+  const [breakdownTask, setBreakdownTask] = useState(null);
+  const [reschedulePickerTask, setReschedulePickerTask] = useState(null);
+
+  const refreshAll = () => Promise.all([refetch(), fetchTeamTasks()]);
+
+  // Team tasks and personal tasks live in different collections.
+  const { pendingDelete, scheduleDelete, undoDelete } = useUndoDelete(async (t) => {
+    const success = t.isTeamTask ? await deleteBoardTask(t.id) : await deleteTask(t.id);
+    if (success) {
+      await refreshAll();
+    } else {
+      Alert.alert('Error', `Failed to delete "${t.title}".`);
+    }
+  });
+
+  // The item waiting on Undo is hidden right away.
+  const allTasks = useMemo(
+    () => [...tasks, ...teamAssignedTasks].filter((t) => t.id !== pendingDelete?.id),
+    [tasks, teamAssignedTasks, pendingDelete]
+  );
   const { hasConflictsOnDate, getConflictsForDate } = useAllConflicts(allTasks);
 
   // ─── Calendar helpers ───
@@ -316,7 +346,7 @@ export default function CalendarScreen({ navigation }) {
       <TouchableOpacity
         key={task.id}
         style={[styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 1 }]}
-        onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+        onPress={() => setActionTask(task)}
         activeOpacity={0.7}
       >
         <View style={styles.taskTopRow}>
@@ -347,6 +377,68 @@ export default function CalendarScreen({ navigation }) {
             : urgency?.text || 'All day'}
         </Text>
       </TouchableOpacity>
+    );
+  };
+
+  // ─── Task actions (same behavior as Home and Tasks) ───
+
+  const handleSetStatus = async (t, newProgress) => {
+    if (t.isTeamTask) {
+      const team = await getTeam(t.teamId);
+      if (team) await updateBoardTaskProgress(team, t, newProgress, auth.currentUser);
+    } else {
+      await updateTaskProgress(t.id, newProgress);
+    }
+    await refreshAll();
+  };
+
+  const handleReschedule = async (task, newDeadlineDate) => {
+    const hasTime = task.deadline && task.deadline.includes('T');
+    const newDeadline = hasTime
+      ? newDeadlineDate.toISOString()
+      : toLocalDateKey(newDeadlineDate);
+
+    const score = computePriorityScore({ deadline: newDeadline, priority: task.priority, category: task.category });
+    const success = await updateTask(task.id, {
+      deadline: newDeadline,
+      priorityScore: score,
+      priorityLabel: getPriorityLabel(score),
+    });
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', 'Failed to reschedule task.');
+    }
+  };
+
+  const handleDeleteSeries = (task) => {
+    const templateName = task.recurrence?.templateName;
+    if (!templateName) return;
+    const now = new Date();
+    const upcomingCount = tasks.filter(
+      (t) => t.recurrence?.templateName === templateName && getClassSessionEnd(t) >= now
+    ).length;
+
+    if (upcomingCount === 0) {
+      Alert.alert('Nothing to delete', `"${task.title}" has no upcoming sessions left.`);
+      return;
+    }
+
+    Alert.alert(
+      'Delete Class Sessions',
+      `Delete ${upcomingCount} upcoming session${upcomingCount !== 1 ? 's' : ''} of "${task.title}"? Past sessions stay in your calendar.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const deleted = await deleteUpcomingClassSessions(task.userId, templateName);
+            if (deleted < 0) Alert.alert('Error', 'Failed to delete the class sessions.');
+            refetch();
+          },
+        },
+      ]
     );
   };
 
@@ -658,6 +750,75 @@ export default function CalendarScreen({ navigation }) {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <PriorityBreakdownModal
+        visible={!!breakdownTask}
+        task={breakdownTask}
+        onClose={() => setBreakdownTask(null)}
+      />
+
+      <TaskActionModal
+        visible={!!actionTask}
+        task={actionTask}
+        theme={theme}
+        onClose={() => setActionTask(null)}
+        onSetStatus={(newProgress) => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) handleSetStatus(t, newProgress);
+        }}
+        onViewBreakdown={() => {
+          setBreakdownTask(actionTask);
+          setActionTask(null);
+        }}
+        onEdit={() => {
+          const t = actionTask;
+          setActionTask(null);
+          navigation.getParent()?.navigate('EditTask', { task: t });
+        }}
+        onSnooze={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) {
+            const newDate = new Date(t.deadline);
+            newDate.setDate(newDate.getDate() + 1);
+            handleReschedule(t, newDate);
+          }
+        }}
+        onPickDate={() => {
+          const t = actionTask;
+          setActionTask(null);
+          setReschedulePickerTask(t);
+        }}
+        onDelete={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) scheduleDelete(t);
+        }}
+        onDeleteSeries={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) handleDeleteSeries(t);
+        }}
+      />
+
+      {/* Shown after "Pick a New Date" in the action sheet */}
+      {reschedulePickerTask && (
+        <DateTimePicker
+          value={new Date(reschedulePickerTask.deadline)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            const t = reschedulePickerTask;
+            setReschedulePickerTask(null);
+            if (selectedDate && t) handleReschedule(t, selectedDate);
+          }}
+        />
+      )}
+
+      {pendingDelete && (
+        <UndoToast key={pendingDelete.id} onUndo={undoDelete} isDarkMode={isDarkMode} />
+      )}
     </SafeAreaView>
   );
 }

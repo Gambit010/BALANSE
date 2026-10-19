@@ -82,7 +82,7 @@ export const updateTaskProgress = async (taskId, progress) => {
     // No need to keep reminding about a completed task
     if (progress === 100) {
       await cancelDeadlineReminder(taskId);
-      recordActiveDay(auth.currentUser?.uid); // not awaited; never blocks the status change
+      recordActiveDay(auth.currentUser?.uid, taskId); // not awaited; never blocks the status change
     }
 
     return true;

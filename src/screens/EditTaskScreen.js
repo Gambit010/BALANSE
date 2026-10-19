@@ -85,7 +85,7 @@ export default function EditTaskScreen({ route, navigation }) {
       if (success) {
         // Only when it changes to Done, so editing an already-done task doesn't count.
         if (progress === 100 && task.progress !== 100) {
-          recordActiveDay(task.userId);
+          recordActiveDay(task.userId, task.id);
         }
         updatedData.id = task.id;
         updatedData.userId = task.userId;

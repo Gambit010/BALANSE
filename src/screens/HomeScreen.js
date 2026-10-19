@@ -316,11 +316,15 @@ export default function HomeScreen({ navigation }) {
                 </View>
               )}
             </TouchableOpacity>
-            <View style={styles.avatar}>
+            <TouchableOpacity
+              style={styles.avatar}
+              onPress={() => navigation.navigate('Profile')}
+              accessibilityLabel="Open profile"
+            >
               <Text style={styles.avatarText}>
                 {userName.charAt(0).toUpperCase()}
               </Text>
-            </View>
+            </TouchableOpacity>
 
           </View>
         </View>

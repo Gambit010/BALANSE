@@ -52,6 +52,7 @@ export default function TasksScreen({ navigation, route }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(route.params?.filterCategory || 'All');
   const [breakdownTask, setBreakdownTask] = useState(null);
+  const [showCompleted, setShowCompleted] = useState(false); // Completed section starts collapsed
   const [actionTask, setActionTask] = useState(null); // task currently showing the action modal
   const [filterType, setFilterType] = useState('category'); // 'category' | 'priority' | 'status'
   const [reschedulePickerTask, setReschedulePickerTask] = useState(null); // task currently showing the date picker
@@ -112,6 +113,19 @@ export default function TasksScreen({ navigation, route }) {
     return matchesSearch && matchesFilter;
   });
 
+  // Finished tasks move to a collapsed "Completed" section so the main list
+  // only shows what's still active. The Status → Done filter lists them as usual.
+  const isFinished = (task) => task.progress === 100 || isElapsedClass(task);
+  const showingDoneFilter = filterType === 'status' && activeFilter === 'Done';
+  const activeTasks = showingDoneFilter
+    ? filteredTasks
+    : filteredTasks.filter((t) => !isFinished(t));
+  const finishedTasks = showingDoneFilter
+    ? []
+    : filteredTasks
+        .filter(isFinished)
+        .sort((a, b) => new Date(b.deadline) - new Date(a.deadline)); // most recent first
+
   const handleReschedule = async (task, newDeadlineDate) => {
     const hasTime = task.deadline && task.deadline.includes('T');
     const newDeadline = hasTime
@@ -130,8 +144,6 @@ export default function TasksScreen({ navigation, route }) {
       Alert.alert('Error', 'Failed to reschedule task.');
     }
   };
-
-;
 
   const handleDeleteSeries = (task) => {
     const templateName = task.recurrence?.templateName;
@@ -195,6 +207,64 @@ export default function TasksScreen({ navigation, route }) {
   const getEffectiveStatusColor = (task) =>
     isElapsedClass(task) ? '#34d399' : getStatusColor(task.progress);
 
+  // One task card; used by both the active list and the Completed section.
+  const renderTaskCard = (task) => (
+    <TouchableOpacity
+      key={task.id}
+      style={[ styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, }, isFinished(task) && { opacity: 0.7 }, ]}
+      onPress={() => setActionTask(task)}
+      activeOpacity={0.7}
+    >
+      {/* Top Row - Title + Priority */}
+      <View style={styles.taskTopRow}>
+        <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
+          {task.title}
+        </Text>
+        {task.recurrence?.isClassSchedule ? (
+          <View style={[styles.priorityBadge, { backgroundColor: theme.border }]}>
+            <Text style={[styles.priorityText, { color: theme.subtext }]}>Class</Text>
+          </View>
+        ) : task.progress === 100 ? (
+          <View style={[styles.priorityBadge, { backgroundColor: 'rgba(52,211,153,0.15)' }]}>
+            <Text style={[styles.priorityText, { color: '#34d399' }]}>Done</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              setBreakdownTask(task);
+            }}
+            style={[
+              styles.priorityBadge,
+              { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
+            ]}
+            activeOpacity={0.6}
+          >
+            <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
+              {task.priorityLabel} ({task.priorityScore})
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Plain, uncolored deadline text — priority already carries the color
+          signal, so a colored deadline/category/status row was redundant.
+          Category, status, and description are still one tap away via the
+          action sheet, the priority breakdown, and Edit Details. */}
+      <Text style={[styles.taskDeadlineText, { color: theme.subtext }]}>
+        {task.deadline && task.deadline.includes('T')
+          ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          : task.deadline}
+      </Text>
+
+      {/* Progress Bar */}
+      <View style={[styles.taskProgressBg, { backgroundColor: theme.border},]}>
+        <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
+      </View>
+    </TouchableOpacity>
+  );
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}> 
@@ -215,7 +285,7 @@ export default function TasksScreen({ navigation, route }) {
         {/* HEADER */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: theme.text }]}>All Tasks</Text> 
-          <Text style={[styles.taskCount, { color: theme.text }]}>{filteredTasks.length} tasks</Text> 
+          <Text style={[styles.taskCount, { color: theme.text }]}>{activeTasks.length} tasks</Text> 
         </View>
 
         {/* SEARCH BAR */}
@@ -289,77 +359,41 @@ export default function TasksScreen({ navigation, route }) {
         {filteredTasks.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="document-text-outline" size={48} color="rgba(255,255,255,0.2)" />
-            {/* <Text style={styles.emptyTitle}>No tasks found</Text> */}
             <Text style={[styles.emptyTitle, { color: theme.text }]}>No tasks found</Text> 
-
-            {/*
-            <Text style={styles.emptySubtitle}>
-              {searchQuery ? 'Try a different search term' : 'Tap + to create your first task'}
-            </Text>
-            */}
-
             <Text style={[styles.emptySubtitle, { color: theme.text }]}> 
               {searchQuery ? 'Try a different search term' : 'Tap + to create your first task'}
             </Text> 
           </View>
         )}
 
-          {/* TASK LIST */}
-        {filteredTasks.map((task) => {
-  return (
-    <TouchableOpacity
-      key={task.id}
-      style={[ styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, }, ]}
-      onPress={() => setActionTask(task)}
-      activeOpacity={0.7}
-    >
-      {/* Top Row - Title + Priority */}
-      <View style={styles.taskTopRow}>
-        <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
-          {task.title}
-        </Text>
-        {task.recurrence?.isClassSchedule ? (
-          <View style={[styles.priorityBadge, { backgroundColor: theme.border }]}>
-            <Text style={[styles.priorityText, { color: theme.subtext }]}>Class</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation?.();
-              setBreakdownTask(task);
-            }}
-            style={[
-              styles.priorityBadge,
-              { backgroundColor: `${getPriorityColor(task.priorityLabel)}20` },
-            ]}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.priorityText, { color: getPriorityColor(task.priorityLabel) }]}>
-              {task.priorityLabel} ({task.priorityScore})
-            </Text>
-          </TouchableOpacity>
+        {/* Everything here is finished */}
+        {filteredTasks.length > 0 && activeTasks.length === 0 && (
+          <Text style={[styles.allDoneText, { color: theme.subtext }]}>
+            Nothing left to do here. Finished tasks are under Completed.
+          </Text>
         )}
-      </View>
 
-      {/* Plain, uncolored deadline text — priority already carries the color
-          signal, so a colored deadline/category/status row was redundant.
-          Category, status, and description are still one tap away via the
-          action sheet, the priority breakdown, and Edit Details. */}
-      <Text style={[styles.taskDeadlineText, { color: theme.subtext }]}>
-        {task.deadline && task.deadline.includes('T')
-          ? new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            + ' at ' + new Date(task.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-          : task.deadline}
-      </Text>
+        {/* TASK LIST */}
+        {activeTasks.map(renderTaskCard)}
 
-      {/* Progress Bar */}
-      <View style={[styles.taskProgressBg, { backgroundColor: theme.border},]}>
-        <View style={[styles.taskProgressFill, { width: `${task.progress}%` }]} />
-      </View>
-
-    </TouchableOpacity>
-  );
-})}
+        {/* COMPLETED — finished tasks, tucked away until tapped */}
+        {finishedTasks.length > 0 && (
+          <>
+            <TouchableOpacity
+              style={styles.completedHeader}
+              onPress={() => setShowCompleted((v) => !v)}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color="#34d399" />
+              <Text style={[styles.completedTitle, { color: theme.text }]}>Completed</Text>
+              <Text style={[styles.completedCount, { color: theme.subtext, backgroundColor: theme.border }]}>
+                {finishedTasks.length}
+              </Text>
+              <Ionicons name={showCompleted ? 'chevron-up' : 'chevron-down'} size={18} color={theme.subtext} />
+            </TouchableOpacity>
+            {showCompleted && finishedTasks.map(renderTaskCard)}
+          </>
+        )}
 
       </ScrollView>
 
@@ -453,6 +487,32 @@ export default function TasksScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  completedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  completedTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  completedCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  allDoneText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginVertical: 24,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0f0f23',
@@ -484,11 +544,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    // color: '#ffffff',
   },
   taskCount: {
     fontSize: 14,
-    // color: 'rgba(255,255,255,0.5)',
   },
   searchBar: {
     flexDirection: 'row',
@@ -504,7 +562,6 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    // color: '#ffffff',
     fontSize: 14,
   },
   filterTypeRow: {
@@ -567,12 +624,10 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    // color: 'rgba(255,255,255,0.5)',
     marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 13,
-    // color: 'rgba(255,255,255,0.3)',
     marginTop: 6,
   },
   taskCard: {
@@ -592,13 +647,11 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 15,
     fontWeight: '600',
-    // color: '#ffffff',
     flex: 1,
     marginRight: 8,
   },
   taskDescription: {
     fontSize: 13,
-    // color: 'rgba(255,255,255,0.4)',
     marginBottom: 10,
     lineHeight: 18,
   },
@@ -633,7 +686,6 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 11,
-    // color: 'rgba(255,255,255,0.5)',
   },
   statusDot: {
     width: 6,
@@ -673,7 +725,6 @@ const styles = StyleSheet.create({
   taskProgressText: {
     fontSize: 12,
     fontWeight: '600',
-    // color: 'rgba(255,255,255,0.5)',
   },
   actionRow: {
     flexDirection: 'row',
@@ -687,7 +738,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   addButton: {
     position: 'absolute',
     bottom: 20,
@@ -704,8 +754,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-
-    // Priority breakdown styles
+  // Priority breakdown styles
   breakdownContainer: {
     backgroundColor: 'rgba(167,139,250,0.08)',
     borderRadius: 10,
@@ -772,11 +821,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#a78bfa',
-  },
-
-    taskBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
 });

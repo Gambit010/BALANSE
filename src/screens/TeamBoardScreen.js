@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,8 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -19,7 +19,8 @@ import { statusFromProgress } from '../services/teamService';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { toLocalDateKey } from '../utils/dateUtils';
 
-const COLUMN_WIDTH = Dimensions.get('window').width * 0.78;
+// Remembered per phone, like the dark mode setting.
+const VIEW_MODE_KEY = 'balanse_teamboard_view';
 
 const COLUMNS = [
   { key: 'todo', label: 'To Do', color: '#94a3b8' },
@@ -81,6 +82,24 @@ export default function TeamBoardScreen({ route, navigation }) {
 
   // Add-member form
   const [memberEmail, setMemberEmail] = useState('');
+
+  // Board layout
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
+  const [showDone, setShowDone] = useState(false); // Done starts collapsed
+  const [actionTask, setActionTask] = useState(null); // grid card tapped
+
+  useEffect(() => {
+    AsyncStorage.getItem(VIEW_MODE_KEY)
+      .then((saved) => {
+        if (saved === 'list' || saved === 'grid') setViewMode(saved);
+      })
+      .catch(() => {});
+  }, []);
+
+  const changeViewMode = (mode) => {
+    setViewMode(mode);
+    AsyncStorage.setItem(VIEW_MODE_KEY, mode).catch(() => {});
+  };
 
   const { theme } = useTheme(); // for dark mode
 
@@ -179,6 +198,176 @@ export default function TeamBoardScreen({ route, navigation }) {
     ]);
   };
 
+
+  // Shared by the list cards and the grid action sheet. afterChange lets the
+  // sheet close itself once a status is picked.
+  const renderStatusSelector = (task, afterChange) => (
+    <View style={styles.statusSelector}>
+      {COLUMNS.map((c) => {
+        const active = statusFromProgress(task.progress) === c.key;
+        return (
+          <TouchableOpacity
+            key={c.key}
+            style={[
+              styles.statusChip,
+              { backgroundColor: active ? c.color : 'transparent', borderColor: c.color, borderWidth: 1 },
+            ]}
+            onPress={() => {
+              if (!active) updateProgress(task, c.key === 'done' ? 100 : c.key === 'in-progress' ? 50 : 0);
+              afterChange?.();
+            }}
+          >
+            <Text style={[styles.statusChipText, { color: active ? '#fff' : theme.subtext }]}>
+              {c.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  const renderLocked = (task) => (
+    <View style={styles.lockedContainer}>
+      <Ionicons name="lock-closed" size={14} color={theme.subtext} />
+      <Text style={[styles.lockedNote, { color: theme.subtext }]}>
+        {task.assigneeName ? `Assigned to ${task.assigneeName}` : 'Only the owner or assignee can update this'}
+      </Text>
+    </View>
+  );
+
+  // List view: the full card, one per row.
+  const renderListCard = (task, col) => {
+    const dl = formatDeadline(task.deadline);
+    const editable = canModify(task);
+    return (
+      <View key={task.id} style={[styles.taskCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+        <Text style={[styles.taskTitle, {color:theme.text}]}>{task.title}</Text>
+        {!!task.description && (
+          <Text style={[styles.taskDesc, {color:theme.subtext}]} numberOfLines={2}>
+            {task.description}
+          </Text>
+        )}
+
+        {/* Meta row */}
+        <View style={styles.taskMetaRow}>
+          <View
+            style={[
+              styles.assigneePill, {backgroundColor: task.assigneeName ? `${theme.accent}20` : theme.border,},
+            ]}
+          >
+            <Ionicons
+              name="person"
+              size={11}
+              color={task.assigneeName ? theme.accent : theme.subtext}
+            />
+            <Text
+              style={[
+                styles.assigneeText, {color: task.assigneeName ? theme.accent : theme.subtext,},
+              ]}
+            >
+              {task.assigneeName || 'Unassigned'}
+            </Text>
+          </View>
+          {dl && (
+            <View style={styles.deadlinePill}>
+              <Ionicons name="calendar-outline" size={11} color="#fbbf24" />
+              <Text style={styles.deadlineText}>{dl}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Conflict warning — only shown to the assignee, since the
+            cross-check in useTeamBoard only runs against the current
+            user's own personal tasks/classes. */}
+        {teamTaskConflicts[task.id] && (
+          <View style={styles.conflictWarning}>
+            <Ionicons name="warning" size={12} color="#f87171" />
+            <Text style={styles.conflictWarningText} numberOfLines={2}>
+              {teamTaskConflicts[task.id][0]?.message ||
+                'Conflicts with your personal schedule'}
+            </Text>
+          </View>
+        )}
+
+        {/* Progress */}
+        <View style={[styles.progressTrack, {backgroundColor:theme.border}]}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${task.progress}%`, backgroundColor: col.color },
+            ]}
+          />
+        </View>
+        <Text style={[styles.progressLabel, {color:theme.subtext}]}>{task.progress}%</Text>
+
+        {editable ? renderStatusSelector(task) : renderLocked(task)}
+
+        {/* Footer actions */}
+        <View style={[styles.cardFooter, {borderTopColor: theme.border}]}>
+          <TouchableOpacity
+            style={styles.footerBtn}
+            onPress={() => setAssignModal(task)}
+          >
+            <Ionicons name="swap-horizontal" size={13} color={theme.subtext} />
+            <Text style={[styles.footerBtnText, {color:theme.subtext}]}>Assign</Text>
+          </TouchableOpacity>
+          {(isOwner || task.assignedById === actor?.uid) && (
+            <TouchableOpacity
+              style={styles.footerBtn}
+              onPress={() => confirmDeleteTask(task)}
+            >
+              <Ionicons name="trash-outline" size={13} color="rgba(239,68,68,0.7)" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  // Grid view: compact two-column card. Status, Assign and Delete move to a
+  // sheet opened by tapping, since three status buttons don't fit at half width.
+  const renderGridCard = (task, col) => {
+    const dl = formatDeadline(task.deadline);
+    return (
+      <TouchableOpacity
+        key={task.id}
+        style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+        onPress={() => setActionTask(task)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.gridTitleRow}>
+          <Text style={[styles.gridTitle, { color: theme.text }]} numberOfLines={2}>
+            {task.title}
+          </Text>
+          {teamTaskConflicts[task.id] && <Ionicons name="warning" size={13} color="#f87171" />}
+        </View>
+        {!!task.description && (
+          <Text style={[styles.gridDesc, { color: theme.subtext }]} numberOfLines={2}>
+            {task.description}
+          </Text>
+        )}
+        <View style={styles.gridMetaRow}>
+          <Ionicons name="person" size={11} color={task.assigneeName ? theme.accent : theme.subtext} />
+          <Text
+            style={[styles.gridMetaText, { color: task.assigneeName ? theme.accent : theme.subtext }]}
+            numberOfLines={1}
+          >
+            {task.assigneeName || 'Unassigned'}
+          </Text>
+        </View>
+        {dl && (
+          <View style={styles.gridMetaRow}>
+            <Ionicons name="calendar-outline" size={11} color="#fbbf24" />
+            <Text style={[styles.gridMetaText, { color: '#fbbf24' }]}>{dl}</Text>
+          </View>
+        )}
+        <View style={[styles.progressTrack, { backgroundColor: theme.border, marginTop: 10 }]}>
+          <View style={[styles.progressFill, { width: `${task.progress}%`, backgroundColor: col.color }]} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const members = team?.members || [];
 
   return (
@@ -213,151 +402,56 @@ export default function TeamBoardScreen({ route, navigation }) {
           <Ionicons name="person-add-outline" size={18} color={theme.accent}/>
           <Text style={[styles.actionText, {color:theme.text}]}>Add Member</Text>
         </TouchableOpacity>
+
+        {/* List / Grid toggle */}
+        <View style={[styles.viewToggle, { borderColor: theme.border }]}>
+          {[
+            { mode: 'list', icon: 'list-outline', label: 'List view' },
+            { mode: 'grid', icon: 'grid-outline', label: 'Grid view' },
+          ].map((opt) => (
+            <TouchableOpacity
+              key={opt.mode}
+              style={[styles.viewToggleBtn, viewMode === opt.mode && { backgroundColor: `${theme.accent}25` }]}
+              onPress={() => changeViewMode(opt.mode)}
+              accessibilityLabel={opt.label}
+            >
+              <Ionicons name={opt.icon} size={18} color={viewMode === opt.mode ? theme.accent : theme.subtext} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {loading ? (
         <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.boardScroll}
-        >
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.boardScroll}>
           {COLUMNS.map((col) => {
             const colTasks = columns[col.key] || [];
+            const isDone = col.key === 'done';
+            const collapsed = isDone && !showDone;
             return (
-              <View key={col.key} style={[styles.column, {backgroundColor:theme.card, borderColor:theme.border},{ width: COLUMN_WIDTH }]}>
-                <View style={styles.columnHeader}>
+              <View key={col.key} style={styles.section}>
+                <TouchableOpacity
+                  style={styles.columnHeader}
+                  onPress={() => setShowDone((v) => !v)}
+                  disabled={!isDone}
+                  activeOpacity={0.6}
+                >
                   <View style={[styles.statusDot, { backgroundColor: col.color }]} />
                   <Text style={[styles.columnTitle, {color:theme.text}]}>{col.label}</Text>
                   <Text style={[styles.columnCount, {color:theme.subtext}]}>{colTasks.length}</Text>
-                </View>
-
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {colTasks.length === 0 ? (
-                    <Text style={[styles.emptyColumn, {color:theme.subtext}]}>No tasks</Text>
-                  ) : (
-                    colTasks.map((task) => {
-                      const dl = formatDeadline(task.deadline);
-                      const editable = canModify(task);
-                      return (
-                        <View key={task.id} style={[styles.taskCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
-                          <Text style={[styles.taskTitle, {color:theme.text}]}>{task.title}</Text>
-                          {!!task.description && (
-                            <Text style={[styles.taskDesc, {color:theme.subtext}]} numberOfLines={2}>
-                              {task.description}
-                            </Text>
-                          )}
-
-                          {/* Meta row */}
-                          <View style={styles.taskMetaRow}>
-                            <View
-                              style={[
-                                styles.assigneePill, {backgroundColor: task.assigneeName ? `${theme.accent}20` : theme.border,},
-                              ]}
-                            >
-                              <Ionicons
-                                name="person"
-                                size={11}
-                                color={task.assigneeName ? theme.accent : theme.subtext}
-                              />
-                              <Text
-                                style={[
-                                  styles.assigneeText, {color: task.assigneeName ? theme.accent : theme.subtext,},
-                                ]}
-                              >
-                                {task.assigneeName || 'Unassigned'}
-                              </Text>
-                            </View>
-                            {dl && (
-                              <View style={styles.deadlinePill}>
-                                <Ionicons name="calendar-outline" size={11} color="#fbbf24" />
-                                <Text style={styles.deadlineText}>{dl}</Text>
-                              </View>
-                            )}
-                          </View>
-
-                          {/* Conflict warning — only shown to the assignee, since the
-                              cross-check in useTeamBoard only runs against the current
-                              user's own personal tasks/classes. */}
-                          {teamTaskConflicts[task.id] && (
-                            <View style={styles.conflictWarning}>
-                              <Ionicons name="warning" size={12} color="#f87171" />
-                              <Text style={styles.conflictWarningText} numberOfLines={2}>
-                                {teamTaskConflicts[task.id][0]?.message ||
-                                  'Conflicts with your personal schedule'}
-                              </Text>
-                            </View>
-                          )}
-
-                          {/* Progress */}
-                          <View style={[styles.progressTrack, {backgroundColor:theme.border}]}>
-                            <View
-                              style={[
-                                styles.progressFill,
-                                { width: `${task.progress}%`, backgroundColor: col.color },
-                              ]}
-                            />
-                          </View>
-                          <Text style={[styles.progressLabel, {color:theme.subtext}]}>{task.progress}%</Text>
-
-                         {/* NEW STATUS SELECTOR */}
-                          {editable ? (
-                            <View style={styles.statusSelector}>
-                              {COLUMNS.map((col) => (
-                                <TouchableOpacity
-                                  key={col.key}
-                                  style={[
-                                    styles.statusChip,
-                                    { 
-                                      backgroundColor: statusFromProgress(task.progress) === col.key ? col.color : 'transparent',
-                                      borderColor: col.color,
-                                      borderWidth: 1
-                                    }
-                                  ]}
-                                  onPress={() => updateProgress(task, statusFromProgress(task.progress) === col.key ? task.progress : (col.key === 'done' ? 100 : col.key === 'in-progress' ? 50 : 0))}
-                                >
-                                  <Text style={[
-                                    styles.statusChipText,
-                                    { color: statusFromProgress(task.progress) === col.key ? '#fff' : theme.subtext }
-                                  ]}>
-                                    {col.label}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          ) : (
-                            <View style={styles.lockedContainer}>
-                              <Ionicons name="lock-closed" size={14} color={theme.subtext} />
-                              <Text style={[styles.lockedNote, {color:theme.subtext}]}>
-                                Assigned to {task.assigneeName}
-                              </Text>
-                            </View>
-                          )}
-
-                          {/* Footer actions */}
-                          <View style={[styles.cardFooter, {borderTopColor: theme.border}]}>
-                            <TouchableOpacity
-                              style={styles.footerBtn}
-                              onPress={() => setAssignModal(task)}
-                            >
-                              <Ionicons name="swap-horizontal" size={13} color={theme.subtext} />
-                              <Text style={[styles.footerBtnText, {color:theme.subtext}]}>Assign</Text>
-                            </TouchableOpacity>
-                            {(isOwner || task.assignedById === actor?.uid) && (
-                              <TouchableOpacity
-                                style={styles.footerBtn}
-                                onPress={() => confirmDeleteTask(task)}
-                              >
-                                <Ionicons name="trash-outline" size={13} color="rgba(239,68,68,0.7)" />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })
+                  {isDone && (
+                    <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={18} color={theme.subtext} />
                   )}
-                </ScrollView>
+                </TouchableOpacity>
+
+                {collapsed ? null : colTasks.length === 0 ? (
+                  <Text style={[styles.emptyColumn, {color:theme.subtext}]}>No tasks</Text>
+                ) : viewMode === 'grid' ? (
+                  <View style={styles.grid}>{colTasks.map((task) => renderGridCard(task, col))}</View>
+                ) : (
+                  colTasks.map((task) => renderListCard(task, col))
+                )}
               </View>
             );
           })}
@@ -506,6 +600,80 @@ export default function TeamBoardScreen({ route, navigation }) {
         </View>
       </Modal>
 
+      {/* GRID ACTION SHEET */}
+      <Modal visible={!!actionTask} transparent animationType="fade" onRequestClose={() => setActionTask(null)}>
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setActionTask(null)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.sheetCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          >
+            {actionTask && (
+              <>
+                <Text style={[styles.modalTitle, { color: theme.text }]} numberOfLines={2}>
+                  {actionTask.title}
+                </Text>
+                {!!actionTask.description && (
+                  <Text style={[styles.sheetDesc, { color: theme.subtext }]}>{actionTask.description}</Text>
+                )}
+                <Text style={[styles.sheetMeta, { color: theme.subtext }]}>
+                  {actionTask.assigneeName || 'Unassigned'}
+                  {formatDeadline(actionTask.deadline) ? ` · Due ${formatDeadline(actionTask.deadline)}` : ''}
+                  {` · ${actionTask.progress}%`}
+                </Text>
+
+                {teamTaskConflicts[actionTask.id] && (
+                  <View style={[styles.conflictWarning, { marginTop: 12 }]}>
+                    <Ionicons name="warning" size={12} color="#f87171" />
+                    <Text style={styles.conflictWarningText}>
+                      {teamTaskConflicts[actionTask.id][0]?.message || 'Conflicts with your personal schedule'}
+                    </Text>
+                  </View>
+                )}
+
+                {canModify(actionTask)
+                  ? renderStatusSelector(actionTask, () => setActionTask(null))
+                  : renderLocked(actionTask)}
+
+                <View style={[styles.sheetDivider, { backgroundColor: theme.border }]} />
+
+                <TouchableOpacity
+                  style={styles.sheetOption}
+                  onPress={() => {
+                    const t = actionTask;
+                    setActionTask(null);
+                    setAssignModal(t);
+                  }}
+                >
+                  <Ionicons name="swap-horizontal" size={18} color={theme.text} />
+                  <Text style={[styles.sheetOptionText, { color: theme.text }]}>Assign</Text>
+                </TouchableOpacity>
+
+                {(isOwner || actionTask.assignedById === actor?.uid) && (
+                  <TouchableOpacity
+                    style={styles.sheetOption}
+                    onPress={() => {
+                      const t = actionTask;
+                      setActionTask(null);
+                      confirmDeleteTask(t);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                    <Text style={[styles.sheetOptionText, { color: '#ef4444' }]}>Delete Task</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalCancel, { backgroundColor: theme.border, marginTop: 12 }]}
+                  onPress={() => setActionTask(null)}
+                >
+                  <Text style={[styles.modalCancelText, { color: theme.text }]}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ASSIGN MODAL */}
       <Modal visible={!!assignModal} transparent animationType="fade" onRequestClose={() => setAssignModal(null)}>
         <View style={styles.modalOverlay}>
@@ -573,13 +741,43 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(167,139,250,0.25)',
   },
   actionText: { color: '#a78bfa', fontWeight: '600', fontSize: 13 },
-  boardScroll: { paddingHorizontal: 12, paddingBottom: 20 },
-  column: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 16,
-    padding: 12,
-    marginHorizontal: 4,
+  boardScroll: { paddingHorizontal: 16, paddingBottom: 30 },
+  section: { marginBottom: 18 },
+  viewToggle: {
+    flexDirection: 'row',
+    marginLeft: 'auto',
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
+  viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 8 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  gridCard: {
+    width: '48.5%',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  gridTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  gridTitle: { flex: 1, fontSize: 14, fontWeight: '600', lineHeight: 18 },
+  gridDesc: { fontSize: 11, lineHeight: 15, marginTop: 4 },
+  gridMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  gridMetaText: { flex: 1, fontSize: 11, fontWeight: '600' },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheetCard: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 30,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+  },
+  sheetDesc: { fontSize: 13, lineHeight: 18, marginTop: 2 },
+  sheetMeta: { fontSize: 12, marginTop: 8 },
+  sheetDivider: { height: 1, marginTop: 16, marginBottom: 4 },
+  sheetOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13 },
+  sheetOptionText: { fontSize: 15, fontWeight: '600' },
   columnHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   statusDot: { width: 9, height: 9, borderRadius: 5 },
   columnTitle: { fontSize: 15, fontWeight: '700', color: '#ffffff', flex: 1 },
