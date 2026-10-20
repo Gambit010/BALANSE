@@ -1,0 +1,65 @@
+appId: com.balanseapp.app
+---
+# Boundary type: Module to Module
+# What to test: Task creation, priority score computed, and appearance on the dashboard
+
+- launchApp:
+    clearState: false
+
+- assertVisible: "Overall Progress"
+- tapOn: "Tasks"
+- assertVisible: "All Tasks"
+- extendedWaitUntil:
+    visible: "Add task"
+    timeout: 10000
+- tapOn: "Add task"
+- assertVisible: "Add New Task"
+
+# Create a single task. Repeat weekly and Set specific time remain off.
+- tapOn: "Enter task title"
+- inputText: "Maestro deadline task"
+
+- tapOn:
+    text: "Enter task description"
+- inputText: "Test maestro description"
+
+- tapOn: "Academic"
+- tapOn: "High"
+
+# Select October 21, 2026 from the deadline date picker.
+- assertVisible: "DEADLINE"
+- assertVisible: "Set specific time"
+
+- scrollUntilVisible:
+    element:
+      text: "Add Task"
+    direction: DOWN
+    timeout: 10000
+
+- tapOn: "Add Task"
+#- assertVisible: "Schedule Conflict Detected"
+#- tapOn: "ADD ANYWAY"
+- assertVisible: "Task Added"
+- tapOn: "OK"
+
+- scrollUntilVisible:
+    element:
+      text: "Maestro deadline task"
+    direction: DOWN
+    timeout: 10000
+
+- tapOn: "Maestro deadline task"
+- tapOn: "View Priority Breakdown"
+- assertVisible: "HOW THIS SCORE WAS COMPUTED"
+- assertVisible: "Close priority breakdown"
+- tapOn: "Close priority breakdown"
+
+- tapOn: "Home"
+
+- scrollUntilVisible:
+    element:
+      text: "Maestro deadline task"
+    direction: DOWN
+    timeout: 10000
+
+- assertVisible: "Maestro deadline task"
