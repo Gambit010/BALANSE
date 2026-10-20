@@ -1,0 +1,28 @@
+appId: com.balanseapp.app
+---
+
+# Boundary type: Auth to app
+# What to test: Logout navigates to correct screen (unauthenticated landing screen)
+
+- launchApp:
+    clearState: false
+
+- assertVisible: "Overall Progress"
+
+- tapOn: "Profile"
+
+- assertVisible: "Profile"
+
+- scrollUntilVisible:
+    element:
+      text: "Log Out"
+    direction: DOWN
+    timeout: 10000
+
+- tapOn: "Log Out"
+
+- assertVisible: "BALANSE"
+- assertVisible: "Smart Task Management for Student Leaders"  
+- assertVisible: "Get Started"
+- assertVisible: "Log In"
+  
