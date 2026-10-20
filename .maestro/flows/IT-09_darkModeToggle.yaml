@@ -1,0 +1,52 @@
+appId: com.balanseapp.app
+---
+
+# Boundary type: Module to Module
+# What to test: Dark mode persists after app restart
+
+- launchApp:
+    clearState: false
+
+- assertVisible: "Overall Progress"
+
+- tapOn: "Profile"
+- assertVisible: "Profile"
+
+- scrollUntilVisible:
+    element:
+      text: "Dark Mode"
+    direction: DOWN
+    timeout: 10000
+
+- assertVisible: "Dark Mode"
+- assertVisible:
+    id: "dark-mode-toggle"
+    checked: false
+
+- tapOn:
+    id: "dark-mode-toggle"
+
+- assertVisible:
+    id: "dark-mode-toggle"
+    checked: true
+
+# Stop and relaunch without clearing app data so AsyncStorage is retained.
+- stopApp
+- launchApp:
+    clearState: false
+
+- assertVisible: "Overall Progress"
+- tapOn: "Profile"
+- assertVisible: "Profile"
+
+- scrollUntilVisible:
+    element:
+      text: "Dark Mode"
+    direction: DOWN
+    timeout: 10000
+
+- assertVisible: "Dark Mode"
+- assertVisible:
+    id: "dark-mode-toggle"
+    checked: true
+
