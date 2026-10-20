@@ -653,6 +653,8 @@ export default function HomeScreen({ navigation }) {
 
       {/* Floating Add button */}
       <TouchableOpacity
+        testID="add-task-button"
+        accessibilityLabel="Add task"
         style={styles.addButton}
         onPress={() => navigation.getParent()?.navigate('AddTask')}
       >
