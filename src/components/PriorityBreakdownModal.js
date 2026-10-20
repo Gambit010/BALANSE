@@ -51,7 +51,12 @@ export default function PriorityBreakdownModal({ visible, task, onClose }) {
               <Ionicons name="analytics-outline" size={18} color={theme.accent} />
               <Text style={[styles.headerTitle, {color: theme.accent}]}>Priority Breakdown</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1,}]}>
+            <TouchableOpacity
+              testID="close-priority-breakdown"
+              accessibilityLabel="Close priority breakdown"
+              onPress={onClose}
+              style={[styles.closeBtn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1, }]}
+            >
               <Ionicons name="close" size={20} color={theme.icon} />
             </TouchableOpacity>
           </View>
