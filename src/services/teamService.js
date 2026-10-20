@@ -231,7 +231,7 @@ export const updateBoardTaskProgress = async (team, task, newProgress, actor) =>
       updatedAt: serverTimestamp(),
     });
     if (newProgress >= 100 && (task.progress ?? 0) < 100) {
-      recordActiveDay(actor.uid);
+      recordActiveDay(actor.uid, `team_${task.id}`);
     }
     const label = STATUS_LABELS[statusFromProgress(newProgress)];
     const recipients = new Set();

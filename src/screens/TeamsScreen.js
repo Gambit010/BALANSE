@@ -54,7 +54,7 @@ export default function TeamsScreen({ navigation }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={[styles.screenTitle, {color:theme.text}]}>Teams</Text>
             <Text style={[styles.screenSubtitle, {color:theme.subtext}]}>Shared task boards for your orgs</Text>
           </View>

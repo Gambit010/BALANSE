@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { updateTask } from '../services/taskService';
+import { updateTask, updateUpcomingSessions } from '../services/taskService';
 import { recordActiveDay } from '../services/activityService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { checkAndNotifyConflicts } from '../services/conflictService';
@@ -28,6 +28,10 @@ export default function EditTaskScreen({ route, navigation }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hasTime, setHasTime] = useState(task.deadline && task.deadline.includes('T'));
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  // Repeating tasks and classes can push these edits to every upcoming session.
+  const isRecurring = !!task.recurrence?.templateName;
+  const [applyToAll, setApplyToAll] = useState(false);
 
   const { tasks: existingTasks } = useTasks();
   const { theme, isDarkMode } = useTheme(); // for dark mode
@@ -85,15 +89,28 @@ export default function EditTaskScreen({ route, navigation }) {
       if (success) {
         // Only when it changes to Done, so editing an already-done task doesn't count.
         if (progress === 100 && task.progress !== 100) {
-          recordActiveDay(task.userId);
+          recordActiveDay(task.userId, task.id);
         }
         updatedData.id = task.id;
         updatedData.userId = task.userId;
         await checkAndNotifyConflicts(task.userId, updatedData, existingTasks);
 
+        let seriesNote = '';
+        if (isRecurring && applyToAll) {
+          const count = await updateUpcomingSessions(task.userId, task.recurrence.templateName, {
+            title: updatedData.title,
+            description: updatedData.description,
+            category,
+            priority,
+          });
+          seriesNote = count >= 0
+            ? ` ${count} upcoming session${count !== 1 ? 's were' : ' was'} updated too.`
+            : ' The other upcoming sessions could not be updated.';
+        }
+
         Alert.alert(
           'Task Updated',
-          `"${title}" has been updated. Priority score: ${score}`,
+          `"${title}" has been updated. Priority score: ${score}.${seriesNote}`,
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } else {
@@ -173,6 +190,10 @@ export default function EditTaskScreen({ route, navigation }) {
           numberOfLines={4}
           maxLength={500}
         />
+
+                <Text style={{ alignSelf: 'flex-end', marginTop: -14, marginBottom: 16, fontSize: 11, color: theme.subtext }}>
+          {description.length}/500
+        </Text>
 
         {/* CATEGORY SELECTOR */}
         <Text style={[styles.label, { color: theme.text }]}>Category</Text>
@@ -334,6 +355,27 @@ export default function EditTaskScreen({ route, navigation }) {
                 {/* CONFLICT ALERTS */}
       <ConflictAlert conflicts={conflicts} onApplySuggestion={handleApplySuggestion}/>
 
+        {/* APPLY TO SERIES — repeating tasks and classes only */}
+        {isRecurring && (
+          <TouchableOpacity
+            style={[styles.seriesRow, { backgroundColor: theme.card, borderColor: applyToAll ? '#7c3aed' : theme.border }]}
+            onPress={() => setApplyToAll((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={applyToAll ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={applyToAll ? '#7c3aed' : theme.subtext}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.seriesTitle, { color: theme.text }]}>Apply to all upcoming sessions</Text>
+              <Text style={[styles.seriesHint, { color: theme.subtext }]}>
+                Title, description, category and priority. Each session keeps its own date, time and status.
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* SAVE BUTTON */}
         <TouchableOpacity
           style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
@@ -350,6 +392,24 @@ export default function EditTaskScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  seriesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  seriesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  seriesHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0f0f23',

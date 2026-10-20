@@ -26,7 +26,8 @@ import {
 } from '../constants/wellness';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 
-const CONSENT_STORAGE_KEY = 'wellness_consent_accepted_v1';
+// v2: hotlines and withdrawal added, so everyone sees the updated text once.
+const CONSENT_STORAGE_KEY = 'wellness_consent_accepted_v2';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_HEIGHT = 180;
@@ -525,16 +526,27 @@ export default function WellnessScreen() {
 
             <ScrollView style={styles.consentScroll} showsVerticalScrollIndicator={false}>
               <Text style={[styles.consentText, { color: theme.text }]}>
-                • The WHO-5 Well-Being Index is a self-monitoring tool for your own awareness. It is not a clinical diagnosis and does not replace a professional evaluation.
+                • BALANSE supports self-awareness and personal well-being. The WHO-5 Well-Being Index used here is a self-check tool. It is not a clinical diagnosis and does not replace assessment or care from a professional.
               </Text>
               <Text style={[styles.consentText, { color: theme.text }]}>
-                • Recommendations shown here (breathing exercises, sleep tips, resource links) are general guidance, not emergency care. If you are in crisis or immediate danger, contact emergency services or a crisis hotline directly — do not rely on this app.
+                • Results and recommendations, including breathing exercises, sleep tips and resource links, are for general guidance only. They are not a substitute for emergency help.
               </Text>
               <Text style={[styles.consentText, { color: theme.text }]}>
-                • Your responses are saved to your account so you can track your own trends over time. BALANSE has no reporting feature of its own and nothing is sent anywhere unless you choose to reach out yourself using the referral option on this screen. Keep in mind that reaching out this way may itself suggest to Guidance Office staff that you're going through something, even though your actual score is never included in the message.
+                • If you are in crisis or in immediate danger, do not rely on this app. Contact:{'\n'}
+                <Text style={{ fontWeight: '700' }}>911</Text> — National Emergency Hotline{'\n'}
+                <Text style={{ fontWeight: '700' }}>NCMH Crisis Hotline</Text> — 1553 · 0917-899-8727 · 0919-057-1553
               </Text>
               <Text style={[styles.consentText, { color: theme.text }]}>
-                • If a recommendation suggests contacting the Guidance Counseling Office or an outside resource, reaching out is entirely your choice — tapping a link or contact only opens it for you; it does not notify anyone on its own.
+                • Your responses are saved to your account so you can follow your own trends over time. BALANSE does not report your answers to anyone. Nothing is shared unless you choose to contact the Guidance Office yourself, and even then your score is not included. Reaching out may still let the staff know you're going through something.
+              </Text>
+              <Text style={[styles.consentText, { color: theme.text }]}>
+                • Contacting the Guidance Counseling Office or any other resource is always your choice. Tapping a link or contact only opens it for you; it does not notify anyone.
+              </Text>
+              <Text style={[styles.consentText, { color: theme.text }]}>
+                • You can review or withdraw this consent anytime through "Review Consent" on this screen.
+              </Text>
+              <Text style={[styles.consentText, { color: theme.subtext, fontStyle: 'italic' }]}>
+                By tapping "I Understand & Agree," you confirm that you have read and understood the points above and agree to use BALANSE's well-being features under these conditions.
               </Text>
             </ScrollView>
 
