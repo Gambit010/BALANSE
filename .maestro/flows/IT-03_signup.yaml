@@ -1,6 +1,9 @@
 appId: com.balanseapp.app
 ---
 
+# Boundary type: Auth to app
+# What to test: Signup navigates to correct screen (onboarding screen)
+
 - launchApp:
     clearState: true
 
