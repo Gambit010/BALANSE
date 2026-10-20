@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { getWellnessStatus } from '../constants/wellness';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CHART_WIDTH = SCREEN_WIDTH - 70;
@@ -22,7 +23,7 @@ const chartConfig = {
   backgroundColor: '#1a1a3e',
   backgroundGradientFrom: '#1a1a3e',
   backgroundGradientTo: '#1a1a3e',
-  decimalCount: 0,
+  decimalPlaces: 0,
   color: (opacity = 1) => `rgba(167, 139, 250, ${opacity})`,
   labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.6})`,
   propsForDots: {
@@ -35,6 +36,23 @@ const chartConfig = {
     stroke: 'rgba(255,255,255,0.06)',
   },
 };
+
+// Show at most `max` date labels so they don't run into each other.
+// The latest date always keeps its label.
+const thinLabels = (labels, max = 4) => {
+  const step = Math.ceil(labels.length / max);
+  return labels.map((l, i) => ((labels.length - 1 - i) % step === 0 ? l : ''));
+};
+
+// Grid lines that land on whole numbers for count charts (0, 1, 2 ...).
+const countSegments = (values) => {
+  const max = Math.max(0, ...values);
+  if (max <= 4) return Math.max(1, max);
+  return [4, 5, 3, 2].find((n) => max % n === 0) || 4;
+};
+
+// Same colors as the Positive / At Risk / Low legend.
+const zoneColor = (percentage) => getWellnessStatus(percentage).color;
 
 export default function AnalyticsScreen({ navigation }) {
   const {
@@ -136,7 +154,7 @@ export default function AnalyticsScreen({ navigation }) {
               <LineChart
               style={styles.chart}
               data={{
-                labels: wellnessTrend.map(d => d.label),
+                labels: thinLabels(wellnessTrend.map(d => d.label)),
                 datasets: [
                   { data: wellnessTrend.map(d => d.percentage) },
                   { data: [0], withDots: false },
@@ -151,10 +169,9 @@ export default function AnalyticsScreen({ navigation }) {
                 backgroundGradientFrom: theme.card,
                 backgroundGradientTo: theme.card,
 
-                decimalCount: 0,
                 color: (opacity = 1) => `rgba(244, 114, 182, ${opacity})`,
                 labelColor: (opacity = 1) => isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
-                propsForDots: { r: '4', strokeWidth: '2', stroke: '#f472b6' },
+                propsForDots: { r: '5', strokeWidth: '0' },
                 propsForBackgroundLines: {
                   strokeDasharray: '',
                   stroke: theme.border,
@@ -164,18 +181,7 @@ export default function AnalyticsScreen({ navigation }) {
               fromZero
               yAxisSuffix="%"
               segments={4}
-              decorator={() => (
-                <>
-                  {/* 50% threshold line */}
-                  <View style={[styles.thresholdLine, { bottom: 200 * 0.5 + 10 }]}>
-                    <View style={[styles.thresholdDash, { backgroundColor: 'rgba(74,222,128,0.45)',}]} />
-                  </View>
-                  {/* 28% threshold line */}
-                  <View style={[styles.thresholdLine, { bottom: 200 * 0.28 + 10 }]}>
-                    <View style={[styles.thresholdDash, { backgroundColor: isDarkMode ? 'rgba(251,191,36,0.45)' : 'rgba(245,158,11,0.35)',}]} />
-                  </View>
-                </>
-              )}
+              getDotColor={(value) => zoneColor(value)}
             />
             </View>
             
@@ -207,73 +213,54 @@ export default function AnalyticsScreen({ navigation }) {
               How your task count relates to your well-being
             </Text>
 
-            {/* Bar chart for active tasks */}
+            {/* One bar per check-in: height = active tasks at that time,
+                color = that check-in's well-being zone. */}
             <View style={styles.chartContainer}>
               <BarChart
                 data={{
-                  labels: correlation.map(d => d.label),
-                  datasets: [{ data: correlation.map(d => d.activeTaskCount) }],
+                  labels: thinLabels(correlation.map(d => d.label)),
+                  datasets: [{
+                    data: correlation.map(d => d.activeTaskCount),
+                    colors: correlation.map(d => () => zoneColor(d.wellnessPercentage)),
+                  }],
                 }}
                 width={CHART_WIDTH}
-                height={180}
+                height={200}
                 chartConfig={{
                   ...chartConfig,
                   backgroundColor: theme.card,
                   backgroundGradientFrom: theme.card,
                   backgroundGradientTo: theme.card,
-                  color: (opacity = 1) => `rgba(96, 165, 250, ${opacity})`,
+                  color: (opacity = 1) => isDarkMode ? `rgba(255,255,255,${opacity})` : `rgba(30,41,59,${opacity})`,
                   labelColor: (opacity = 1) => isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
                   propsForBackgroundLines: {stroke: theme.border, strokeDasharray: '',},
                   barPercentage: 0.5,
                 }}
                 style={styles.chart}
                 fromZero
+                segments={countSegments(correlation.map(d => d.activeTaskCount))}
+                withCustomBarColorFromData
+                flatColor
+                showBarTops={false}
                 showValuesOnTopOfBars
-            />
-            </View>
-            <View style={[styles.chartContainer, {marginTop: 18}]}>
-              {/* Line chart overlay for wellness */}
-            <LineChart
-              data={{
-                labels: correlation.map(d => d.label),
-                datasets: [
-                  { data: correlation.map(d => d.wellnessPercentage) },
-                  { data: [0], withDots: false },
-                  { data: [100], withDots: false },
-                ],
-              }}
-              width={CHART_WIDTH}
-              height={180}
-              chartConfig={{
-                ...chartConfig,
-                backgroundColor: theme.card,
-                backgroundGradientFrom: theme.card,
-                backgroundGradientTo: theme.card,
-                color: (opacity = 1) => `rgba(244, 114, 182, ${opacity})`,
-                labelColor: (opacity = 1) =>
-                isDarkMode ? `rgba(255,255,255,${opacity * 0.6})` : `rgba(30,41,59,${opacity * 0.7})`,
-                propsForBackgroundLines: {
-                  stroke: theme.border,
-                  strokeDasharray: '',
-                },
-                propsForDots: { r: '4', strokeWidth: '2', stroke: '#f472b6' },
-              }}
-              bezier
-              style={styles.chart}
-              fromZero
-              yAxisSuffix="%"
-              segments={4}
-            />
+              />
             </View>
 
+            <Text style={[styles.cardSubtitle, {color:theme.subtext, marginTop: 8, marginBottom: 0}]}>
+              Bar height = active tasks at each check-in. Bar color = well-being at that check-in.
+            </Text>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#60a5fa' }]} />
-                <Text style={[styles.legendText, {color:theme.subtext}]}>Active Tasks</Text>
+                <View style={[styles.legendDot, { backgroundColor: '#4ade80' }]} />
+                <Text style={[styles.legendText, {color:theme.subtext}]}>Positive</Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#f472b6' }]} />
-                <Text style={[styles.legendText, {color:theme.subtext}]}>WHO-5 Score</Text>
+                <View style={[styles.legendDot, { backgroundColor: '#fbbf24' }]} />
+                <Text style={[styles.legendText, {color:theme.subtext}]}>At Risk</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#f87171' }]} />
+                <Text style={[styles.legendText, {color:theme.subtext}]}>Low</Text>
               </View>
             </View>
           </View>
@@ -307,6 +294,7 @@ export default function AnalyticsScreen({ navigation }) {
                 }}
                 style={styles.chart}
                 fromZero
+                segments={countSegments(weeklyCompletions.map(w => w.completed || 0))}
                 showValuesOnTopOfBars
                 //verticalLabelRotation={25}
             />

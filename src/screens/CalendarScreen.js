@@ -228,12 +228,10 @@ export default function CalendarScreen({ navigation }) {
   const isClassSession = (t) => !!t.recurrence?.isClassSchedule;
   const isDoneTask = (t) => t.progress === 100;
 
-  // The grid badge counts unfinished tasks only; classes get their own dot,
-  // and finished tasks drop off the calendar.
+  // "N tasks" under each date: everything still left that day, classes
+  // included. Finished tasks and classes that already ended don't count.
   const getTaskCountForDate = (date) =>
-    getTasksForDate(date).filter((t) => !isClassSession(t) && !isDoneTask(t)).length;
-
-  const hasClassOnDate = (date) => getTasksForDate(date).some(isClassSession);
+    getTasksForDate(date).filter((t) => !isDoneTask(t) && !isElapsedClass(t)).length;
 
   const hasHighPriority = (date) => {
     return getTasksForDate(date).some((t) => !isClassSession(t) && !isDoneTask(t) && t.priorityLabel === 'High');
@@ -605,15 +603,13 @@ export default function CalendarScreen({ navigation }) {
                 const isTodayDate = isToday(item.date);
                 const highPriority = hasHighPriority(item.date);
                 const dateHasConflict = hasConflictsOnDate(getDateKey(item.date));
-                const hasClass = hasClassOnDate(item.date);
-                const badgeColor = dateHasConflict
+                const countColor = isSelected
+                  ? theme.text
+                  : dateHasConflict
                   ? '#ef4444'
                   : highPriority
                   ? '#fb923c'
-                  : isSelected
-                  ? 'rgba(255,255,255,0.3)'
-                  : theme.border;
-                const badgeTextColor = dateHasConflict || highPriority || isSelected ? '#ffffff' : theme.text;
+                  : theme.subtext;
 
                 return (
                   <TouchableOpacity
@@ -641,14 +637,9 @@ export default function CalendarScreen({ navigation }) {
                     {/* Fixed-height row, so every date number sits at the same height */}
                     <View style={styles.dayIndicators}>
                       {taskCount > 0 && (
-                        <View style={[styles.dayBadge, { backgroundColor: badgeColor }]}>
-                          <Text style={[styles.dayBadgeText, { color: badgeTextColor }]} maxFontSizeMultiplier={1.2}>
-                            {taskCount > 9 ? '9+' : taskCount}
-                          </Text>
-                        </View>
-                      )}
-                      {hasClass && (
-                        <View style={[styles.classDot, { backgroundColor: isSelected ? '#ffffff' : theme.accent }]} />
+                        <Text style={[styles.dayTaskCount, { color: countColor }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                          {taskCount} task{taskCount !== 1 ? 's' : ''}
+                        </Text>
                       )}
                     </View>
                   </TouchableOpacity>
@@ -656,19 +647,6 @@ export default function CalendarScreen({ navigation }) {
               })}
             </View>
 
-            {/* What the marks under each date mean */}
-            <View style={styles.legendRow}>
-              <View style={[styles.dayBadge, { backgroundColor: theme.border }]}>
-                <Text style={[styles.dayBadgeText, { color: theme.text }]} maxFontSizeMultiplier={1.2}>2</Text>
-              </View>
-              <Text style={[styles.legendText, { color: theme.subtext }]}>Tasks left</Text>
-              <View style={[styles.legendSwatch, { backgroundColor: '#fb923c' }]} />
-              <Text style={[styles.legendText, { color: theme.subtext }]}>High priority</Text>
-              <View style={[styles.legendSwatch, { backgroundColor: '#ef4444' }]} />
-              <Text style={[styles.legendText, { color: theme.subtext }]}>Conflict</Text>
-              <View style={[styles.classDot, { backgroundColor: theme.accent, marginLeft: 8 }]} />
-              <Text style={[styles.legendText, { color: theme.subtext }]}>Class</Text>
-            </View>
 
           </View>
           </GestureDetector>
@@ -1123,7 +1101,6 @@ const styles = StyleSheet.create({
   dayTaskCount: {
     fontSize: 9,
     fontWeight: '600',
-    marginTop: 3,
   },
 
   // Dots (unused, kept for reference)

@@ -263,24 +263,24 @@ export const getTrendInsight = (history) => {
     if (direction === 'improved') {
         tone = 'positive';
         if (hasWorkload && taskDelta < 0) {
-            message = `Your well-being improved by ${absScore}% since your last check-in, and your active tasks dropped from ${prevTasks} to ${latestTasks}. Lightening your load appears to be helping.`;
+            message = `Your well-being improved by ${absScore} points since your last check-in, and your active tasks dropped from ${prevTasks} to ${latestTasks}. Lightening your load appears to be helping.`;
         } else if (hasWorkload && taskDelta > 0) {
-            message = `Your well-being improved by ${absScore}% even though your active tasks rose from ${prevTasks} to ${latestTasks}. You're managing a heavier load well — keep an eye on it.`;
+            message = `Your well-being improved by ${absScore} points even though your active tasks rose from ${prevTasks} to ${latestTasks}. You're managing a heavier load well — keep an eye on it.`;
         } else if (hasWorkload) {
-            message = `Your well-being improved by ${absScore}% with a steady workload of ${latestTasks} active task${latestTasks === 1 ? '' : 's'}. Your current balance is working.`;
+            message = `Your well-being improved by ${absScore} points with a steady workload of ${latestTasks} active task${latestTasks === 1 ? '' : 's'}. Your current balance is working.`;
         } else {
-            message = `Your well-being improved by ${absScore}% since your last check-in. Whatever you're doing is working — keep it up.`;
+            message = `Your well-being improved by ${absScore} points since your last check-in. Whatever you're doing is working — keep it up.`;
         }
     } else if (direction === 'declined') {
         tone = 'warning';
         if (hasWorkload && taskDelta > 0) {
-            message = `Your well-being dropped by ${absScore}% while your active tasks increased from ${prevTasks} to ${latestTasks}. A rising workload may be affecting your mood — consider prioritizing or delegating.`;
+            message = `Your well-being dropped by ${absScore} points while your active tasks increased from ${prevTasks} to ${latestTasks}. A rising workload may be affecting your mood — consider prioritizing or delegating.`;
         } else if (hasWorkload && taskDelta < 0) {
-            message = `Your well-being dropped by ${absScore}% even though your active tasks decreased from ${prevTasks} to ${latestTasks}. Something beyond workload may be at play — be gentle with yourself.`;
+            message = `Your well-being dropped by ${absScore} points even though your active tasks decreased from ${prevTasks} to ${latestTasks}. Something beyond workload may be at play — be gentle with yourself.`;
         } else if (hasWorkload) {
-            message = `Your well-being dropped by ${absScore}% with a steady workload of ${latestTasks} active task${latestTasks === 1 ? '' : 's'}. Factors outside your task list may be affecting you.`;
+            message = `Your well-being dropped by ${absScore} points with a steady workload of ${latestTasks} active task${latestTasks === 1 ? '' : 's'}. Factors outside your task list may be affecting you.`;
         } else {
-            message = `Your well-being dropped by ${absScore}% since your last check-in. Take a moment to check in with yourself and review your recommendations below.`;
+            message = `Your well-being dropped by ${absScore} points since your last check-in. Take a moment to check in with yourself and review your recommendations below.`;
         }
     } else {
         tone = 'neutral';
