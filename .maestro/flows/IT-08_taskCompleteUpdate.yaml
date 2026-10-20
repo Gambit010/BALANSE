@@ -1,0 +1,27 @@
+appId: com.balanseapp.app
+---
+
+# Boundary type: Module to Module
+# What to test: Task completion updates the dashboard 
+
+- launchApp:
+    clearState: false
+
+- assertVisible: "Overall Progress"
+
+- assertVisible: "0/11 tasks done"
+
+- tapOn: "Tasks"
+
+- scrollUntilVisible:
+    element:
+      text: "Test it appear on calendar"
+    direction: DOWN
+    timeout: 10000
+
+- tapOn: "Test it appear on calendar"
+- tapOn: "Done"
+
+- tapOn: "Home"
+- assertVisible: "1/11 tasks done"
+
