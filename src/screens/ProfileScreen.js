@@ -221,6 +221,7 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
             <Switch
+              testID="dark-mode-toggle"
               value={isDarkMode}
               onValueChange={toggleDarkMode}
               trackColor={{ false: theme.border, true: '#7c3aed' }}
