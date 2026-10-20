@@ -1,7 +1,9 @@
 appId: com.balanseapp.app
 ---
 
-# Integration Testing 01: Authentication Flow
+# Boundary type: Auth to app
+# What to test: Login navigates to correct screen (onboarding screen)
+
 # Tests: A valid email/password login opens the authenticated onboarding screen.
 
 - launchApp:
