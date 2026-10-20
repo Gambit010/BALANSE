@@ -443,6 +443,8 @@ export default function TasksScreen({ navigation, route }) {
 
       {/* Floating Add Button */}
       <TouchableOpacity
+        testID="add-task-button"
+        accessibilityLabel="Add task"
         style={styles.addButton}
         onPress={() => navigation.navigate('AddTask')}
       >
