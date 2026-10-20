@@ -181,7 +181,9 @@ export const computeWellnessWorkloadCorrelation = (tasks, wellnessHistory) => {
         ? entry.date
         : (entry.createdAt?.toDate?.() ?? new Date(entry.createdAt));
 
-      const activeAtTime = regular.filter(t => {
+      // Prefer the task count saved with the check-in itself. Rebuilding it
+      // from today's task list misses tasks that were deleted since.
+      const activeAtTime = typeof entry.activeTaskCount === 'number' ? entry.activeTaskCount : regular.filter(t => {
         const created = parseCreatedAt(t.createdAt);
         if (!created || created > entryDate) return false;
         if (t.progress === 100) {

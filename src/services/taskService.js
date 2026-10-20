@@ -82,7 +82,7 @@ export const updateTaskProgress = async (taskId, progress) => {
     // No need to keep reminding about a completed task
     if (progress === 100) {
       await cancelDeadlineReminder(taskId);
-      recordActiveDay(auth.currentUser?.uid); // not awaited; never blocks the status change
+      recordActiveDay(auth.currentUser?.uid, taskId); // not awaited; never blocks the status change
     }
 
     return true;
@@ -273,11 +273,16 @@ export const deleteRecurringTasks = async (templateName) => {
     return 0;
   }
 };
-// When a class session ends; falls back to 60 minutes like conflictService.
-export const getClassSessionEnd = (task) =>
-  task.endTime
-    ? new Date(task.endTime)
-    : new Date(new Date(task.deadline).getTime() + 60 * 60000);
+// When a class or repeating-task session ends. Date-only sessions last the
+// whole day; timed ones without an end fall back to 60 minutes like conflictService.
+export const getClassSessionEnd = (task) => {
+  if (task.endTime) return new Date(task.endTime);
+  if (task.deadline && !task.deadline.includes('T')) {
+    const [y, m, d] = task.deadline.split('-').map(Number);
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+  return new Date(new Date(task.deadline).getTime() + 60 * 60000);
+};
 
 // Deletes the sessions of one class that haven't ended yet; past sessions
 // stay as Calendar history. Returns how many were deleted, or -1 on error.
@@ -302,6 +307,69 @@ export const deleteUpcomingClassSessions = async (userId, templateName) => {
     return upcoming.length;
   } catch (error) {
     console.error('Error deleting class sessions:', error);
+    return -1;
+  }
+};
+
+// A repeating session's description ends with its own time, e.g.
+// "Review notes (5:00 PM - 6:00 PM)", or is just "Scheduled 5:00 PM - 6:00 PM".
+// These strip that part so one edited description can be reused for every
+// session, each getting its own time back (Mon and Wed can have different times).
+const SESSION_TIME_SUFFIX = /\s*\(\d{1,2}:\d{2}\s*[AP]M\s*-\s*\d{1,2}:\d{2}\s*[AP]M\)\s*$/i;
+const AUTO_SESSION_DESC = /^(class\s+)?scheduled\s+\d{1,2}:\d{2}\s*[AP]M\s*-\s*\d{1,2}:\d{2}\s*[AP]M$/i;
+
+const baseSessionDescription = (description) => {
+  const d = (description || '').trim();
+  if (AUTO_SESSION_DESC.test(d)) return '';
+  return d.replace(SESSION_TIME_SUFFIX, '').trim();
+};
+
+const formatSessionTime = (date) =>
+  date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+const sessionDescription = (base, session) => {
+  if (!session.endTime || !session.deadline?.includes('T')) return base;
+  const range = `${formatSessionTime(new Date(session.deadline))} - ${formatSessionTime(new Date(session.endTime))}`;
+  if (base) return `${base} (${range})`;
+  return session.recurrence?.isClassSchedule ? `Class scheduled ${range}` : `Scheduled ${range}`;
+};
+
+// Applies title, description, category and priority to every session of a
+// repeating task or class that hasn't ended yet. Dates, times and each
+// session's status stay as they are. Returns how many were updated, or -1.
+export const updateUpcomingSessions = async (userId, templateName, fields) => {
+  try {
+    const q = query(
+      collection(db, 'tasks'),
+      where('userId', '==', userId),
+      where('recurrence.templateName', '==', templateName)
+    );
+    const snapshot = await getDocs(q);
+    const now = new Date();
+    const upcoming = snapshot.docs.filter((d) => getClassSessionEnd(d.data()) >= now);
+    const base = baseSessionDescription(fields.description);
+
+    // Firestore batches are capped at 500 writes.
+    for (let i = 0; i < upcoming.length; i += 450) {
+      const batch = writeBatch(db);
+      upcoming.slice(i, i + 450).forEach((d) => {
+        const session = d.data();
+        const update = {
+          title: fields.title,
+          description: sessionDescription(base, session),
+          category: fields.category,
+          priority: fields.priority,
+        };
+        const score = computePriorityScore({ ...session, ...update });
+        update.priorityScore = score;
+        update.priorityLabel = getPriorityLabel(score);
+        batch.update(d.ref, update);
+      });
+      await batch.commit();
+    }
+    return upcoming.length;
+  } catch (error) {
+    console.error('Error updating upcoming sessions:', error);
     return -1;
   }
 };

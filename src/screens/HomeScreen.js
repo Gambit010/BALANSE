@@ -26,6 +26,7 @@ import UndoToast from '../components/UndoToast';
 import { getUnreadCount, checkDeadlineNotifications } from '../services/notificationService';
 import { useWellness } from '../hooks/useWellness';
 import { getWellnessThrottleAdvice } from '../constants/wellness';
+import UserAvatar from '../components/UserAvatar';
 
 export default function HomeScreen({ navigation }) {
   const { tasks, loading, error, refetch } = useTasks();
@@ -316,11 +317,12 @@ export default function HomeScreen({ navigation }) {
                 </View>
               )}
             </TouchableOpacity>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {userName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
+                      <TouchableOpacity
+            onPress={() => navigation.navigate('Profile')}
+            accessibilityLabel="Open profile"
+          >
+            <UserAvatar name={userName} photoURL={auth.currentUser?.photoURL} size={40} />
+          </TouchableOpacity>
 
           </View>
         </View>
@@ -342,7 +344,7 @@ export default function HomeScreen({ navigation }) {
           >
             <Ionicons name="repeat-outline" size={18} color="#a78bfa" />
             {/* <Text style={styles.quickActionText}>Add Class Schedule</Text> */}
-            <Text style={[styles.quickActionText, { color: theme.text }]}>Add Class Schedule</Text>
+            <Text style={[styles.quickActionText, { color: theme.text }]} numberOfLines={1}>Add Class</Text>
           </TouchableOpacity>
         </View>
 
@@ -1184,6 +1186,7 @@ export default function HomeScreen({ navigation }) {
     borderColor: 'rgba(167,139,250,0.25)',
     borderRadius: 12,
     paddingVertical: 12,
+    paddingHorizontal: 8,
   },
   quickActionText: {
     fontSize: 13,

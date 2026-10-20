@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +18,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { auth } from '../../firebase';
-import { getMyAssignedBoardTasks } from '../services/teamService';
+import { getMyAssignedBoardTasks, getTeam, updateBoardTaskProgress, deleteBoardTask } from '../services/teamService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { isElapsedClass } from '../services/conflictService';
+import { updateTaskProgress, updateTask, deleteTask, deleteUpcomingClassSessions, getClassSessionEnd } from '../services/taskService';
+import { toLocalDateKey } from '../utils/dateUtils';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import TaskActionModal from '../components/TaskActionModal';
+import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import UndoToast from '../components/UndoToast';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -68,7 +77,34 @@ export default function CalendarScreen({ navigation }) {
     }, [fetchTeamTasks])
   );
 
-  const allTasks = useMemo(() => [...tasks, ...teamAssignedTasks], [tasks, teamAssignedTasks]);
+  // Same tap actions as Home and Tasks: one action sheet for every task card.
+  const [actionTask, setActionTask] = useState(null);
+  const [breakdownTask, setBreakdownTask] = useState(null);
+  const [reschedulePickerTask, setReschedulePickerTask] = useState(null);
+
+  // Finished tasks are hidden; this reveals them for the day(s) on screen.
+  const [showCompleted, setShowCompleted] = useState(false);
+  useEffect(() => {
+    setShowCompleted(false);
+  }, [selectedDate, viewMode, weekAnchor]);
+
+  const refreshAll = () => Promise.all([refetch(), fetchTeamTasks()]);
+
+  // Team tasks and personal tasks live in different collections.
+  const { pendingDelete, scheduleDelete, undoDelete } = useUndoDelete(async (t) => {
+    const success = t.isTeamTask ? await deleteBoardTask(t.id) : await deleteTask(t.id);
+    if (success) {
+      await refreshAll();
+    } else {
+      Alert.alert('Error', `Failed to delete "${t.title}".`);
+    }
+  });
+
+  // The item waiting on Undo is hidden right away.
+  const allTasks = useMemo(
+    () => [...tasks, ...teamAssignedTasks].filter((t) => t.id !== pendingDelete?.id),
+    [tasks, teamAssignedTasks, pendingDelete]
+  );
   const { hasConflictsOnDate, getConflictsForDate } = useAllConflicts(allTasks);
 
   // ─── Calendar helpers ───
@@ -189,14 +225,27 @@ export default function CalendarScreen({ navigation }) {
 
   const getTasksForDate = (date) => tasksByDateKey.get(getDateKey(date)) || [];
 
-  // Elapsed, untouched class sessions don't count toward "how much is on
-  // this day" — they've already happened and need no attention, matching
-  // how HomeScreen already excludes class schedules generally.
+  const isClassSession = (t) => !!t.recurrence?.isClassSchedule;
+  const isDoneTask = (t) => t.progress === 100;
+
+  // "N tasks" under each date: everything still left that day, classes
+  // included. Finished tasks and classes that already ended don't count.
   const getTaskCountForDate = (date) =>
-    getTasksForDate(date).filter((t) => !isElapsedClass(t)).length;
+    getTasksForDate(date).filter((t) => !isDoneTask(t) && !isElapsedClass(t)).length;
 
   const hasHighPriority = (date) => {
-    return getTasksForDate(date).some((t) => !t.recurrence?.isClassSchedule && t.priorityLabel === 'High');
+    return getTasksForDate(date).some((t) => !isClassSession(t) && !isDoneTask(t) && t.priorityLabel === 'High');
+  };
+
+  // One day split into classes (by time) and tasks (by priority). Finished
+  // tasks are kept apart and only shown when "Show completed" is on.
+  const splitDay = (date) => {
+    const all = getTasksForDate(date);
+    return {
+      classes: all.filter(isClassSession).sort((a, b) => new Date(a.deadline) - new Date(b.deadline)),
+      open: all.filter((t) => !isClassSession(t) && !isDoneTask(t)).sort((a, b) => b.priorityScore - a.priorityScore),
+      done: all.filter((t) => !isClassSession(t) && isDoneTask(t)),
+    };
   };
 
   const getCategoryColor = (category) => {
@@ -292,8 +341,7 @@ export default function CalendarScreen({ navigation }) {
 
   // ─── Selected date tasks ───
 
-  const selectedTasks = getTasksForDate(selectedDate)
-    .sort((a, b) => b.priorityScore - a.priorityScore);
+  const selectedDay = splitDay(selectedDate);
 
   const formatSelectedDate = () => {
     if (isToday(selectedDate)) return 'Today';
@@ -315,8 +363,12 @@ export default function CalendarScreen({ navigation }) {
     return (
       <TouchableOpacity
         key={task.id}
-        style={[styles.taskCard, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 1 }]}
-        onPress={() => navigation.getParent()?.navigate('EditTask', { task })}
+        style={[
+          styles.taskCard,
+          { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 1 },
+          (elapsed || task.progress === 100) && { opacity: 0.6 },
+        ]}
+        onPress={() => setActionTask(task)}
         activeOpacity={0.7}
       >
         <View style={styles.taskTopRow}>
@@ -329,6 +381,10 @@ export default function CalendarScreen({ navigation }) {
           {task.recurrence?.isClassSchedule ? (
             <View style={[styles.prioBadge, { backgroundColor: theme.border }]}>
               <Text style={[styles.prioText, { color: theme.subtext }]}>Class</Text>
+            </View>
+          ) : task.progress === 100 ? (
+            <View style={[styles.prioBadge, { backgroundColor: 'rgba(52,211,153,0.15)' }]}>
+              <Text style={[styles.prioText, { color: '#34d399' }]}>Done</Text>
             </View>
           ) : (
             <View style={[styles.prioBadge, { backgroundColor: `${prioColor}20` }]}>
@@ -347,6 +403,98 @@ export default function CalendarScreen({ navigation }) {
             : urgency?.text || 'All day'}
         </Text>
       </TouchableOpacity>
+    );
+  };
+
+  // Classes and tasks for one day, as separate groups, plus the
+  // "Show completed" link when that day has finished tasks.
+  const renderDayLists = (day) => (
+    <>
+      {day.classes.length > 0 && (
+        <>
+          <Text style={[styles.groupLabel, { color: theme.subtext }]}>Classes</Text>
+          {day.classes.map(renderTaskCard)}
+        </>
+      )}
+      {day.open.length > 0 && (
+        <>
+          {day.classes.length > 0 && (
+            <Text style={[styles.groupLabel, { color: theme.subtext }]}>Tasks</Text>
+          )}
+          {day.open.map(renderTaskCard)}
+        </>
+      )}
+      {day.done.length > 0 && (
+        <TouchableOpacity style={styles.showCompletedLink} onPress={() => setShowCompleted((v) => !v)}>
+          <Ionicons name={showCompleted ? 'chevron-up' : 'checkmark-done-outline'} size={14} color={theme.subtext} />
+          <Text style={[styles.showCompletedText, { color: theme.subtext }]}>
+            {showCompleted ? 'Hide completed' : `Show completed (${day.done.length})`}
+          </Text>
+        </TouchableOpacity>
+      )}
+      {showCompleted && day.done.map(renderTaskCard)}
+    </>
+  );
+
+  // ─── Task actions (same behavior as Home and Tasks) ───
+
+  const handleSetStatus = async (t, newProgress) => {
+    if (t.isTeamTask) {
+      const team = await getTeam(t.teamId);
+      if (team) await updateBoardTaskProgress(team, t, newProgress, auth.currentUser);
+    } else {
+      await updateTaskProgress(t.id, newProgress);
+    }
+    await refreshAll();
+  };
+
+  const handleReschedule = async (task, newDeadlineDate) => {
+    const hasTime = task.deadline && task.deadline.includes('T');
+    const newDeadline = hasTime
+      ? newDeadlineDate.toISOString()
+      : toLocalDateKey(newDeadlineDate);
+
+    const score = computePriorityScore({ deadline: newDeadline, priority: task.priority, category: task.category });
+    const success = await updateTask(task.id, {
+      deadline: newDeadline,
+      priorityScore: score,
+      priorityLabel: getPriorityLabel(score),
+    });
+    if (success) {
+      refetch();
+    } else {
+      Alert.alert('Error', 'Failed to reschedule task.');
+    }
+  };
+
+  const handleDeleteSeries = (task) => {
+    const templateName = task.recurrence?.templateName;
+    if (!templateName) return;
+    const now = new Date();
+    const upcomingCount = tasks.filter(
+      (t) => t.recurrence?.templateName === templateName && getClassSessionEnd(t) >= now
+    ).length;
+
+    if (upcomingCount === 0) {
+      Alert.alert('Nothing to delete', `"${task.title}" has no upcoming sessions left.`);
+      return;
+    }
+
+    Alert.alert(
+      'Delete Upcoming Sessions',
+      `Delete ${upcomingCount} upcoming session${upcomingCount !== 1 ? 's' : ''} of "${task.title}"? Past sessions stay in your calendar.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const deleted = await deleteUpcomingClassSessions(task.userId, templateName);
+            if (deleted < 0) Alert.alert('Error', 'Failed to delete the class sessions.');
+            refetch();
+          },
+        },
+      ]
     );
   };
 
@@ -455,6 +603,13 @@ export default function CalendarScreen({ navigation }) {
                 const isTodayDate = isToday(item.date);
                 const highPriority = hasHighPriority(item.date);
                 const dateHasConflict = hasConflictsOnDate(getDateKey(item.date));
+                const countColor = isSelected
+                  ? theme.text
+                  : dateHasConflict
+                  ? '#ef4444'
+                  : highPriority
+                  ? '#fb923c'
+                  : theme.subtext;
 
                 return (
                   <TouchableOpacity
@@ -467,37 +622,31 @@ export default function CalendarScreen({ navigation }) {
                     onPress={() => setSelectedDate(item.date)}
                     activeOpacity={0.6}
                   >
-                    <Text style={[
-                      styles.dayText,
-                      { color: item.isCurrentMonth ? theme.text : theme.subtext },
-                      isSelected && { color: theme.text },
-                      isTodayDate && !isSelected && { color: theme.accent },
-                    ]}>
+                    <Text
+                      style={[
+                        styles.dayText,
+                        { color: item.isCurrentMonth ? theme.text : theme.subtext },
+                        isSelected && { color: theme.text },
+                        isTodayDate && !isSelected && { color: theme.accent },
+                      ]}
+                      maxFontSizeMultiplier={1.3}
+                    >
                       {item.day}
                     </Text>
 
-                    {taskCount > 0 && (
-                      <Text
-                        style={[
-                          styles.dayTaskCount,
-                          {
-                            color: isSelected
-                              ? theme.text
-                              : dateHasConflict
-                              ? '#ef4444'
-                              : highPriority
-                              ? '#fb923c'
-                              : theme.subtext,
-                          },
-                        ]}
-                      >
-                        {taskCount} task{taskCount !== 1 ? 's' : ''}
-                      </Text>
-                    )}
+                    {/* Fixed-height row, so every date number sits at the same height */}
+                    <View style={styles.dayIndicators}>
+                      {taskCount > 0 && (
+                        <Text style={[styles.dayTaskCount, { color: countColor }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                          {taskCount} task{taskCount !== 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
+
 
           </View>
           </GestureDetector>
@@ -507,7 +656,10 @@ export default function CalendarScreen({ navigation }) {
               <View style={styles.selectedHeader}>
                 <Text style={[styles.selectedDate, { color: theme.text }]}>{formatSelectedDate()}</Text>
                 <Text style={[styles.selectedCount, { color: theme.subtext }]}>
-                  {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
+                  {selectedDay.open.length} task{selectedDay.open.length !== 1 ? 's' : ''}
+                  {selectedDay.classes.length > 0
+                    ? ` · ${selectedDay.classes.length} class${selectedDay.classes.length !== 1 ? 'es' : ''}`
+                    : ''}
                 </Text>
               </View>
 
@@ -539,10 +691,12 @@ export default function CalendarScreen({ navigation }) {
                 );
               })()}
 
-              {selectedTasks.length === 0 ? (
+              {selectedDay.classes.length + selectedDay.open.length === 0 && (
                 <View style={styles.emptyDay}>
                   <Ionicons name="checkmark-circle-outline" size={40} color={theme.subtext} />
-                  <Text style={[styles.emptyDayText, { color: theme.subtext }]}>No tasks on this day</Text>
+                  <Text style={[styles.emptyDayText, { color: theme.subtext }]}>
+                    {selectedDay.done.length > 0 ? 'Everything on this day is done' : 'No tasks on this day'}
+                  </Text>
                   <TouchableOpacity
                     style={styles.addTaskLink}
                     onPress={() => navigation.getParent()?.navigate('AddTask')}
@@ -551,9 +705,8 @@ export default function CalendarScreen({ navigation }) {
                     <Text style={[styles.addTaskLinkText, { color: theme.accent }]}>Add a task</Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
-                selectedTasks.map(renderTaskCard)
               )}
+              {renderDayLists(selectedDay)}
             </View>
           </>
         ) : (
@@ -561,7 +714,7 @@ export default function CalendarScreen({ navigation }) {
           <GestureDetector gesture={swipeGesture}>
           <View style={styles.weekContainer}>
             {getWeekDays(weekAnchor).map((date) => {
-              const dayTasks = getTasksForDate(date).sort((a, b) => b.priorityScore - a.priorityScore);
+              const day = splitDay(date);
               const dateConflicts = getConflictsForDate(getDateKey(date));
               const totalConflicts = dateConflicts.reduce((sum, entry) => sum + entry.conflicts.length, 0);
               const todayDate = isToday(date);
@@ -585,11 +738,12 @@ export default function CalendarScreen({ navigation }) {
                     )}
                   </View>
 
-                  {dayTasks.length === 0 ? (
-                    <Text style={[styles.weekEmptyText, { color: theme.subtext }]}>No tasks</Text>
-                  ) : (
-                    dayTasks.map(renderTaskCard)
+                  {day.classes.length + day.open.length === 0 && (
+                    <Text style={[styles.weekEmptyText, { color: theme.subtext }]}>
+                      {day.done.length > 0 ? 'All done' : 'No tasks'}
+                    </Text>
                   )}
+                  {renderDayLists(day)}
                 </View>
               );
             })}
@@ -658,6 +812,75 @@ export default function CalendarScreen({ navigation }) {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <PriorityBreakdownModal
+        visible={!!breakdownTask}
+        task={breakdownTask}
+        onClose={() => setBreakdownTask(null)}
+      />
+
+      <TaskActionModal
+        visible={!!actionTask}
+        task={actionTask}
+        theme={theme}
+        onClose={() => setActionTask(null)}
+        onSetStatus={(newProgress) => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) handleSetStatus(t, newProgress);
+        }}
+        onViewBreakdown={() => {
+          setBreakdownTask(actionTask);
+          setActionTask(null);
+        }}
+        onEdit={() => {
+          const t = actionTask;
+          setActionTask(null);
+          navigation.getParent()?.navigate('EditTask', { task: t });
+        }}
+        onSnooze={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) {
+            const newDate = new Date(t.deadline);
+            newDate.setDate(newDate.getDate() + 1);
+            handleReschedule(t, newDate);
+          }
+        }}
+        onPickDate={() => {
+          const t = actionTask;
+          setActionTask(null);
+          setReschedulePickerTask(t);
+        }}
+        onDelete={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) scheduleDelete(t);
+        }}
+        onDeleteSeries={() => {
+          const t = actionTask;
+          setActionTask(null);
+          if (t) handleDeleteSeries(t);
+        }}
+      />
+
+      {/* Shown after "Pick a New Date" in the action sheet */}
+      {reschedulePickerTask && (
+        <DateTimePicker
+          value={new Date(reschedulePickerTask.deadline)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            const t = reschedulePickerTask;
+            setReschedulePickerTask(null);
+            if (selectedDate && t) handleReschedule(t, selectedDate);
+          }}
+        />
+      )}
+
+      {pendingDelete && (
+        <UndoToast key={pendingDelete.id} onUndo={undoDelete} isDarkMode={isDarkMode} />
+      )}
     </SafeAreaView>
   );
 }
@@ -780,8 +1003,9 @@ const styles = StyleSheet.create({
   dayCell: {
     width: '14.28%',
     aspectRatio: 0.85,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    paddingTop: 7,
     borderRadius: 12,
   },
   dayCellSelected: { 
@@ -793,8 +1017,73 @@ const styles = StyleSheet.create({
   },
   dayText: { 
     fontSize: 14, 
+    lineHeight: 18,
     fontWeight: '500', 
     color: '#ffffff' 
+  },
+  dayIndicators: {
+    height: 16,
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  dayBadge: {
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayBadgeText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
+  },
+  classDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    rowGap: 6,
+    marginTop: -12,
+    marginBottom: 20,
+  },
+  legendSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginLeft: 8,
+  },
+  legendText: {
+    fontSize: 11,
+    marginLeft: 4,
+  },
+  groupLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  showCompletedLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  showCompletedText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   dayTextFaded: { 
     color: 'rgba(255,255,255,0.2)' 
@@ -812,7 +1101,6 @@ const styles = StyleSheet.create({
   dayTaskCount: {
     fontSize: 9,
     fontWeight: '600',
-    marginTop: 3,
   },
 
   // Dots (unused, kept for reference)

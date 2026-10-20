@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { getActiveDays, toLocalDateKey } from '../services/activityService';
+import { getActivity, toLocalDateKey } from '../services/activityService';
 import {
   View,
   Text,
@@ -16,21 +16,24 @@ import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../context/ThemeContext'; // for global dark mode 
 import { getNotificationsEnabled, setNotificationsEnabled } from '../services/pushNotificationServices';
+import UserAvatar from '../components/UserAvatar';
 
-// Simple task-completion milestones — no new data to track, just thresholds
-// against the completed-task count already computed below.
+// Task-completion milestones, counted over every task ever finished (see
+// lifetimeCompleted below), so a badge stays earned after a task is deleted.
 const MILESTONES = [
+  { threshold: 1, label: 'First Task', icon: 'flag-outline' },
   { threshold: 10, label: '10 Tasks', icon: 'ribbon-outline' },
-  { threshold: 50, label: '50 Tasks', icon: 'medal-outline' },
-  { threshold: 100, label: '100 Tasks', icon: 'trophy-outline' },
+  { threshold: 25, label: '25 Tasks', icon: 'medal-outline' },
+  { threshold: 50, label: '50 Tasks', icon: 'trophy-outline' },
 ];
 
 export default function ProfileScreen({ navigation }) {
   //const [darkMode, setDarkMode] = useState(false);
   const { isDarkMode, toggleDarkMode, theme } = useTheme(); // this replace the code above 
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
-  const { tasks } = useTasks();
+  const { tasks, refetch } = useTasks();
   const [activeDays, setActiveDays] = useState([]);
+  const [completedTaskIds, setCompletedTaskIds] = useState([]);
 
   useEffect(() => {
     getNotificationsEnabled().then(setNotificationsEnabledState);
@@ -39,8 +42,14 @@ export default function ProfileScreen({ navigation }) {
   // Refresh on focus so a task finished elsewhere shows up when you come back.
   useFocusEffect(
     useCallback(() => {
+      refetch();
       const uid = auth.currentUser?.uid;
-      if (uid) getActiveDays(uid).then(setActiveDays);
+      if (uid) {
+        getActivity(uid).then((activity) => {
+          setActiveDays(activity.activeDays);
+          setCompletedTaskIds(activity.completedTaskIds);
+        });
+      }
     }, [])
   );
 
@@ -71,12 +80,22 @@ export default function ProfileScreen({ navigation }) {
     return unsubscribe;
   }, []);
 
-  // Computed stats from real task data
-  const completedTasks = tasks.filter(t => t.progress === 100).length;
-  const inProgressTasks = tasks.filter(t => t.progress > 0 && t.progress < 100).length;
-  const successRate = tasks.length > 0
-    ? Math.round((completedTasks / tasks.length) * 100)
+  // Computed stats from real task data. Class sessions are left out: they're
+  // never marked Done, so a semester of them would pull the rate toward 0%.
+  const statTasks = tasks.filter(t => !t.recurrence?.isClassSchedule);
+  const completedTasks = statTasks.filter(t => t.progress === 100).length;
+  const inProgressTasks = statTasks.filter(t => t.progress > 0 && t.progress < 100).length;
+  const successRate = statTasks.length > 0
+    ? Math.round((completedTasks / statTasks.length) * 100)
     : 0;
+
+  // Every task ever finished: the saved IDs, plus tasks that are Done right
+  // now (covers tasks completed before IDs were being saved).
+  const lifetimeCompleted = new Set([
+    ...completedTaskIds,
+    ...statTasks.filter(t => t.progress === 100).map(t => t.id),
+  ]).size;
+  const nextMilestone = MILESTONES.find(m => lifetimeCompleted < m.threshold);
 
     /*
   const handleLogout = async () => {
@@ -113,10 +132,8 @@ export default function ProfileScreen({ navigation }) {
 
         {/* AVATAR + USER INFO */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {userName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={{ marginBottom: 12 }}>
+            <UserAvatar name={userName} photoURL={auth.currentUser?.photoURL} size={80} />
           </View>
           <Text style={[styles.userName, { color: theme.text }]}>{userName}</Text>
           <Text style={[styles.userEmail, { color: theme.subtext }]}>{userEmail}</Text>
@@ -141,7 +158,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={[styles.statDivider, { backgroundColor: theme.border},]} />
           <View style={styles.statItem}>
             <Text style={[styles.statNumber, { color: theme.text }]}>{successRate}%</Text>
-            <Text style={[styles.statLabel, { color: theme.subtext }]}>Sucess Rate</Text>
+            <Text style={[styles.statLabel, { color: theme.subtext }]}>Success Rate</Text>
           </View>
         </View>
 
@@ -185,7 +202,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={[styles.achievementsTitle, { color: theme.text }]}>Achievements</Text>
           <View style={styles.achievementsRow}>
             {MILESTONES.map((m) => {
-              const earned = completedTasks >= m.threshold;
+              const earned = lifetimeCompleted >= m.threshold;
               return (
                 <View key={m.threshold} style={styles.achievementItem}>
                   <View style={[
@@ -204,6 +221,11 @@ export default function ProfileScreen({ navigation }) {
               );
             })}
           </View>
+          <Text style={[styles.achievementProgress, { color: theme.subtext }]}>
+            {nextMilestone
+              ? `${lifetimeCompleted} of ${nextMilestone.threshold} tasks done for "${nextMilestone.label}"`
+              : `All badges earned · ${lifetimeCompleted} tasks done`}
+          </Text>
         </View>
 
         {/* SETTINGS */}
@@ -456,6 +478,11 @@ const styles = StyleSheet.create({
   achievementLabel: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  achievementProgress: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 14,
   },
   settingsCard: {
     backgroundColor: '#1a1a3e',
