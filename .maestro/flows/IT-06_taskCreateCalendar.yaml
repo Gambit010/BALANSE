@@ -1,0 +1,65 @@
+appId: com.balanseapp.app
+---
+# Boundary type: Module to Module
+# What to test: Task creation appears on calendar on correct date
+
+- launchApp:
+    clearState: false
+
+- assertVisible: "Overall Progress"
+- tapOn: "Add task"
+- assertVisible: "Add New Task"
+
+- tapOn:
+    text: "Enter task title"
+- inputText: "Test it appear on calendar"
+
+- tapOn:
+    text: "Enter task description" 
+- inputText: "Test maestro description"
+
+- tapOn: "Organization"
+- tapOn: "Medium"
+
+- assertVisible: "DEADLINE"
+- assertVisible: "Set specific time"
+- assertVisible: "Sunday, October 18, 2026"
+
+- scrollUntilVisible:
+    element:
+      text: "Add Task"
+    direction: DOWN
+    timeout: 10000
+
+- tapOn: "Add Task"
+#- assertVisible: "Schedule Conflict Detected"
+#- tapOn: "ADD ANYWAY"
+- assertVisible: "Task Added"
+- tapOn: "OK"
+
+- tapOn: "Calendar"
+- tapOn: "18"
+
+- scrollUntilVisible:
+    element:
+      text: "Test it appear on calendar"
+    direction: DOWN
+    timeout: 10000
+
+- assertVisible: "Test it appear on calendar"
+
+- scrollUntilVisible:
+    element:
+      text: "Week"
+    direction: UP
+    timeout: 10000
+
+- tapOn: "Week"
+
+- scrollUntilVisible:
+    element:
+      text: "Test it appear on calendar"
+    direction: DOWN
+    timeout: 10000
+
+- assertVisible: "Test it appear on calendar"
