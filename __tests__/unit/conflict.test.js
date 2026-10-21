@@ -61,7 +61,7 @@ describe('TC-U02: Conflict Detection', () => {
     expect(conflicts.some(c => c.type === 'same_day_high_load')).toBe(true);
   });
 
-  test('TC-U02-07: Classes should not count toward the busy-day warning', () => {
+  test('TC-U02-07: Classes should not be counted as tasks in the busy-day warning', () => {
     const tasks = [task('t1', 18), classSession('c1', 8), classSession('c2', 10), classSession('c3', 13)];
     const conflicts = detectConflicts(tasks[0], tasks, 't1');
     expect(conflicts.some(c => c.type === 'same_day_high_load')).toBe(false);
@@ -72,5 +72,30 @@ describe('TC-U02: Conflict Detection', () => {
     const b = task('b', 7, { category: 'Organization' });
     const keys = [...detectAllConflicts([a, b]).keys()];
     expect(keys).toEqual([toLocalDateKey(new Date(a.deadline))]);
+  });
+
+  test('TC-U02-09: On a heavy class day (1/3 of the day or more), 3 tasks should be a busy day', () => {
+    // 4 classes x 1.5 h = 6 h, more than a third of the 14-hour active day
+    const classes = [8, 10, 13, 15].map((h, i) => classSession(`c${i}`, h));
+    const tasks = [12, 18, 19].map((h, i) => task(`t${i}`, h));
+    const conflicts = detectConflicts(tasks[0], [...classes, ...tasks], 't0');
+    const busy = conflicts.find(c => c.type === 'same_day_high_load');
+    expect(busy).toBeDefined();
+    expect(busy.message).toContain('6 h of classes');
+  });
+
+  test('TC-U02-10: On a light class day (under 1/3 of the day), 3 tasks should not be a busy day', () => {
+    // 2 classes x 1.5 h = 3 h, less than a third of the day
+    const classes = [8, 10].map((h, i) => classSession(`c${i}`, h));
+    const tasks = [12, 18, 19].map((h, i) => task(`t${i}`, h));
+    const conflicts = detectConflicts(tasks[0], [...classes, ...tasks], 't0');
+    expect(conflicts.some(c => c.type === 'same_day_high_load')).toBe(false);
+  });
+
+  test('TC-U02-11: A heavy class day with only 2 tasks should not be a busy day', () => {
+    const classes = [8, 10, 13, 15].map((h, i) => classSession(`c${i}`, h));
+    const tasks = [12, 18].map((h, i) => task(`t${i}`, h));
+    const conflicts = detectConflicts(tasks[0], [...classes, ...tasks], 't0');
+    expect(conflicts.some(c => c.type === 'same_day_high_load')).toBe(false);
   });
 });

@@ -11,6 +11,15 @@ const DEFAULT_TASK_DURATION = 60;
 // correlate with schedule strain. Adjust here to tune the heuristic.
 const SAME_DAY_OVERLOAD_THRESHOLD = 3;
 
+// The part of the day the app plans around (also used when suggesting a free slot).
+const ACTIVE_DAY_START_HOUR = 7;  // 7:00 AM
+const ACTIVE_DAY_END_HOUR = 21;   // 9:00 PM
+
+// When classes take up a third or more of that active day (4 h 40 min of the
+// 14 hours), one task fewer is enough to make it a busy day.
+const HEAVY_CLASS_DAY_SHARE = 1 / 3;
+const HEAVY_CLASS_DAY_THRESHOLD = SAME_DAY_OVERLOAD_THRESHOLD - 1;
+
 /**
  * Parse a task's deadline into a time range { start, end }.
  * - Tasks with time (ISO string containing 'T'): start = deadline, end = start + DEFAULT_TASK_DURATION
@@ -161,9 +170,9 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
   }
 
   // --- 2. Same-day overload detection ---
-  // Counts tasks only. Classes are fixed commitments that already get their
-  // own overlap check above, so a normal school day of classes is never a
-  // "busy day" by itself.
+  // Counts tasks, not classes, so a normal school day of classes is never a
+  // "busy day" by itself. Classes still add weight: on a heavy class day the
+  // task threshold drops by one.
   const targetIsClass = !!targetTask.recurrence?.isClassSchedule;
   const sameDayTasks = targetIsClass ? [] : otherTasks.filter((t) => {
     if (t.recurrence?.isClassSchedule) return false;
@@ -172,7 +181,11 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
     return isSameDay(taskRange.start, targetRange.start);
   });
 
-  if (sameDayTasks.length >= SAME_DAY_OVERLOAD_THRESHOLD) {
+  const classMinutes = targetIsClass ? 0 : getClassMinutesOnDay(otherTasks, targetRange.start);
+  const isHeavyClassDay = classMinutes >= activeDayMinutes() * HEAVY_CLASS_DAY_SHARE;
+  const overloadThreshold = isHeavyClassDay ? HEAVY_CLASS_DAY_THRESHOLD : SAME_DAY_OVERLOAD_THRESHOLD;
+
+  if (sameDayTasks.length >= overloadThreshold) {
     const highPriorityCount = sameDayTasks.filter(
       (t) => t.priorityLabel === 'High' || t.priorityScore >= 70
     ).length;
@@ -182,7 +195,7 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
       task: null,
       type: 'same_day_high_load',
       severity: highPriorityCount >= 2 ? 'high' : 'medium',
-      message: `You already have ${sameDayTasks.length} task${sameDayTasks.length > 1 ? 's' : ''} on this day${highPriorityCount > 0 ? ` (${highPriorityCount} high priority)` : ''}.`,
+      message: `You already have ${sameDayTasks.length} task${sameDayTasks.length > 1 ? 's' : ''} on this day${highPriorityCount > 0 ? ` (${highPriorityCount} high priority)` : ''}${isHeavyClassDay ? `, on top of ${formatDuration(classMinutes)} of classes` : ''}.`,
       suggestion: alt.message,
       suggestedSlot: alt.slot,
     });
@@ -242,8 +255,8 @@ const suggestAlternativeTime = (targetRange, otherTasks) => {
     .map((t) => getTaskTimeRange(t))
     .filter((r) => r && !r.isAllDay && isSameDay(r.start, targetDate));
 
-  // Try 30-minute slots from 7 AM to 9 PM
-  for (let minutes = 7 * 60; minutes <= 21 * 60; minutes += 30) {
+  // Try 30-minute slots across the active day (7 AM to 9 PM)
+  for (let minutes = ACTIVE_DAY_START_HOUR * 60; minutes <= ACTIVE_DAY_END_HOUR * 60; minutes += 30) {
     const slotStart = new Date(targetDate);
     slotStart.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
     const slotEnd = new Date(slotStart.getTime() + duration);
@@ -311,6 +324,36 @@ const findLeastBusyDay = (deadline, allTasks) => {
     message: 'Try spreading tasks across different days to reduce overload.',
     slot: null,
   };
+};
+
+const activeDayMinutes = () => (ACTIVE_DAY_END_HOUR - ACTIVE_DAY_START_HOUR) * 60;
+
+/**
+ * Total minutes of class on the given day, counting only the part that falls
+ * inside the active day (7 AM to 9 PM).
+ */
+const getClassMinutesOnDay = (tasks, day) => {
+  const windowStart = new Date(day);
+  windowStart.setHours(ACTIVE_DAY_START_HOUR, 0, 0, 0);
+  const windowEnd = new Date(day);
+  windowEnd.setHours(ACTIVE_DAY_END_HOUR, 0, 0, 0);
+
+  return tasks.reduce((total, t) => {
+    if (!t.recurrence?.isClassSchedule) return total;
+    const range = getTaskTimeRange(t);
+    if (!range || range.isAllDay || !isSameDay(range.start, day)) return total;
+    const start = Math.max(range.start.getTime(), windowStart.getTime());
+    const end = Math.min(range.end.getTime(), windowEnd.getTime());
+    return end > start ? total + (end - start) / 60000 : total;
+  }, 0);
+};
+
+// 280 -> "4 h 40 min", 300 -> "5 h"
+const formatDuration = (minutes) => {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 };
 
 const formatTime = (date) => {
