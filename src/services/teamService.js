@@ -9,6 +9,7 @@ import {
   query,
   where,
   arrayUnion,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -132,9 +133,17 @@ export const addTeamMember = async (team, userToAdd) => {
   }
 };
 
-// Delete a team (owner only — enforced in the UI)
+// Delete a team and its board tasks (owner only — enforced in the UI and rules).
+// Tasks go first: once the team is gone, the rules can no longer tell who owns them.
 export const deleteTeam = async (teamId) => {
   try {
+    const snapshot = await getDocs(query(collection(db, 'boardTasks'), where('teamId', '==', teamId)));
+    // Firestore batches are capped at 500 writes.
+    for (let i = 0; i < snapshot.docs.length; i += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
     await deleteDoc(doc(db, 'teams', teamId));
     return true;
   } catch (error) {
