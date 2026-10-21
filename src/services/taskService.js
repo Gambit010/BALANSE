@@ -17,8 +17,10 @@ import { scheduleDeadlineReminder, cancelDeadlineReminder } from './pushNotifica
 import { recordActiveDay } from './activityService';
 import { toLocalDateKey } from '../utils/dateUtils';
 
-// Get all tasks for the current user
-export const getUserTasks = async (userId) => {
+// Get all tasks for the current user. By default a failed read returns [];
+// pass { throwOnError: true } to get the error instead (useTasks does, so a
+// failed load isn't mistaken for "no tasks").
+export const getUserTasks = async (userId, { throwOnError = false } = {}) => {
   try {
     const q = query(
       collection(db, 'tasks'),
@@ -31,6 +33,7 @@ export const getUserTasks = async (userId) => {
     }));
   } catch (error) {
       console.error('Error fetching tasks:', error);
+      if (throwOnError) throw error;
       return [];
   }
 };

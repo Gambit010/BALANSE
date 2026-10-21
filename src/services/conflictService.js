@@ -161,7 +161,12 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
   }
 
   // --- 2. Same-day overload detection ---
-  const sameDayTasks = otherTasks.filter((t) => {
+  // Counts tasks only. Classes are fixed commitments that already get their
+  // own overlap check above, so a normal school day of classes is never a
+  // "busy day" by itself.
+  const targetIsClass = !!targetTask.recurrence?.isClassSchedule;
+  const sameDayTasks = targetIsClass ? [] : otherTasks.filter((t) => {
+    if (t.recurrence?.isClassSchedule) return false;
     const taskRange = getTaskTimeRange(t);
     if (!taskRange) return false;
     return isSameDay(taskRange.start, targetRange.start);
@@ -193,6 +198,8 @@ export const detectConflicts = (targetTask, existingTasks, targetTaskId = null) 
 
     const crossDomainConflicts = otherTasks.filter((t) => {
       if (t.category === targetTask.category) return false;
+      // Back-to-back classes are just the timetable, not a tight transition.
+      if (targetIsClass && t.recurrence?.isClassSchedule) return false;
       const taskHasTime = t.deadline && t.deadline.includes('T');
       if (!taskHasTime) return false;
 
@@ -365,8 +372,11 @@ export const detectAllConflicts = (tasks) => {
     const conflicts = detectConflicts(task, activeTasks, task.id);
 
     if (conflicts.length > 0) {
+      // Local date, same as the Calendar's keys. Splitting the ISO string
+      // would give the UTC date, which is the previous day before 8:00 AM
+      // in the Philippines.
       const dateKey = task.deadline.includes('T')
-        ? task.deadline.split('T')[0]
+        ? toLocalDateKey(new Date(task.deadline))
         : task.deadline;
 
       const existing = conflictMap.get(dateKey) || [];

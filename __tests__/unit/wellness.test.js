@@ -303,12 +303,13 @@ describe('TC-U03: Wellness Assessment and Recommendation Engine', () => {
     test('TC-U03-29: At-risk wellness should recommend mental health resources', () => {
       const interventions = getInterventions(40, 0, 0);
 
-      expect(interventions).toHaveLength(2);
+      expect(interventions).toHaveLength(3);
       expect(interventions.map(i => i.title)).toEqual([
         'Take a Break',
+        'Talk to the Guidance Office',
         'Mental Health Resources',
     ]);
-      expect(interventions[1].link).toBe('https://mentalhealthph.org/');
+      expect(interventions[2].link).toBe('https://mentalhealthph.org/');
     });
 
     test('TC-U03-30: Wellness exactly at 50 should not trigger Take a Break intervention', () => {
@@ -655,5 +656,38 @@ describe('TC-U03: Wellness Assessment and Recommendation Engine', () => {
 
   });
 
+});
+
+
+describe('TC-U03: WHO-5 Check-in Interval', () => {
+  const { isAssessmentDue, getNextAssessmentDate, WHO5_COOLDOWN_DAYS } = require('../../src/constants/wellness');
+
+  const daysAgo = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d;
+  };
+
+  test('TC-U03-56: The first check-in should always be allowed', () => {
+    expect(isAssessmentDue(null)).toBe(true);
+  });
+
+  test('TC-U03-57: A second check-in on the same day should be blocked', () => {
+    expect(isAssessmentDue(daysAgo(0))).toBe(false);
+  });
+
+  test('TC-U03-58: A check-in 13 days later should still be blocked', () => {
+    expect(isAssessmentDue(daysAgo(13))).toBe(false);
+  });
+
+  test('TC-U03-59: A check-in 14 days later should be allowed', () => {
+    expect(WHO5_COOLDOWN_DAYS).toBe(14);
+    expect(isAssessmentDue(daysAgo(14))).toBe(true);
+  });
+
+  test('TC-U03-60: The next check-in date should be 14 days after the last one', () => {
+    const last = new Date(2026, 9, 1, 9, 0);
+    expect(getNextAssessmentDate(last).toDateString()).toBe(new Date(2026, 9, 15, 9, 0).toDateString());
+  });
 });
 
