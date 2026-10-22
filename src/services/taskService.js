@@ -16,6 +16,7 @@ import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { scheduleDeadlineReminder, cancelDeadlineReminder } from './pushNotificationServices';
 import { recordActiveDay } from './activityService';
 import { toLocalDateKey } from '../utils/dateUtils';
+import { WEEKDAY_NAMES, toWeekdayNumbers, getSessionDates } from '../utils/scheduleUtils';
 
 // Get all tasks for the current user. By default a failed read returns [];
 // pass { throwOnError: true } to get the error instead (useTasks does, so a
@@ -377,68 +378,68 @@ export const updateUpcomingSessions = async (userId, templateName, fields) => {
   }
 };
 
+// Creates one task per class session, from startDate (default today) to
+// endDate. The dates come from getSessionDates, the same rule the Add Class
+// screen uses for its preview, so the count shown is the count saved.
 export const addClassSchedule = async (scheduleData) => {
   try {
-    const dayMap = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 0 };
-    const targetDays = scheduleData.days.map(d => dayMap[d]);
-
-    const current = new Date();
-    current.setHours(0, 0, 0, 0);
-    const end = new Date(scheduleData.endDate);
-    end.setHours(23, 59, 59, 999);
-
-    let count = 0;
+    const startDate = scheduleData.startDate ? new Date(scheduleData.startDate) : new Date();
+    const sessionDates = getSessionDates(startDate, scheduleData.endDate, toWeekdayNumbers(scheduleData.days));
     const templateName = `class_${scheduleData.className.replace(/\s+/g, '_')}_${Date.now()}`;
+    const taskDocs = [];
 
-    while (current <= end) {
-      if (targetDays.includes(current.getDay())) {
-        const dayName = Object.keys(dayMap).find(k => dayMap[k] === current.getDay());
-        const times = scheduleData.dayTimes[dayName];
-        if (!times) { current.setDate(current.getDate() + 1); continue; }
+    for (const current of sessionDates) {
+      const times = scheduleData.dayTimes[WEEKDAY_NAMES[current.getDay()]];
+      if (!times) continue;
 
-        const taskDate = new Date(current);
-        taskDate.setHours(times.startHour, times.startMinute, 0, 0);
+      const taskDate = new Date(current);
+      taskDate.setHours(times.startHour, times.startMinute, 0, 0);
 
-        const endDate = new Date(current);
-        endDate.setHours(times.endHour, times.endMinute, 0, 0);
+      const endDate = new Date(current);
+      endDate.setHours(times.endHour, times.endMinute, 0, 0);
 
-        const startLabel = taskDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-        const endLabel = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const startLabel = taskDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const endLabel = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-        const taskDoc = {
-          userId: scheduleData.userId,
-          ownerEmail: scheduleData.ownerEmail,
-          ownerName: scheduleData.ownerName,
-          title: scheduleData.className,
-          description: `Class scheduled ${startLabel} - ${endLabel}`,
-          category: scheduleData.category,
-          priority: 'Medium',
-          deadline: taskDate.toISOString(),
-          endTime: endDate.toISOString(),
-          assignments: [],
-          createdAt: serverTimestamp(),
-          isCompleted: false,
-          progress: 0,
-          recurrence: {
-            templateName,
-            frequency: 'weekly',
-            days: scheduleData.days,
-            instanceDate: toLocalDateKey(taskDate),
-            isClassSchedule: true,
-          },
-        };
+      const taskDoc = {
+        userId: scheduleData.userId,
+        ownerEmail: scheduleData.ownerEmail,
+        ownerName: scheduleData.ownerName,
+        title: scheduleData.className,
+        description: `Class scheduled ${startLabel} - ${endLabel}`,
+        category: scheduleData.category,
+        priority: 'Medium',
+        deadline: taskDate.toISOString(),
+        endTime: endDate.toISOString(),
+        assignments: [],
+        createdAt: serverTimestamp(),
+        isCompleted: false,
+        progress: 0,
+        recurrence: {
+          templateName,
+          frequency: 'weekly',
+          days: scheduleData.days,
+          instanceDate: toLocalDateKey(taskDate),
+          isClassSchedule: true,
+        },
+      };
 
-        const score = computePriorityScore(taskDoc);
-        taskDoc.priorityScore = score;
-        taskDoc.priorityLabel = getPriorityLabel(score);
+      const score = computePriorityScore(taskDoc);
+      taskDoc.priorityScore = score;
+      taskDoc.priorityLabel = getPriorityLabel(score);
 
-        await addDoc(collection(db, 'tasks'), taskDoc);
-        count++;
-      }
-      current.setDate(current.getDate() + 1);
+      taskDocs.push(taskDoc);
     }
 
-    return count;
+    // Saved in batches instead of one by one: much faster on a slow
+    // connection. Firestore batches are capped at 500 writes.
+    for (let i = 0; i < taskDocs.length; i += 450) {
+      const batch = writeBatch(db);
+      taskDocs.slice(i, i + 450).forEach((taskDoc) => batch.set(doc(collection(db, 'tasks')), taskDoc));
+      await batch.commit();
+    }
+
+    return taskDocs.length;
   } catch (error) {
     console.error('Error adding class schedule:', error);
     return 0;
