@@ -1,6 +1,7 @@
 import { 
   collection, 
   addDoc, 
+  getDoc,
   getDocs, 
   updateDoc,
   deleteDoc,
@@ -87,6 +88,12 @@ export const updateTaskProgress = async (taskId, progress) => {
     if (progress === 100) {
       await cancelDeadlineReminder(taskId);
       recordActiveDay(auth.currentUser?.uid, taskId); // not awaited; never blocks the status change
+    } else {
+      // A task reopened from Done gets its reminder back
+      const snap = await getDoc(taskRef);
+      if (snap.exists() && !snap.data().recurrence?.isClassSchedule) {
+        await scheduleDeadlineReminder({ id: taskId, ...snap.data() });
+      }
     }
 
     return true;
@@ -116,9 +123,15 @@ export const updateTask = async (taskId, taskData) => {
     const taskRef = doc(db, 'tasks', taskId);
     await updateDoc(taskRef, updateData);
 
-    // Reschedule reminder if deadline changed
-    if (updateData.deadline && !updateData.recurrence?.isClassSchedule) {
-      await scheduleDeadlineReminder({ id: taskId, ...updateData });
+    // Reschedule the reminder when the deadline changes. Snooze and "Pick a
+    // New Date" only send the new date, so read the saved task to give the
+    // reminder its title, and skip classes and finished tasks.
+    if (updateData.deadline) {
+      const snap = await getDoc(taskRef);
+      const saved = snap.exists() ? snap.data() : updateData;
+      if (!saved.recurrence?.isClassSchedule && saved.progress !== 100) {
+        await scheduleDeadlineReminder({ id: taskId, ...saved });
+      }
     }
 
     return true;
