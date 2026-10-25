@@ -75,6 +75,17 @@ export const addTask = async (taskData) => {
     return null;
   }
 };
+// Get one task by its ID (used when a notification opens a task)
+export const getTaskById = async (taskId) => {
+  try {
+    const snap = await getDoc(doc(db, 'tasks', taskId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  } catch (error) {
+    console.error('Error fetching task:', error);
+    return null;
+  }
+};
+
 // Update task progress
 export const updateTaskProgress = async (taskId, progress) => {
   try {

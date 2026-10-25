@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useState, useEffect, useRef } from 'react';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -22,6 +22,21 @@ import * as Notifications from 'expo-notifications';
 import { setupPushNotifications } from './src/services/pushNotificationServices';
 
 const Stack = createStackNavigator();
+const navigationRef = createNavigationContainerRef();
+
+// Where a tapped notification should take the user, based on the data the
+// notification was sent with.
+const goToNotificationTarget = (data) => {
+  if ((data.type === 'deadline' || data.type === 'conflict') && data.taskId) {
+    navigationRef.navigate('MainApp', { screen: 'Tasks', params: { openTaskId: data.taskId } });
+  } else if (data.type === 'team' && data.teamId) {
+    navigationRef.navigate('TeamBoard', { teamId: data.teamId, teamName: '' });
+  } else if (data.type === 'wellness') {
+    navigationRef.navigate('MainApp', { screen: 'Wellness' });
+  } else {
+    navigationRef.navigate('Notifications');
+  }
+};
 
 
 export default function App() {
@@ -50,21 +65,50 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // A tapped notification is kept here until the app is ready to open it:
+  // signed in, and with the navigation set up.
+  const pendingNotificationRef = useRef(null);
+
+  const openPendingNotification = () => {
+    const data = pendingNotificationRef.current;
+    if (!data || !auth.currentUser || !navigationRef.isReady()) return;
+    pendingNotificationRef.current = null;
+    try {
+      goToNotificationTarget(data);
+    } catch (error) {
+      console.error('Could not open notification target:', error);
+    }
+  };
+
   // Handles what happens when the user taps a notification
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      console.log('Notification tapped:', data);
-    });
+    const handleResponse = (response) => {
+      const data = response?.notification?.request?.content?.data;
+      if (!data) return;
+      pendingNotificationRef.current = data;
+      Notifications.clearLastNotificationResponse(); // so it isn't opened again on the next launch
+      openPendingNotification();
+    };
+
+    // The app was closed and opened by tapping a notification
+    handleResponse(Notifications.getLastNotificationResponse());
+
+    // The app was already open or in the background
+    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
     return () => subscription.remove();
   }, []);
+
+  // Open a waiting notification once the user is signed in and the screens exist
+  useEffect(() => {
+    if (!loading && user) openPendingNotification();
+  }, [loading, user]);
 
   if (loading) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <ThemeProvider> 
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={openPendingNotification}>
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
       >
