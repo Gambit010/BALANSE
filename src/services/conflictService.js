@@ -391,7 +391,7 @@ export const checkAndNotifyConflicts = async (userId, savedTask, existingTasks) 
     const isDuplicate = await hasRecentNotification(userId, message);
     if (isDuplicate) continue;
 
-    await createNotification(userId, message, 'conflict');
+    await createNotification(userId, message, 'conflict', savedTask.id ? { taskId: savedTask.id } : {});
     await sendImmediateNotification('Scheduling conflict', message, {
       type: 'conflict',
       taskId: savedTask.id,

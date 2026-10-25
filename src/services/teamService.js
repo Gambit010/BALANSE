@@ -118,7 +118,8 @@ export const addTeamMember = async (team, userToAdd) => {
     await createNotification(
       userToAdd.uid,
       `You were added to the team "${team.name}".`,
-      'team'
+      'team',
+      { teamId: team.id }
     );
     await notifyUserDevice(
       userToAdd.uid,
@@ -203,7 +204,7 @@ export const createBoardTask = async (team, taskData, creator) => {
     });
     if (taskData.assigneeId && taskData.assigneeId !== creator.uid) {
       const msg = `${safeName(creator)} assigned you "${taskData.title}" in ${team.name}.`;
-      await createNotification(taskData.assigneeId, msg, 'team');
+      await createNotification(taskData.assigneeId, msg, 'team', { teamId: team.id, taskId: docRef.id });
       await notifyUserDevice(taskData.assigneeId, 'New task assigned', msg, {
         type: 'team',
         teamId: team.id,
@@ -248,7 +249,7 @@ export const updateBoardTaskProgress = async (team, task, newProgress, actor) =>
     if (task.assigneeId && task.assigneeId !== actor.uid) recipients.add(task.assigneeId);
     for (const uid of recipients) {
       const msg = `${safeName(actor)} updated "${task.title}" to ${label} (${newProgress}%) in ${team.name}.`;
-      await createNotification(uid, msg, 'team');
+      await createNotification(uid, msg, 'team', { teamId: team.id, taskId: task.id });
       await notifyUserDevice(uid, 'Team task updated', msg, {
         type: 'team',
         teamId: team.id,
@@ -272,7 +273,7 @@ export const assignBoardTask = async (team, task, assignee, actor) => {
     });
     if (assignee.uid !== actor.uid) {
       const msg = `${safeName(actor)} assigned you "${task.title}" in ${team.name}.`;
-      await createNotification(assignee.uid, msg, 'team');
+      await createNotification(assignee.uid, msg, 'team', { teamId: team.id, taskId: task.id });
       await notifyUserDevice(assignee.uid, 'New task assigned', msg, {
         type: 'team',
         teamId: team.id,

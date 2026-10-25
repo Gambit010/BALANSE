@@ -43,12 +43,14 @@ export const markAsRead = async (notifId) => {
 };
 
 // Create a notification
-export const createNotification = async (userId, message, type) => {
+// extra holds the ids a tap needs to open the right screen ({ taskId, teamId }).
+export const createNotification = async (userId, message, type, extra = {}) => {
   try {
     await addDoc(collection(db, 'notifications'), {
       userId,
       message,
       type,
+      ...extra,
       isRead: false,
       createdAt: serverTimestamp(),
     });
@@ -126,7 +128,7 @@ export const checkDeadlineNotifications = async (userId, tasks) => {
       if (message) {
         const alreadyNotified = await hasRecentNotification(userId, message);
         if (!alreadyNotified) {
-          await createNotification(userId, message, 'deadline');
+          await createNotification(userId, message, 'deadline', { taskId: task.id });
           await sendImmediateNotification('Deadline approaching', message, {
             type: 'deadline',
             taskId: task.id,

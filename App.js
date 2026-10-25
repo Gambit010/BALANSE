@@ -30,7 +30,7 @@ const goToNotificationTarget = (data) => {
   if ((data.type === 'deadline' || data.type === 'conflict') && data.taskId) {
     navigationRef.navigate('MainApp', { screen: 'Tasks', params: { openTaskId: data.taskId } });
   } else if (data.type === 'team' && data.teamId) {
-    navigationRef.navigate('TeamBoard', { teamId: data.teamId, teamName: '' });
+    navigationRef.navigate('TeamBoard', { teamId: data.teamId, teamName: '', openTaskId: data.taskId });
   } else if (data.type === 'wellness') {
     navigationRef.navigate('MainApp', { screen: 'Wellness' });
   } else {

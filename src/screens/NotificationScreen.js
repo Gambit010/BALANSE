@@ -65,10 +65,15 @@ export default function NotificationScreen({ navigation }) {
     );
   };
 
-  // Tapping a notification marks it read and opens the screen it is about
+  // Tapping a notification marks it read and opens the task it is about.
+  // Older notifications have no task id, so they just open the matching tab.
   const handleOpen = (notif) => {
     if (!notif.isRead) handleMarkAsRead(notif.id);
-    if (notif.type === 'team') {
+    if (notif.type === 'team' && notif.teamId) {
+      navigation.navigate('TeamBoard', { teamId: notif.teamId, teamName: '', openTaskId: notif.taskId });
+    } else if ((notif.type === 'deadline' || notif.type === 'conflict') && notif.taskId) {
+      navigation.navigate('MainApp', { screen: 'Tasks', params: { openTaskId: notif.taskId } });
+    } else if (notif.type === 'team') {
       navigation.navigate('MainApp', { screen: 'Teams' });
     } else if (notif.type === 'wellness') {
       navigation.navigate('MainApp', { screen: 'Wellness' });
