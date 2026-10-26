@@ -24,6 +24,9 @@ import { setupPushNotifications } from './src/services/pushNotificationServices'
 const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
+// The notification types BALANSE sends. Anything else is ignored.
+const NOTIFICATION_TYPES = ['deadline', 'conflict', 'team', 'wellness'];
+
 // Where a tapped notification should take the user, based on the data the
 // notification was sent with.
 const goToNotificationTarget = (data) => {
@@ -39,13 +42,20 @@ const goToNotificationTarget = (data) => {
 };
 
 
+// Email/password accounts must open the link sent to their inbox first.
+// Google accounts are already verified by Google.
+const canEnterApp = (u) =>
+  !!u && (u.emailVerified || u.providerData.some((p) => p.providerId === 'google.com'));
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [onboardingSeen, setOnboardingSeen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (signedInUser) => {
+      // An unverified account stays on the login screens.
+      const currentUser = canEnterApp(signedInUser) ? signedInUser : null;
       // Read the flag before setUser, so the first screen is decided correctly.
       if (currentUser) {
         try {
@@ -71,7 +81,7 @@ export default function App() {
 
   const openPendingNotification = () => {
     const data = pendingNotificationRef.current;
-    if (!data || !auth.currentUser || !navigationRef.isReady()) return;
+    if (!data || !canEnterApp(auth.currentUser) || !navigationRef.isReady()) return;
     pendingNotificationRef.current = null;
     try {
       goToNotificationTarget(data);
@@ -83,10 +93,13 @@ export default function App() {
   // Handles what happens when the user taps a notification
   useEffect(() => {
     const handleResponse = (response) => {
-      const data = response?.notification?.request?.content?.data;
-      if (!data) return;
-      pendingNotificationRef.current = data;
+      if (!response) return;
       Notifications.clearLastNotificationResponse(); // so it isn't opened again on the next launch
+      const data = response.notification?.request?.content?.data;
+      // Some Android phones report a normal app launch as a notification tap,
+      // with unrelated launch data. Only BALANSE's own notifications have a type.
+      if (!NOTIFICATION_TYPES.includes(data?.type)) return;
+      pendingNotificationRef.current = data;
       openPendingNotification();
     };
 

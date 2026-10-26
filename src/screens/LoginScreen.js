@@ -12,7 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { handleGoogleSignIn } from '../services/authService'; // google signIn
@@ -42,7 +42,19 @@ export default function LoginScreen({ navigation }) {
 
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      if (!user.emailVerified) {
+        // Keep them signed in only long enough to resend the link.
+        Alert.alert(
+          'Verify your email',
+          `Open the link we sent to ${user.email}, then log in again. Check your spam folder if you can't find it.`,
+          [
+            { text: 'Resend link', onPress: () => resendVerification(user) },
+            { text: 'OK', onPress: () => signOut(auth) },
+          ],
+          { cancelable: false }
+        );
+      }
     } catch (error) {
       let message = 'Something went wrong. Please try again.';
       //if (error.code === 'auth/user-not-found') message = 'No user found with this email.';
@@ -52,6 +64,20 @@ export default function LoginScreen({ navigation }) {
       Alert.alert('Login Failed', message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const resendVerification = async (user) => {
+    try {
+      await sendEmailVerification(user);
+      Alert.alert('Link sent', `We sent a new link to ${user.email}.`);
+    } catch (error) {
+      const message = error.code === 'auth/too-many-requests'
+        ? 'Please wait a few minutes before asking for another link.'
+        : 'Could not send the link. Please try again later.';
+      Alert.alert('Resend Failed', message);
+    } finally {
+      signOut(auth);
     }
   };
 

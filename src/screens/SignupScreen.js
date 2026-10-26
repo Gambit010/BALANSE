@@ -18,6 +18,7 @@ import {
   isValidPasswordLength,
   isValidMiddleName,
   areSignupFieldsFilled,
+  doPasswordsMatch,
 } from '../constants/validation';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
@@ -31,6 +32,7 @@ export default function SignupScreen({ navigation }) {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -82,6 +84,11 @@ export default function SignupScreen({ navigation }) {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
+
+    if (!doPasswordsMatch(password, confirmPassword)) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
     
 
     const fullName = middleName
@@ -101,9 +108,8 @@ export default function SignupScreen({ navigation }) {
       await auth.signOut();
 
       Alert.alert(
-        'Account Created',
-        `Welcome, ${firstName}! Please log in to continue`,
-        //`Welcome, ${firstName}! A verification email has been sent to ${email}. Please verify your email before logging in`,
+        'Verify your email',
+        `Welcome, ${firstName}! We sent a link to ${email}. Open it to verify your account, then log in. Check your spam folder if you can't find it.`,
         [{ text: 'Go to Login', onPress: () => navigation.navigate('Login') }]
       );
 
@@ -206,6 +212,19 @@ export default function SignupScreen({ navigation }) {
                   color="rgba(255, 255, 255, 0.7)"
                 />
               </TouchableOpacity>
+            </View>
+
+            {/* Confirm Password */}
+            <Text style={styles.label}>Confirm Password<Text style={styles.required}>*</Text></Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Type your password again"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showPassword}
+              />
             </View>
 
             {/* Create Account Button */}
