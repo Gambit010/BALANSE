@@ -6,6 +6,7 @@ import {
   isValidMiddleName,
   areSignupFieldsFilled,
   areLoginFieldsFilled,
+  doPasswordsMatch,
 } from '../../src/constants/validation';
 
 describe('TC-U04: Input Validation', () => {
@@ -267,6 +268,29 @@ describe('TC-U04: Input Validation', () => {
       test('TC-U04-48: Both fields empty should fail', () => {
         expect(areLoginFieldsFilled('', '')).toBe(false);
       });
+    });
+  });
+
+  // ─── Confirm Password ───
+  describe('Confirm Password Validation', () => {
+    test('TC-U04-49: Same password typed twice should pass', () => {
+      expect(doPasswordsMatch('secret123', 'secret123')).toBe(true);
+    });
+
+    test('TC-U04-50: Different passwords should fail', () => {
+      expect(doPasswordsMatch('secret123', 'secret124')).toBe(false);
+    });
+
+    test('TC-U04-51: Same letters with different capitalization should fail', () => {
+      expect(doPasswordsMatch('Secret123', 'secret123')).toBe(false);
+    });
+
+    test('TC-U04-52: Empty confirm password should fail', () => {
+      expect(doPasswordsMatch('secret123', '')).toBe(false);
+    });
+
+    test('TC-U04-53: Both empty should fail', () => {
+      expect(doPasswordsMatch('', '')).toBe(false);
     });
   });
 });

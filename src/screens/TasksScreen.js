@@ -18,7 +18,7 @@ import { useTasks } from '../hooks/useTasks';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import PriorityBreakdownModal from '../components/PriorityBreakdownModal';
 import TaskActionModal from '../components/TaskActionModal';
-import { deleteTask, updateTaskProgress, updateTask, deleteUpcomingClassSessions, getClassSessionEnd } from '../services/taskService';
+import { deleteTask, updateTaskProgress, updateTask, deleteUpcomingClassSessions, getClassSessionEnd, getTaskById } from '../services/taskService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { useUndoDelete } from '../hooks/useUndoDelete';
@@ -77,6 +77,22 @@ export default function TasksScreen({ navigation, route }) {
       return () => setSelectedIds([]); // leaving the tab ends selection
     }, [route.params?.filterCategory])
   );
+
+  // Opened from a notification: show that task's details. It's read straight
+  // from the database, so it works even if the list hasn't refreshed yet.
+  const openTaskId = route.params?.openTaskId;
+  useEffect(() => {
+    if (!openTaskId) return;
+    navigation.setParams({ openTaskId: undefined });
+    getTaskById(openTaskId).then((task) => {
+      if (!task) {
+        Alert.alert('Task not found', 'This task may have been deleted.');
+        return;
+      }
+      const score = computePriorityScore(task);
+      setActionTask({ ...task, priorityScore: score, priorityLabel: getPriorityLabel(score) });
+    });
+  }, [openTaskId]);
 
   // Android back button leaves selection mode instead of the screen.
   useEffect(() => {

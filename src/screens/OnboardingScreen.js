@@ -19,30 +19,25 @@ const { width } = Dimensions.get('window');
 const slides = [
   {
     id: '1',
-    icon: '⊞',
-    title: 'Task Management',
-    description: 'Manage academic, organization, and personal tasks in one smart dashboard.',
+    title: 'Everything in one list',
+    description: 'Add your school work, org tasks, and personal to-dos. Put in your class schedule too, so it all shows up on one calendar.',
   },
   {
     id: '2',
-    icon: '🧠', 
-    title: 'Smart Priorities',
-    description: 'Each task gets a score from its deadline, the priority you set, and its category, so the most urgent work rises to the top. Tap any task to see how its score was worked out.',
+    title: 'See what to do first',
+    description: 'Each task gets a score from its deadline, the priority you pick, and its category. Higher scores go to the top. Tap the score on a task to see how it was counted.',
   },
   {
     id: '3',
-    icon: '⚡', 
-    title: 'Conflict Detection',
-    description: 'Never miss a deadline with smart scheduling alerts.',
+    title: 'Spot clashes early',
+    description: 'If a task overlaps with a class or another deadline, you\'ll get a warning so you can move things around before it becomes a problem.',
   },
   {
     id: '4',
-    icon: '💚',
-    title: 'Well-being Check-ins',
-    description: 'Track your mental health with WHO-5 assessments and get personalized recommendations.',
+    title: 'Check in with yourself',
+    description: 'Every two weeks, answer five short questions about how you\'ve been feeling. You\'ll get tips based on your answers and can see how your score changes over time.',
   },
 ];
-
 export default function OnboardingScreen({ navigation }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -84,7 +79,7 @@ export default function OnboardingScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.brandName}>BALANSE</Text>
-        <Text style={styles.tagline}>Smart Task Management</Text>
+        <Text style={styles.tagline}>A quick look before you start</Text> 
         
         <TouchableOpacity onPress={handleSkip}>
           <Text style={styles.skipText}>Skip</Text>
@@ -93,9 +88,6 @@ export default function OnboardingScreen({ navigation }) {
 
       {/* Content */}
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <Text style={styles.icon}>{currentSlide.icon}</Text>
-        </View>
 
         {/* Title */}
         <Text style={styles.title}>{currentSlide.title}</Text>
@@ -159,20 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  icon: {
-    fontSize: 48,
-  },
+
   title: {
     fontSize: 28,
     fontWeight: '700',

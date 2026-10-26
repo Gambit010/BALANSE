@@ -65,6 +65,23 @@ export default function NotificationScreen({ navigation }) {
     );
   };
 
+  // Tapping a notification marks it read and opens the task it is about.
+  // Older notifications have no task id, so they just open the matching tab.
+  const handleOpen = (notif) => {
+    if (!notif.isRead) handleMarkAsRead(notif.id);
+    if (notif.type === 'team' && notif.teamId) {
+      navigation.navigate('TeamBoard', { teamId: notif.teamId, teamName: '', openTaskId: notif.taskId });
+    } else if ((notif.type === 'deadline' || notif.type === 'conflict') && notif.taskId) {
+      navigation.navigate('MainApp', { screen: 'Tasks', params: { openTaskId: notif.taskId } });
+    } else if (notif.type === 'team') {
+      navigation.navigate('MainApp', { screen: 'Teams' });
+    } else if (notif.type === 'wellness') {
+      navigation.navigate('MainApp', { screen: 'Wellness' });
+    } else if (notif.type === 'deadline' || notif.type === 'conflict') {
+      navigation.navigate('MainApp', { screen: 'Tasks' });
+    }
+  };
+
   const handleMarkAllRead = async () => {
     const unread = notifications.filter(n => !n.isRead);
     await Promise.all(unread.map(n => markAsRead(n.id)));
@@ -175,7 +192,7 @@ export default function NotificationScreen({ navigation }) {
                   backgroundColor: isDarkMode ? 'rgba(167,139,250,0.08)' : '#F3E8FF',
                 },
               ]}
-              onPress={() => handleMarkAsRead(notif.id)}
+              onPress={() => handleOpen(notif)}
             >
               <View style={[styles.notifIcon, { backgroundColor: `${icon.color}20` }]}>
                 <Ionicons name={icon.name} size={20} color={icon.color} />

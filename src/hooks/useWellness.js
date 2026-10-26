@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { auth } from '../../firebase'
 import { saveWellnessScore, getWellnessHistory } from "../services/taskService";
-import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline, getTrendInsight } from "../constants/wellness";
+import { WHO5_QUESTIONS, getWellnessStatus, getInterventions, detectDecline, getTrendInsight, isAssessmentDue, getNextAssessmentDate } from "../constants/wellness";
 import { getUserTasks } from '../services/taskService';
 import { detectAllConflicts } from '../services/conflictService';
 import { createNotification, hasRecentNotification } from '../services/notificationService';
@@ -104,21 +104,10 @@ const useWellness = () => {
     const trendInsight = getTrendInsight(history);
 
     // Check if 14 days have passed since last assessment
-    const canTakeAssessment = (() => {
-          if (!latestScore || !latestScore.date) return true;
-             const now = new Date();
-             const lastDate = latestScore.date instanceof Date ? latestScore.date : new Date(latestScore.date);
-             const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
-                 return diffDays >= 0;
-             })();
-
-    const nextAssessmentDate = (() => {
-         if (!latestScore || !latestScore.date) return null;
-            const lastDate = latestScore.date instanceof Date ? latestScore.date : new Date(latestScore.date);
-            const next = new Date(lastDate);
-            next.setDate(next.getDate() + 14);
-             return next;
-                })();
+        // Next check-in opens WHO5_COOLDOWN_DAYS (14) after the last one
+    const lastAssessmentDate = latestScore?.date ? new Date(latestScore.date) : null;
+    const canTakeAssessment = isAssessmentDue(lastAssessmentDate);
+    const nextAssessmentDate = getNextAssessmentDate(lastAssessmentDate);
 
        return {
         history,

@@ -547,7 +547,7 @@ export default function WellnessScreen() {
               </Text>
               <Text style={[styles.consentText, { color: theme.subtext, fontStyle: 'italic' }]}>
                 By tapping "I Understand & Agree," you confirm that you have read and understood the points above and agree to use BALANSE's well-being features under these conditions.
-              </Text>
+              </Text> 
             </ScrollView>
 
             {consentPurpose === 'review' ? (

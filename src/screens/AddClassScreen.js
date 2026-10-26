@@ -11,16 +11,28 @@ import { createNotification } from '../services/notificationService';
 import { useTasks } from '../hooks/useTasks';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import {
+  WEEKDAY_NAMES,
+  toWeekdayNumbers,
+  startOfDay,
+  addDuration,
+  getMaxEndDate,
+  getSessionDates,
+} from '../utils/scheduleUtils';
 
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+// Shortcuts that fill in the end date, counted from the start date.
 const DURATION_PRESETS = [
   { label: '4 weeks', value: 4, unit: 'weeks' },
   { label: '8 weeks', value: 8, unit: 'weeks' },
   { label: '4 months', value: 4, unit: 'months' },
 ];
+
+const formatDate = (date) =>
+  date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
 export default function AddClassScreen({ navigation }) {
   const { tasks: existingTasks } = useTasks();
@@ -44,11 +56,12 @@ export default function AddClassScreen({ navigation }) {
   const [editingDay, setEditingDay] = useState(null);   // null | 'default' | 'Monday' etc.
   const [editingField, setEditingField] = useState(null); // null | 'start' | 'end'
 
-  // Duration state
-  const [durationPreset, setDurationPreset] = useState(null);
-  const [customValue, setCustomValue] = useState('8');
-  const [customUnit, setCustomUnit] = useState('weeks');
-  const [showCustom, setShowCustom] = useState(false);
+  // Schedule dates. Starts today unless the user picks a later day; the end
+  // date is picked from the calendar or filled in by a preset.
+  const [startDate, setStartDate] = useState(() => startOfDay(new Date()));
+  const [endDate, setEndDate] = useState(null);
+  const [activePreset, setActivePreset] = useState(null); // preset that set endDate
+  const [datePicker, setDatePicker] = useState(null); // null | 'start' | 'end'
 
   const toggleDay = (day) => {
     const removing = selectedDays.includes(day);
@@ -109,70 +122,54 @@ export default function AddClassScreen({ navigation }) {
     setEditingField(null);
   };
 
-  const getDuration = () => {
-    if (durationPreset) return durationPreset;
-    if (showCustom && customValue) {
-      return { value: parseInt(customValue, 10) || 4, unit: customUnit };
-    }
-    return null;
+  const choosePreset = (preset) => {
+    setEndDate(addDuration(startDate, preset.value, preset.unit));
+    setActivePreset(preset);
   };
 
-  const getEndDate = () => {
-    const dur = getDuration();
-    if (!dur) return null;
-    const end = new Date();
-    if (dur.unit === 'weeks') {
-      end.setDate(end.getDate() + dur.value * 7);
+  const handleDateChange = (event, selectedDate) => {
+    const which = datePicker;
+    setDatePicker(null);
+    if (event?.type === 'dismissed' || !selectedDate) return;
+    const picked = startOfDay(selectedDate);
+
+    if (which === 'start') {
+      setStartDate(picked);
+      // Keep the end date valid for the new start: a preset follows the
+      // start date; a hand-picked end date is cleared if it no longer fits.
+      if (activePreset) {
+        setEndDate(addDuration(picked, activePreset.value, activePreset.unit));
+      } else if (endDate && (endDate < picked || endDate > getMaxEndDate(picked))) {
+        setEndDate(null);
+      }
     } else {
-      end.setMonth(end.getMonth() + dur.value);
+      setEndDate(picked);
+      setActivePreset(null);
     }
-    return end;
   };
 
-    const countSessions = () => {
-    const endDate = getEndDate();
-    if (!endDate || selectedDays.length === 0) return 0;
-
-    let count = 0;
-    const cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
-
-    while (cursor <= endDate) {
-      const dayName = WEEKDAYS[cursor.getDay() === 0 ? 6 : cursor.getDay() - 1];
-      if (selectedDays.includes(dayName)) count++;
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return count;
-  };
+  // Same rule addClassSchedule uses when saving
+  const getSessionDays = () => getSessionDates(startDate, endDate, toWeekdayNumbers(selectedDays));
 
   const buildSessionTasks = () => {
-    const endDate = getEndDate();
-    if (!endDate || selectedDays.length === 0) return [];
-
     const sessions = [];
-    const cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
+    for (const cursor of getSessionDays()) {
+      const dayName = WEEKDAY_NAMES[cursor.getDay()];
+      const dt = getDayTime(dayName);
+      const taskDate = new Date(cursor);
+      taskDate.setHours(dt.start.getHours(), dt.start.getMinutes(), 0, 0);
+      // Without endTime the conflict check assumes 60 minutes, missing
+      // overlaps in the rest of a longer class.
+      const sessionEnd = new Date(cursor);
+      sessionEnd.setHours(dt.end.getHours(), dt.end.getMinutes(), 0, 0);
 
-    while (cursor <= endDate) {
-      const dayName = WEEKDAYS[cursor.getDay() === 0 ? 6 : cursor.getDay() - 1];
-      if (selectedDays.includes(dayName)) {
-        const dt = getDayTime(dayName);
-        const taskDate = new Date(cursor);
-        taskDate.setHours(dt.start.getHours(), dt.start.getMinutes(), 0, 0);
-        // Without endTime the conflict check assumes 60 minutes, missing
-        // overlaps in the rest of a longer class.
-        const sessionEnd = new Date(cursor);
-        sessionEnd.setHours(dt.end.getHours(), dt.end.getMinutes(), 0, 0);
-
-        sessions.push({
-          title: className.trim(),
-          category,
-          priority: 'Medium',
-          deadline: taskDate.toISOString(),
-          endTime: sessionEnd.toISOString(),
-        });
-      }
-      cursor.setDate(cursor.getDate() + 1);
+      sessions.push({
+        title: className.trim(),
+        category,
+        priority: 'Medium',
+        deadline: taskDate.toISOString(),
+        endTime: sessionEnd.toISOString(),
+      });
     }
     return sessions;
   };
@@ -183,8 +180,6 @@ export default function AddClassScreen({ navigation }) {
     setIsLoading(true);
     try {
       const currentUser = auth.currentUser;
-      const dur = getDuration();
-      const endDate = getEndDate();
 
       const dayTimes = {};
       for (const day of selectedDays) {
@@ -205,8 +200,8 @@ export default function AddClassScreen({ navigation }) {
         category,
         days: selectedDays,
         dayTimes,
+        startDate,
         endDate,
-        duration: { value: dur.value, unit: dur.unit },
       };
 
       const count = await addClassSchedule(scheduleData);
@@ -240,8 +235,8 @@ export default function AddClassScreen({ navigation }) {
       Alert.alert('Error', 'Please select at least one day');
       return;
     }
-    if (!getDuration()) {
-      Alert.alert('Error', 'Please select a duration');
+    if (!endDate) {
+      Alert.alert('Error', 'Please choose when the class ends');
       return;
     }
     if (startTime >= endTime) {
@@ -257,6 +252,10 @@ export default function AddClassScreen({ navigation }) {
     }
 
     const sessions = buildSessionTasks();
+    if (sessions.length === 0) {
+      Alert.alert('No sessions', 'None of the selected days fall between the start and end dates. Pick different dates or days.');
+      return;
+    }
     let conflictSessionCount = 0;
     let highConflictCount = 0;
     let totalConflicts = 0;
@@ -287,11 +286,13 @@ export default function AddClassScreen({ navigation }) {
     await saveSchedule();
   };
 
-  const dur = getDuration();
-  const sessionCount = useMemo(() => {
-    if (!dur || selectedDays.length === 0) return 0;
-    return countSessions();
-  }, [selectedDays, durationPreset, customValue, customUnit, showCustom]);
+  const sessionCount = useMemo(
+    () => getSessionDates(startDate, endDate, toWeekdayNumbers(selectedDays)).length,
+    [selectedDays, startDate, endDate]
+  );
+
+  const today = startOfDay(new Date());
+  const startsToday = startDate.getTime() === today.getTime();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -458,19 +459,41 @@ export default function AddClassScreen({ navigation }) {
           />
         )}
 
-        {/* DURATION */}
-        <Text style={[styles.label, { color: theme.text }]}>Duration</Text>
+        {/* START DATE */}
+        <Text style={[styles.label, { color: theme.text }]}>Starts on</Text>
+        <TouchableOpacity
+          style={[styles.dateBox, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={() => setDatePicker('start')}
+        >
+          <Ionicons name="calendar-outline" size={18} color={theme.accent} />
+          <Text style={[styles.dateBoxText, { color: theme.text }]}>
+            {startsToday ? `Today, ${formatDate(startDate)}` : formatDate(startDate)}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={theme.subtext} />
+        </TouchableOpacity>
+
+        {/* END DATE */}
+        <Text style={[styles.label, { color: theme.text }]}>Repeats until</Text>
+        <TouchableOpacity
+          style={[styles.dateBox, { backgroundColor: theme.card, borderColor: endDate ? theme.accent : theme.border }]}
+          onPress={() => setDatePicker('end')}
+        >
+          <Ionicons name="calendar-outline" size={18} color={theme.accent} />
+          <Text style={[styles.dateBoxText, { color: endDate ? theme.text : theme.subtext }]}>
+            {endDate ? formatDate(endDate) : 'Pick an end date'}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={theme.subtext} />
+        </TouchableOpacity>
+
+        <Text style={[styles.perDayHint, { color: theme.subtext }]}>Or use a shortcut (counted from the start date):</Text>
         <View style={styles.durationRow}>
           {DURATION_PRESETS.map((preset) => {
-            const isActive = durationPreset?.value === preset.value && durationPreset?.unit === preset.unit && !showCustom;
+            const isActive = activePreset?.label === preset.label;
             return (
               <TouchableOpacity
                 key={preset.label}
                 style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, isActive && styles.durationChipActive]}
-                onPress={() => {
-                  setDurationPreset(preset);
-                  setShowCustom(false);
-                }}
+                onPress={() => choosePreset(preset)}
               >
                 <Text style={[styles.durationChipText, { color: isActive ? theme.text : theme.subtext }, isActive && { color: theme.text, fontWeight: '700',},]}>
                   {preset.label}
@@ -478,63 +501,28 @@ export default function AddClassScreen({ navigation }) {
               </TouchableOpacity>
             );
           })}
-          <TouchableOpacity
-            style={[styles.durationChip, { backgroundColor: theme.card, borderColor: theme.border }, showCustom && styles.durationChipActive]}
-            onPress={() => {
-              setShowCustom(true);
-              setDurationPreset(null);
-            }}
-          >
-            <Text style={[styles.durationChipText, { color: showCustom ? theme.text : theme.subtext }, showCustom && { color: theme.text, fontWeight: '700',},]}>
-              Custom
-            </Text>
-          </TouchableOpacity>
         </View>
 
-        {/* CUSTOM DURATION INPUT */}
-        {showCustom && (
-          <View style={styles.customRow}>
-            <TextInput
-              style={[styles.customInput, { 
-                backgroundColor: theme.card, 
-                color: theme.text, 
-                borderColor: theme.border 
-              }]}
-              value={customValue}
-              onChangeText={setCustomValue}
-              keyboardType="number-pad"
-              maxLength={2}
-              placeholder="8"
-              placeholderTextColor= {theme.subtext}
-            />
-            <View style={styles.unitRow}>
-              <TouchableOpacity
-                style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border}, customUnit === 'weeks' && styles.unitChipActive]}
-                onPress={() => setCustomUnit('weeks')}
-              >
-                <Text style={[styles.unitChipText, { color: customUnit ? theme.subtext : theme.text}, customUnit === 'weeks' && { color: theme.text, fontWeight: '700',},]}>
-                  Weeks
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.unitChip, { backgroundColor: theme.card, borderColor: theme.border }, customUnit === 'months' && styles.unitChipActive]}
-                onPress={() => setCustomUnit('months')}
-              >
-                <Text style={[styles.unitChipText, { color: customUnit ? theme.subtext : theme.text}, customUnit === 'months' && { color: theme.text, fontWeight: '700',},]}>
-                  Months
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        {/* DATE PICKER (start or end) */}
+        {datePicker !== null && (
+          <DateTimePicker
+            value={datePicker === 'start' ? startDate : (endDate || addDuration(startDate, 4, 'weeks'))}
+            mode="date"
+            minimumDate={datePicker === 'start' ? today : startDate}
+            maximumDate={datePicker === 'start' ? getMaxEndDate(today) : getMaxEndDate(startDate)}
+            themeVariant={isDarkMode ? 'dark' : 'light'}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+          />
         )}
 
         {/* PREVIEW */}
-        {sessionCount > 0 && dur && (
+        {sessionCount > 0 && endDate && (
           <View style={styles.previewBox}>
             <Ionicons name="calendar-outline" size={16} color={ theme.subtext } />
             <Text style={[styles.previewText, { color: theme.subtext }]}>
               {sessionCount} session{sessionCount !== 1 ? 's' : ''} will be created
-              {' '}({selectedDays.map((d) => d.slice(0, 3)).join(', ')} for {dur.value} {dur.unit})
+              {' '}({selectedDays.map((d) => d.slice(0, 3)).join(', ')}, {startsToday ? 'today' : formatDate(startDate)} to {formatDate(endDate)})
             </Text>
           </View>
         )}
@@ -555,6 +543,20 @@ export default function AddClassScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  dateBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  dateBoxText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   container: { 
     flex: 1, 
     backgroundColor: '#0f0f23' 
