@@ -55,6 +55,22 @@ export const WELLNESS_THRESHOLDS = {
     RISK: 28,
 };
 
+// The WHO-5 asks about the last 2 weeks, so check-ins are spaced 14 days apart.
+export const WHO5_COOLDOWN_DAYS = 14;
+
+// When the next check-in opens, or null if there's no previous one.
+export const getNextAssessmentDate = (lastDate) => {
+    if (!lastDate || isNaN(new Date(lastDate).getTime())) return null;
+    const next = new Date(lastDate);
+    next.setDate(next.getDate() + WHO5_COOLDOWN_DAYS);
+    return next;
+};
+
+export const isAssessmentDue = (lastDate, now = new Date()) => {
+    const next = getNextAssessmentDate(lastDate);
+    return !next || now >= next;
+};
+
 // School Guidance Counseling Office contact info.
 // PLACEHOLDERS — do not ship with these values. Replace every field with
 // details confirmed directly by the actual STI College Sta. Maria Guidance

@@ -54,6 +54,7 @@ export default function TeamBoardScreen({ route, navigation }) {
   const { teamId, teamName } = route.params;
   const {
     team,
+    tasks,
     columns,
     loading,
     isOwner,
@@ -108,6 +109,27 @@ export default function TeamBoardScreen({ route, navigation }) {
       refetch();
     }, [refetch])
   );
+
+  // Opened from a notification: reload the board so a just-assigned task is
+  // there, then open that task's sheet.
+  const openTaskId = route.params?.openTaskId;
+  const [pendingTaskId, setPendingTaskId] = useState(null);
+
+  useEffect(() => {
+    if (!openTaskId) return;
+    navigation.setParams({ openTaskId: undefined });
+    setPendingTaskId(openTaskId);
+    refetch();
+  }, [openTaskId]);
+
+  useEffect(() => {
+    if (!pendingTaskId || loading) return;
+    if (team && team.id !== teamId) return; // still showing the previous team
+    setPendingTaskId(null);
+    const task = tasks.find((t) => t.id === pendingTaskId);
+    if (task) setActionTask(task);
+    else Alert.alert('Task not found', 'This task may have been deleted.');
+  }, [pendingTaskId, loading, tasks, team, teamId]);
 
   const canModify = (task) =>
     isOwner || task.assigneeId === actor?.uid || task.assignedById === actor?.uid;

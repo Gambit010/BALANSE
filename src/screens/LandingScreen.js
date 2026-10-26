@@ -27,38 +27,21 @@ export default function LandingScreen({ navigation }) {
       end={{ x: 1, y: 1 }}
     >
       <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-        
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoIcon}>⊞</Text>
-          </View>
-        </View>
 
         {/* Brand */}
         <Text style={styles.brandName}>BALANSE</Text>
-        <Text style={styles.tagline}>Smart Task Management for Student Leaders</Text>
+        <Text style={styles.tagline}>Your classes, org work, and deadlines in one place.</Text>
 
         {/* Feature Cards */}
         <View style={styles.features}>
           <View style={styles.featureCard}>
-            <View style={styles.featureIcon}>
-              <Text style={styles.featureIconText}>↗</Text>
-            </View>
-            <View>
-              <Text style={styles.featureTitle}>Smart Prioritization</Text>
-              <Text style={styles.featureSub}>AI-powered task scoring</Text>
-            </View>
+            <Text style={styles.featureTitle}>Know what to do first</Text>
+            <Text style={styles.featureSub}>Tasks are sorted by deadline, priority, and category.</Text>
           </View>
 
           <View style={styles.featureCard}>
-            <View style={styles.featureIcon}>
-              <Text style={styles.featureIconText}>⚡</Text>
-            </View>
-            <View>
-              <Text style={styles.featureTitle}>Conflict Detection</Text>
-              <Text style={styles.featureSub}>Never miss a deadline</Text>
-            </View>
+            <Text style={styles.featureTitle}>Catch schedule clashes</Text>
+            <Text style={styles.featureSub}>See it early when a task overlaps a class or another deadline.</Text>
           </View>
         </View>
 
@@ -93,24 +76,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 40,
   },
-  logoContainer: {
-    marginBottom: 24,
-  },
-  logoBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  logoIcon: {
-    fontSize: 36,
-    color: '#ffffff',
-    fontWeight: '300',
-  },
   brandName: {
     fontSize: 42,
     fontWeight: '800',
@@ -130,8 +95,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   featureCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 16,
     padding: 16,
@@ -139,28 +102,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  featureIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  featureIconText: {
-    fontSize: 20,
-    color: '#ffffff',
-  },
   featureTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   featureSub: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 18,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   primaryButton: {
     width: '100%',

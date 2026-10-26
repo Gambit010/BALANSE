@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useState, useEffect, useRef } from 'react';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -22,7 +22,30 @@ import * as Notifications from 'expo-notifications';
 import { setupPushNotifications } from './src/services/pushNotificationServices';
 
 const Stack = createStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
+// The notification types BALANSE sends. Anything else is ignored.
+const NOTIFICATION_TYPES = ['deadline', 'conflict', 'team', 'wellness'];
+
+// Where a tapped notification should take the user, based on the data the
+// notification was sent with.
+const goToNotificationTarget = (data) => {
+  if ((data.type === 'deadline' || data.type === 'conflict') && data.taskId) {
+    navigationRef.navigate('MainApp', { screen: 'Tasks', params: { openTaskId: data.taskId } });
+  } else if (data.type === 'team' && data.teamId) {
+    navigationRef.navigate('TeamBoard', { teamId: data.teamId, teamName: '', openTaskId: data.taskId });
+  } else if (data.type === 'wellness') {
+    navigationRef.navigate('MainApp', { screen: 'Wellness' });
+  } else {
+    navigationRef.navigate('Notifications');
+  }
+};
+
+
+// Email/password accounts must open the link sent to their inbox first.
+// Google accounts are already verified by Google.
+const canEnterApp = (u) =>
+  !!u && (u.emailVerified || u.providerData.some((p) => p.providerId === 'google.com'));
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -30,7 +53,9 @@ export default function App() {
   const [onboardingSeen, setOnboardingSeen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (signedInUser) => {
+      // An unverified account stays on the login screens.
+      const currentUser = canEnterApp(signedInUser) ? signedInUser : null;
       // Read the flag before setUser, so the first screen is decided correctly.
       if (currentUser) {
         try {
@@ -50,21 +75,53 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // A tapped notification is kept here until the app is ready to open it:
+  // signed in, and with the navigation set up.
+  const pendingNotificationRef = useRef(null);
+
+  const openPendingNotification = () => {
+    const data = pendingNotificationRef.current;
+    if (!data || !canEnterApp(auth.currentUser) || !navigationRef.isReady()) return;
+    pendingNotificationRef.current = null;
+    try {
+      goToNotificationTarget(data);
+    } catch (error) {
+      console.error('Could not open notification target:', error);
+    }
+  };
+
   // Handles what happens when the user taps a notification
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      console.log('Notification tapped:', data);
-    });
+    const handleResponse = (response) => {
+      if (!response) return;
+      Notifications.clearLastNotificationResponse(); // so it isn't opened again on the next launch
+      const data = response.notification?.request?.content?.data;
+      // Some Android phones report a normal app launch as a notification tap,
+      // with unrelated launch data. Only BALANSE's own notifications have a type.
+      if (!NOTIFICATION_TYPES.includes(data?.type)) return;
+      pendingNotificationRef.current = data;
+      openPendingNotification();
+    };
+
+    // The app was closed and opened by tapping a notification
+    handleResponse(Notifications.getLastNotificationResponse());
+
+    // The app was already open or in the background
+    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
     return () => subscription.remove();
   }, []);
+
+  // Open a waiting notification once the user is signed in and the screens exist
+  useEffect(() => {
+    if (!loading && user) openPendingNotification();
+  }, [loading, user]);
 
   if (loading) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <ThemeProvider> 
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={openPendingNotification}>
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
       >

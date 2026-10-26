@@ -9,6 +9,7 @@ import {
   query,
   where,
   arrayUnion,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -117,7 +118,8 @@ export const addTeamMember = async (team, userToAdd) => {
     await createNotification(
       userToAdd.uid,
       `You were added to the team "${team.name}".`,
-      'team'
+      'team',
+      { teamId: team.id }
     );
     await notifyUserDevice(
       userToAdd.uid,
@@ -132,9 +134,17 @@ export const addTeamMember = async (team, userToAdd) => {
   }
 };
 
-// Delete a team (owner only — enforced in the UI)
+// Delete a team and its board tasks (owner only — enforced in the UI and rules).
+// Tasks go first: once the team is gone, the rules can no longer tell who owns them.
 export const deleteTeam = async (teamId) => {
   try {
+    const snapshot = await getDocs(query(collection(db, 'boardTasks'), where('teamId', '==', teamId)));
+    // Firestore batches are capped at 500 writes.
+    for (let i = 0; i < snapshot.docs.length; i += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
     await deleteDoc(doc(db, 'teams', teamId));
     return true;
   } catch (error) {
@@ -194,7 +204,7 @@ export const createBoardTask = async (team, taskData, creator) => {
     });
     if (taskData.assigneeId && taskData.assigneeId !== creator.uid) {
       const msg = `${safeName(creator)} assigned you "${taskData.title}" in ${team.name}.`;
-      await createNotification(taskData.assigneeId, msg, 'team');
+      await createNotification(taskData.assigneeId, msg, 'team', { teamId: team.id, taskId: docRef.id });
       await notifyUserDevice(taskData.assigneeId, 'New task assigned', msg, {
         type: 'team',
         teamId: team.id,
@@ -239,7 +249,7 @@ export const updateBoardTaskProgress = async (team, task, newProgress, actor) =>
     if (task.assigneeId && task.assigneeId !== actor.uid) recipients.add(task.assigneeId);
     for (const uid of recipients) {
       const msg = `${safeName(actor)} updated "${task.title}" to ${label} (${newProgress}%) in ${team.name}.`;
-      await createNotification(uid, msg, 'team');
+      await createNotification(uid, msg, 'team', { teamId: team.id, taskId: task.id });
       await notifyUserDevice(uid, 'Team task updated', msg, {
         type: 'team',
         teamId: team.id,
@@ -263,7 +273,7 @@ export const assignBoardTask = async (team, task, assignee, actor) => {
     });
     if (assignee.uid !== actor.uid) {
       const msg = `${safeName(actor)} assigned you "${task.title}" in ${team.name}.`;
-      await createNotification(assignee.uid, msg, 'team');
+      await createNotification(assignee.uid, msg, 'team', { teamId: team.id, taskId: task.id });
       await notifyUserDevice(assignee.uid, 'New task assigned', msg, {
         type: 'team',
         teamId: team.id,

@@ -37,6 +37,15 @@ export const isValidPasswordLength = (password) => {
   return typeof password === 'string' && password.length >= 6;
 };
 
+// Confirm password must be exactly the same as the password
+export const doPasswordsMatch = (password, confirmPassword) => {
+  return (
+    typeof password === 'string' &&
+    password.length > 0 &&
+    password === confirmPassword
+  );
+};
+
 // Middle name is optional — only validate if provided
 export const isValidMiddleName = (middleName) => {
   if (

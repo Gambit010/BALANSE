@@ -5,6 +5,7 @@ import {
   collection,
   query,
   where,
+  limit,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -38,7 +39,8 @@ export const findUserByEmail = async (email) => {
   try {
     const q = query(
       collection(db, 'users'),
-      where('emailLower', '==', email.trim().toLowerCase())
+      where('emailLower', '==', email.trim().toLowerCase()),
+      limit(1) // the rules only allow looking up one user at a time
     );
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
