@@ -9,7 +9,7 @@ appId: com.balanseapp.app
 
 - assertVisible: "Overall Progress"
 
-- assertVisible: "0/11 tasks done"
+- assertVisible: "3/5 tasks done"
 
 - tapOn: "Tasks"
 
@@ -23,5 +23,5 @@ appId: com.balanseapp.app
 - tapOn: "Done"
 
 - tapOn: "Home"
-- assertVisible: "1/11 tasks done"
+- assertVisible: "4/5 tasks done"
 

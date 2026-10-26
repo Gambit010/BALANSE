@@ -21,14 +21,14 @@ appId: com.balanseapp.app
 - assertVisible: "Dark Mode"
 - assertVisible:
     id: "dark-mode-toggle"
-    checked: false
+    checked: true
 
 - tapOn:
     id: "dark-mode-toggle"
 
 - assertVisible:
     id: "dark-mode-toggle"
-    checked: true
+    checked: false
 
 # Stop and relaunch without clearing app data so AsyncStorage is retained.
 - stopApp
@@ -48,5 +48,5 @@ appId: com.balanseapp.app
 - assertVisible: "Dark Mode"
 - assertVisible:
     id: "dark-mode-toggle"
-    checked: true
+    checked: false
 

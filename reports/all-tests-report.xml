@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="R5CX803F1VM" tests="9" failures="0" time="442.175" timestamp="2026-10-21T05:52:14">
+    <testcase id="IT-01_login" name="IT-01_login" classname="IT-01_login" file=".maestro\flows\IT-01_login.yaml" time="52.508" timestamp="2026-10-21T05:52:14" status="SUCCESS"/>
+    <testcase id="IT-02_google_login" name="IT-02_google_login" classname="IT-02_google_login" file=".maestro\flows\IT-02_google_login.yaml" time="35.841" timestamp="2026-10-21T05:53:07" status="SUCCESS"/>
+    <testcase id="IT-03_signup" name="IT-03_signup" classname="IT-03_signup" file=".maestro\flows\IT-03_signup.yaml" time="70.625" timestamp="2026-10-21T05:53:43" status="SUCCESS"/>
+    <testcase id="IT-04_google_signup" name="IT-04_google_signup" classname="IT-04_google_signup" file=".maestro\flows\IT-04_google_signup.yaml" time="40.829" timestamp="2026-10-21T05:54:53" status="SUCCESS"/>
+    <testcase id="IT-05_taskAppearDashboard" name="IT-05_taskAppearDashboard" classname="IT-05_taskAppearDashboard" file=".maestro\flows\IT-05_taskAppearDashboard.yaml" time="72.76" timestamp="2026-10-21T05:55:34" status="SUCCESS"/>
+    <testcase id="IT-06_taskCreateCalendar" name="IT-06_taskCreateCalendar" classname="IT-06_taskCreateCalendar" file=".maestro\flows\IT-06_taskCreateCalendar.yaml" time="71.957" timestamp="2026-10-21T05:56:47" status="SUCCESS"/>
+    <testcase id="IT-07_taskCompleteUpdate" name="IT-07_taskCompleteUpdate" classname="IT-07_taskCompleteUpdate" file=".maestro\flows\IT-07_taskCompleteUpdate.yaml" time="26.36" timestamp="2026-10-21T05:57:59" status="SUCCESS"/>
+    <testcase id="IT-08_darkModeToggle" name="IT-08_darkModeToggle" classname="IT-08_darkModeToggle" file=".maestro\flows\IT-08_darkModeToggle.yaml" time="46.01" timestamp="2026-10-21T05:58:25" status="SUCCESS"/>
+    <testcase id="IT-09_logout" name="IT-09_logout" classname="IT-09_logout" file=".maestro\flows\IT-09_logout.yaml" time="25.2" timestamp="2026-10-21T05:59:11" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

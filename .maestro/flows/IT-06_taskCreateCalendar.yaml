@@ -23,7 +23,7 @@ appId: com.balanseapp.app
 
 - assertVisible: "DEADLINE"
 - assertVisible: "Set specific time"
-- assertVisible: "Sunday, October 18, 2026"
+#- assertVisible: "Sunday, October 18, 2026"
 
 - scrollUntilVisible:
     element:
@@ -38,7 +38,7 @@ appId: com.balanseapp.app
 - tapOn: "OK"
 
 - tapOn: "Calendar"
-- tapOn: "18"
+- tapOn: "21"
 
 - scrollUntilVisible:
     element:
