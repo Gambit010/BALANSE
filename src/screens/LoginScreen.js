@@ -193,9 +193,6 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.socialButton}>
-              <Text style={styles.socialButtonText}>Continue with Microsoft</Text>
-            </TouchableOpacity>
           </Animated.View>
 
           {/* Bottom Link */}
