@@ -63,7 +63,7 @@ export default function WellnessScreen() {
   const { theme, isDarkMode } = useTheme(); // for dark mode
 
   useEffect(() => {
-    AsyncStorage.getItem(CONSENT_STORAGE_KEY).then((value) => {
+    AsyncStorage.getItem(consentKey()).then((value) => {
       if (value === 'true') setHasConsented(true);
     });
   }, []);
@@ -88,7 +88,7 @@ export default function WellnessScreen() {
 
   const acceptConsent = async () => {
     try {
-      await AsyncStorage.setItem(CONSENT_STORAGE_KEY, 'true');
+      await AsyncStorage.setItem(consentKey(), 'true');
     } catch (e) {
       console.error('Failed to persist wellness consent:', e);
     }
@@ -110,7 +110,7 @@ export default function WellnessScreen() {
   // separate decision/feature, not folded into "withdraw consent" here.
   const withdrawConsent = async () => {
     try {
-      await AsyncStorage.removeItem(CONSENT_STORAGE_KEY);
+      await AsyncStorage.removeItem(consentKey());
     } catch (e) {
       console.error('Failed to clear wellness consent:', e);
     }
