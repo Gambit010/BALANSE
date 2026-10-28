@@ -19,8 +19,8 @@ describe('TC-U04: Input Validation', () => {
         expect(isValidEmailFormat('student@gmail.com')).toBe(true);
       });
 
-       test('TC-U04-14: stamaria.sti.edu.ph should be allowed', () => {
-        expect(isAllowedDomain('student@stamaria.sti.edu.ph')).toBe(true);
+      test('TC-U04-02: Valid STI email should pass', () => {
+        expect(isValidEmailFormat('student@stamaria.sti.edu.ph')).toBe(true);
       });
 
       test('TC-U04-03: Valid Yahoo email should pass', () => {
@@ -77,8 +77,8 @@ describe('TC-U04: Input Validation', () => {
         expect(isAllowedDomain('student@outlook.com')).toBe(true);
       });
 
-      test('TC-U04-14: sti.edu.ph should be allowed', () => {
-        expect(isAllowedDomain('student@sti.edu.ph')).toBe(true);
+      test('TC-U04-14: stamaria.sti.edu.ph should be allowed', () => {
+        expect(isAllowedDomain('student@stamaria.sti.edu.ph')).toBe(true);
       });
     });
 
