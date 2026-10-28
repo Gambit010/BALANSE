@@ -3,7 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +106,26 @@ export const savePushTokenToFirestore = async (userId, token) => {
   } catch (error) {
     console.error('Error saving push token:', error);
     return false;
+  }
+};
+
+/**
+ * Call on logout, before signing out. Phones can be shared, so the next person
+ * on this phone must not get this account's team pushes, deadline reminders or
+ * leftover notifications. Logging in again saves the token again.
+ */
+export const clearDeviceNotifications = async (userId) => {
+  try {
+    if (userId) await deleteDoc(doc(db, 'users', userId, 'private', 'pushToken'));
+  } catch (error) {
+    console.error('Error removing push token:', error);
+  }
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    await Notifications.dismissAllNotificationsAsync();
+    await AsyncStorage.removeItem(SCHEDULED_MAP_KEY);
+  } catch (error) {
+    console.error('Error clearing notifications on this phone:', error);
   }
 };
 
