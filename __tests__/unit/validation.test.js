@@ -20,7 +20,7 @@ describe('TC-U04: Input Validation', () => {
       });
 
       test('TC-U04-02: Valid STI email should pass', () => {
-        expect(isValidEmailFormat('student@sti.edu.ph')).toBe(true);
+        expect(isValidEmailFormat('student@stamaria.sti.edu.ph')).toBe(true);
       });
 
       test('TC-U04-03: Valid Yahoo email should pass', () => {
