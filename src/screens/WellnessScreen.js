@@ -27,7 +27,8 @@ import {
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 // v2: hotlines and withdrawal added, so everyone sees the updated text once.
-const CONSENT_STORAGE_KEY = 'wellness_consent_accepted_v2';
+// One per account, so on a shared phone each student gives their own consent.
+const consentKey = () => `wellness_consent_accepted_v2_${auth.currentUser?.uid}`;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_HEIGHT = 180;
