@@ -5,9 +5,18 @@ node_modules/
 
 # Ignore the google-services.json
 google-services.json
+google-services.b64.txt
 GoogleService-Info.plist
 
 # Ignore test coverage files
 coverage/
 
 dist/
+
+# Environments
+.env
+.env.*
+!.env.example
+
+*.pem
+*.p12
