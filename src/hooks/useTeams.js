@@ -10,6 +10,7 @@ import {
   getTeamInvites,
   acceptInvite,
   deleteInvite,
+  removeTeamMember,
   createBoardTask,
   getBoardTasks,
   updateBoardTaskProgress,
@@ -208,6 +209,23 @@ export const useTeamBoard = (teamId) => {
     return await deleteTeam(team.id);
   };
 
+  // Any member except the owner can leave. The screen goes back afterwards,
+  // so there's no board to reload.
+  const leave = async () => {
+    if (!team || !actor) return false;
+    const me = (team.members || []).find((m) => m.uid === actor.uid);
+    if (!me) return false;
+    return await removeTeamMember(team, me, actor);
+  };
+
+  // Owner only (checked in the screen and the rules)
+  const removeMember = async (member) => {
+    if (!team || !actor) return false;
+    const ok = await removeTeamMember(team, member, actor);
+    if (ok) await fetchBoard();
+    return ok;
+  };
+
   return {
     team,
     tasks,
@@ -224,6 +242,8 @@ export const useTeamBoard = (teamId) => {
     assign,
     removeTask,
     removeTeam,
+    leave,
+    removeMember,
     refetch: fetchBoard,
   };
 };

@@ -10,6 +10,7 @@ import {
   query,
   where,
   arrayUnion,
+  arrayRemove,
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -185,6 +186,57 @@ export const deleteInvite = async (inviteId) => {
     return true;
   } catch (error) {
     console.error('Error deleting invite:', error);
+    return false;
+  }
+};
+
+// ─── Leaving and removing ───
+
+// Take one person off a team: a member leaving, or the owner removing someone.
+// Their tasks on this board go back to Unassigned, so they don't stay on that
+// person's Home and Calendar. The notification is written in the same batch,
+// because once the person is off the team the rules no longer allow it.
+export const removeTeamMember = async (team, member, actor) => {
+  try {
+    const leaving = member.uid === actor.uid;
+    const assigned = await getDocs(
+      query(
+        collection(db, 'boardTasks'),
+        where('teamId', '==', team.id),
+        where('assigneeId', '==', member.uid)
+      )
+    );
+    const batch = writeBatch(db);
+    assigned.docs.forEach((d) =>
+      batch.update(d.ref, { assigneeId: null, assigneeName: null, updatedAt: serverTimestamp() })
+    );
+    batch.update(doc(db, 'teams', team.id), {
+      memberIds: arrayRemove(member.uid),
+      members: arrayRemove(member),
+    });
+
+    // Leaving tells the owner; being removed tells the person removed
+    const notifyUid = leaving ? team.ownerId : member.uid;
+    const msg = leaving
+      ? `${safeName(actor)} left the team "${team.name}".`
+      : `You were removed from the team "${team.name}".`;
+    batch.set(doc(collection(db, 'notifications')), {
+      userId: notifyUid,
+      message: msg,
+      type: 'team',
+      teamId: team.id,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+    await batch.commit();
+
+    await notifyUserDevice(notifyUid, leaving ? 'Member left' : 'Removed from team', msg, {
+      type: 'team',
+      teamId: team.id,
+    });
+    return true;
+  } catch (error) {
+    console.error('Error removing team member:', error);
     return false;
   }
 };

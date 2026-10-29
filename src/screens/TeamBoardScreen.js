@@ -68,6 +68,8 @@ export default function TeamBoardScreen({ route, navigation }) {
     assign,
     removeTask,
     removeTeam,
+    leave,
+    removeMember,
     refetch,
   } = useTeamBoard(teamId);
 
@@ -150,12 +152,20 @@ export default function TeamBoardScreen({ route, navigation }) {
   };
   useEffect(() => {
     if (!pendingTaskId || loading) return;
-    if (team && team.id !== teamId) return; // still showing the previous team
+    if (!team || team.id !== teamId) return; // no team (see below), or still showing the previous team
     setPendingTaskId(null);
     const task = tasks.find((t) => t.id === pendingTaskId);
     if (task) setActionTask(task);
     else Alert.alert('Task not found', 'This task may have been deleted.');
   }, [pendingTaskId, loading, tasks, team, teamId]);
+
+  // The team was deleted, or this student is no longer on it (for example,
+  // they tapped an old notification after being removed).
+  useEffect(() => {
+    if (loading || team) return;
+    Alert.alert('Team not available', 'This team may have been deleted, or you’re no longer a member.');
+    navigation.goBack();
+  }, [loading, team]);
 
   const canModify = (task) =>
     isOwner || task.assigneeId === actor?.uid || task.assignedById === actor?.uid;
@@ -229,6 +239,44 @@ export default function TeamBoardScreen({ route, navigation }) {
         },
       },
     ]);
+  };
+
+  const confirmLeaveTeam = () => {
+    Alert.alert(
+      'Leave team?',
+      `You’ll lose access to "${team?.name}". Tasks assigned to you will go back to Unassigned. To rejoin, you’ll need a new invitation.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await leave();
+            if (ok) navigation.goBack();
+            else Alert.alert('Could not leave', 'Something went wrong. Please try again.');
+          },
+        },
+      ]
+    );
+  };
+
+  // Owner only: takes a member off the team
+  const confirmRemoveMember = (member) => {
+    Alert.alert(
+      'Remove member?',
+      `${member.name} will lose access to "${team?.name}". Their tasks will go back to Unassigned.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await removeMember(member);
+            if (!ok) Alert.alert('Could not remove', 'Something went wrong. Please try again.');
+          },
+        },
+      ]
+    );
   };
 
 
@@ -422,11 +470,15 @@ export default function TeamBoardScreen({ route, navigation }) {
             <Ionicons name="chevron-forward" size={12} color={theme.subtext} style={{ marginTop: 2 }} />
           </TouchableOpacity>
         </View>
-        {isOwner && (
-          <TouchableOpacity onPress={confirmDeleteTeam} style={styles.headerIcon}>
+        {isOwner ? (
+          <TouchableOpacity onPress={confirmDeleteTeam} style={styles.headerIcon} accessibilityLabel="Delete team">
             <Ionicons name="trash-outline" size={20} color="#ef4444" />
           </TouchableOpacity>
-        )}
+        ) : team ? (
+          <TouchableOpacity onPress={confirmLeaveTeam} style={styles.headerIcon} accessibilityLabel="Leave team">
+            <Ionicons name="exit-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* ACTION BAR */}
@@ -615,11 +667,15 @@ export default function TeamBoardScreen({ route, navigation }) {
                       <Text style={[styles.memberEmail, {color:theme.subtext}]} numberOfLines={1}>{m.email}</Text>
                     )}
                   </View>
-                  {m.uid === team?.ownerId && (
+                  {m.uid === team?.ownerId ? (
                     <View style={styles.ownerBadge}>
                       <Text style={styles.ownerBadgeText}>Owner</Text>
                     </View>
-                  )}
+                  ) : isOwner ? (
+                    <TouchableOpacity onPress={() => confirmRemoveMember(m)}>
+                      <Text style={styles.dangerLinkText}>Remove</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ))}
 
@@ -695,7 +751,7 @@ export default function TeamBoardScreen({ route, navigation }) {
                       </Text>
                       {(isOwner || invite.invitedById === actor?.uid) && (
                         <TouchableOpacity onPress={() => confirmCancelInvite(invite)}>
-                          <Text style={styles.cancelInviteText}>Cancel</Text>
+                          <Text style={styles.dangerLinkText}>Cancel</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -1086,7 +1142,7 @@ const styles = StyleSheet.create({
   },
   memberAvatarText: { color: '#a78bfa', fontWeight: '700' },
   memberName: { flex: 1, color: '#ffffff', fontSize: 15, fontWeight: '500' },
-  cancelInviteText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
+  dangerLinkText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
   memberEmail: { fontSize: 12, marginTop: 2 },
   ownerBadge: {
     backgroundColor: 'rgba(167,139,250,0.15)',
