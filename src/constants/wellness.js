@@ -56,7 +56,7 @@ export const WELLNESS_THRESHOLDS = {
 };
 
 // The WHO-5 asks about the last 2 weeks, so check-ins are spaced 14 days apart.
-export const WHO5_COOLDOWN_DAYS = 14;
+export const WHO5_COOLDOWN_DAYS = 0;
 
 // When the next check-in opens, or null if there's no previous one.
 export const getNextAssessmentDate = (lastDate) => {
