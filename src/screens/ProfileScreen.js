@@ -15,7 +15,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../context/ThemeContext'; // for global dark mode 
-import { getNotificationsEnabled, setNotificationsEnabled } from '../services/pushNotificationServices';
+import { getNotificationsEnabled, setNotificationsEnabled, clearDeviceNotifications } from '../services/pushNotificationServices';
 import UserAvatar from '../components/UserAvatar';
 
 // Task-completion milestones, counted over every task ever finished (see
@@ -108,6 +108,8 @@ export default function ProfileScreen({ navigation }) {
   */
 
     const handleLogout = async () => {
+    // Must run while still signed in, since it deletes this account's push token.
+    await clearDeviceNotifications(auth.currentUser?.uid);
     try {
       // Expo Go: just sign out from Firebase (no native Google session to clear)
       // Now, it signs out from Google's native session first, then Firebase. 
