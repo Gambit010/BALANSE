@@ -1,8 +1,9 @@
+// Eto yung root ng app
 import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth'; // Eto yung naghahandle pag mga nag log-in or log-out
 import { auth } from './firebase';
 import { ThemeProvider } from './src/context/ThemeContext'; // for dark mode 
 

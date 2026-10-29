@@ -3,6 +3,7 @@ import {
   addDoc,
   getDoc,
   getDocs,
+  setDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -17,6 +18,7 @@ import { createNotification } from './notificationService';
 import { sendPushToToken } from './pushNotificationServices';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { recordActiveDay } from './activityService';
+import { inviteIdFor, normalizeEmail } from '../utils/inviteUtils';
 
 // ─── Helpers ───
 
@@ -100,49 +102,107 @@ export const getTeam = async (teamId) => {
   }
 };
 
-// Add a member (resolved via findUserByEmail) to a team. Notifies the new member.
-export const addTeamMember = async (team, userToAdd) => {
+// ─── Invitations ───
+// Joining a team takes two steps: a member invites an email, and the person
+// with that email accepts. Nobody can add someone else to a team directly.
+
+// Invite an email to a team. The invited student sees it on their Teams tab.
+export const createInvite = async (team, email, inviter) => {
   try {
-    if (team.memberIds?.includes(userToAdd.uid)) {
-      return { success: false, reason: 'already-member' };
-    }
-    const member = {
-      uid: userToAdd.uid,
-      email: userToAdd.email || '',
-      name: userToAdd.displayName || 'Student',
-    };
-    await updateDoc(doc(db, 'teams', team.id), {
-      memberIds: arrayUnion(userToAdd.uid),
-      members: arrayUnion(member),
+    const emailLower = normalizeEmail(email);
+    await setDoc(doc(db, 'invites', inviteIdFor(team.id, emailLower)), {
+      teamId: team.id,
+      teamName: team.name,
+      emailLower,
+      invitedById: inviter.uid,
+      invitedByName: safeName(inviter),
+      createdAt: serverTimestamp(),
     });
-    await createNotification(
-      userToAdd.uid,
-      `You were added to the team "${team.name}".`,
-      'team',
-      { teamId: team.id }
-    );
-    await notifyUserDevice(
-      userToAdd.uid,
-      'Added to a team',
-      `You were added to the team "${team.name}".`,
-      { type: 'team', teamId: team.id }
-    );
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Error adding team member:', error);
-    return { success: false, reason: 'error' };
+    console.error('Error creating invite:', error);
+    return false;
   }
 };
 
-// Delete a team and its board tasks (owner only — enforced in the UI and rules).
-// Tasks go first: once the team is gone, the rules can no longer tell who owns them.
+// Invitations waiting for the signed-in student's email
+export const getMyInvites = async (email) => {
+  try {
+    const q = query(collection(db, 'invites'), where('emailLower', '==', normalizeEmail(email)));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error fetching my invites:', error);
+    return [];
+  }
+};
+
+// Invitations a team has sent that nobody has answered yet
+export const getTeamInvites = async (teamId) => {
+  try {
+    const q = query(collection(db, 'invites'), where('teamId', '==', teamId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error('Error fetching team invites:', error);
+    return [];
+  }
+};
+
+// Accept: the student adds themselves to the team and the invitation is
+// removed, together in one batch. The rules only allow this when there is an
+// invitation for the student's own verified email.
+export const acceptInvite = async (invite, user) => {
+  try {
+    const member = { uid: user.uid, email: user.email || '', name: safeName(user) };
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'teams', invite.teamId), {
+      memberIds: arrayUnion(user.uid),
+      members: arrayUnion(member),
+    });
+    batch.delete(doc(db, 'invites', invite.id));
+    await batch.commit();
+
+    // Let the person who sent the invitation know
+    const msg = `${safeName(user)} joined the team "${invite.teamName}".`;
+    await createNotification(invite.invitedById, msg, 'team', { teamId: invite.teamId });
+    await notifyUserDevice(invite.invitedById, 'Invitation accepted', msg, {
+      type: 'team',
+      teamId: invite.teamId,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error accepting invite:', error);
+    // The team was deleted after the invitation was sent
+    return { success: false, reason: error?.code === 'not-found' ? 'team-gone' : 'error' };
+  }
+};
+
+// Decline (by the invited student) or cancel (by the inviter or team owner)
+export const deleteInvite = async (inviteId) => {
+  try {
+    await deleteDoc(doc(db, 'invites', inviteId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting invite:', error);
+    return false;
+  }
+};
+
+// Delete a team, its board tasks and its pending invitations (owner only —
+// enforced in the UI and rules). These go first: once the team is gone, the
+// rules can no longer tell who owns them.
 export const deleteTeam = async (teamId) => {
   try {
-    const snapshot = await getDocs(query(collection(db, 'boardTasks'), where('teamId', '==', teamId)));
+    const [tasks, invites] = await Promise.all([
+      getDocs(query(collection(db, 'boardTasks'), where('teamId', '==', teamId))),
+      getDocs(query(collection(db, 'invites'), where('teamId', '==', teamId))),
+    ]);
+    const refs = [...tasks.docs, ...invites.docs].map((d) => d.ref);
     // Firestore batches are capped at 500 writes.
-    for (let i = 0; i < snapshot.docs.length; i += 450) {
+    for (let i = 0; i < refs.length; i += 450) {
       const batch = writeBatch(db);
-      snapshot.docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+      refs.slice(i, i + 450).forEach((ref) => batch.delete(ref));
       await batch.commit();
     }
     await deleteDoc(doc(db, 'teams', teamId));

@@ -60,7 +60,9 @@ export default function TeamBoardScreen({ route, navigation }) {
     isOwner,
     actor,
     teamTaskConflicts,
-    addMemberByEmail,
+    pendingInvites,
+    inviteByEmail,
+    cancelInvite,
     addTask,
     updateProgress,
     assign,
@@ -121,19 +123,6 @@ export default function TeamBoardScreen({ route, navigation }) {
     setPendingTaskId(openTaskId);
     refetch();
   }, [openTaskId]);
-
-  useEffect(() => {
-    if (!pendingTaskId || loading) return;
-    if (team && team.id !== teamId) return; // still showing the previous team
-    setPendingTaskId(null);
-    const task = tasks.find((t) => t.id === pendingTaskId);
-    if (task) setActionTask(task);
-    else Alert.alert('Task not found', 'This task may have been deleted.');
-  }, [pendingTaskId, loading, tasks, team, teamId]);
-
-  const canModify = (task) =>
-    isOwner || task.assigneeId === actor?.uid || task.assignedById === actor?.uid;
-
   const resetTaskForm = () => {
     setTitle('');
     setDescription('');
@@ -158,29 +147,50 @@ export default function TeamBoardScreen({ route, navigation }) {
     resetTaskForm();
     setTaskModal(false);
   };
+  useEffect(() => {
+    if (!pendingTaskId || loading) return;
+    if (team && team.id !== teamId) return; // still showing the previous team
+    setPendingTaskId(null);
+    const task = tasks.find((t) => t.id === pendingTaskId);
+    if (task) setActionTask(task);
+    else Alert.alert('Task not found', 'This task may have been deleted.');
+  }, [pendingTaskId, loading, tasks, team, teamId]);
 
-  const handleAddMember = async () => {
+  const canModify = (task) =>
+    isOwner || task.assigneeId === actor?.uid || task.assignedById === actor?.uid;
+
+    const handleInvite = async () => {
     if (!memberEmail.trim()) {
       Alert.alert('Email required', 'Enter the teammate’s email.');
       return;
     }
     setSaving(true);
-    const res = await addMemberByEmail(memberEmail.trim());
+    const res = await inviteByEmail(memberEmail);
     setSaving(false);
     if (res.success) {
       setMemberEmail('');
-      setMemberModal(false);
-      Alert.alert('Member added', 'Your teammate now has access to this board.');
+      Alert.alert(
+        'Invitation sent',
+        'They’ll see it on their Teams tab and join once they accept. Let them know to check it.'
+      );
     } else {
       const messages = {
-        'not-found': 'No BALANSE user found with that email. They need to sign up first.',
         'already-member': 'That person is already on this team.',
+        'already-invited': 'That email already has an invitation waiting.',
         self: 'You’re already on this team.',
         invalid: 'Please enter a valid email.',
         error: 'Something went wrong. Please try again.',
       };
-      Alert.alert('Could not add', messages[res.reason] || messages.error);
+      Alert.alert('Could not invite', messages[res.reason] || messages.error);
     }
+  };
+
+  // The person who sent an invitation, or the team owner, can take it back.
+  const confirmCancelInvite = (invite) => {
+    Alert.alert('Cancel invitation?', `${invite.emailLower} won’t be able to join unless invited again.`, [
+      { text: 'Keep', style: 'cancel' },
+      { text: 'Cancel Invitation', style: 'destructive', onPress: () => cancelInvite(invite) },
+    ]);
   };
 
   const handleProgress = async (task, delta) => {
@@ -405,6 +415,7 @@ export default function TeamBoardScreen({ route, navigation }) {
           </Text>
           <Text style={[styles.headerMeta, {color:theme.subtext}]}>
             {members.length} member{members.length !== 1 ? 's' : ''}
+            {pendingInvites.length > 0 ? ` · ${pendingInvites.length} invited` : ''}
           </Text>
         </View>
         {isOwner && (
@@ -422,7 +433,7 @@ export default function TeamBoardScreen({ route, navigation }) {
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setMemberModal(true)}>
           <Ionicons name="person-add-outline" size={18} color={theme.accent}/>
-          <Text style={[styles.actionText, {color:theme.text}]}>Add Member</Text>
+          <Text style={[styles.actionText, {color:theme.text}]}>Invite</Text>
         </TouchableOpacity>
 
         {/* List / Grid toggle */}
@@ -582,9 +593,9 @@ export default function TeamBoardScreen({ route, navigation }) {
       <Modal visible={memberModal} transparent animationType="fade" onRequestClose={() => setMemberModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border, borderWidth:1,}]}>
-            <Text style={[styles.modalTitle, {color:theme.text}]}>Add Member</Text>
+            <Text style={[styles.modalTitle, {color:theme.text}]}>Invite Member</Text>
             <Text style={[styles.modalHint, {color:theme.subtext}]}>
-              Enter the email your teammate uses for BALANSE. They’ll be notified and gain access to this board.
+              Enter the email your teammate uses for BALANSE. They join this board once they accept the invitation on their Teams tab.
             </Text>
             <Text style={[styles.modalLabel, {color:theme.text}]}>Email</Text>
             <TextInput
@@ -600,6 +611,28 @@ export default function TeamBoardScreen({ route, navigation }) {
               autoCapitalize="none"
               keyboardType="email-address"
             />
+
+            {pendingInvites.length > 0 && (
+              <>
+                <Text style={[styles.modalLabel, {color:theme.text}]}>Waiting to accept</Text>
+                <ScrollView style={{ maxHeight: 180 }}>
+                  {pendingInvites.map((invite) => (
+                    <View key={invite.id} style={[styles.memberRow, { borderBottomColor: theme.border }]}>
+                      <Ionicons name="mail-outline" size={18} color={theme.subtext} />
+                      <Text style={[styles.memberName, {color:theme.text}]} numberOfLines={1}>
+                        {invite.emailLower}
+                      </Text>
+                      {(isOwner || invite.invitedById === actor?.uid) && (
+                        <TouchableOpacity onPress={() => confirmCancelInvite(invite)}>
+                          <Text style={styles.cancelInviteText}>Cancel</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalCancel, {backgroundColor:theme.border}]}
@@ -608,14 +641,14 @@ export default function TeamBoardScreen({ route, navigation }) {
                   setMemberEmail('');
                 }}
               >
-                <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
+                <Text style={[styles.modalCancelText, {color:theme.text}]}>Close</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirm]}
-                onPress={handleAddMember}
+                onPress={handleInvite}
                 disabled={saving}
               >
-                <Text style={styles.modalConfirmText}>{saving ? 'Adding...' : 'Add'}</Text>
+                <Text style={styles.modalConfirmText}>{saving ? 'Sending...' : 'Send Invite'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -981,6 +1014,7 @@ const styles = StyleSheet.create({
   },
   memberAvatarText: { color: '#a78bfa', fontWeight: '700' },
   memberName: { flex: 1, color: '#ffffff', fontSize: 15, fontWeight: '500' },
+  cancelInviteText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
    statusSelector: {
     flexDirection: 'row',
     gap: 6,
