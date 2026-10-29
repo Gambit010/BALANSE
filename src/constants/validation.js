@@ -14,7 +14,7 @@ export const isAllowedDomain = (email) => {
     'gmail.com',
     'yahoo.com',
     'outlook.com',
-    'sti.edu.ph',
+    'stamaria.sti.edu.ph',
   ];
 
   const domain = email.split('@')[1]?.toLowerCase();

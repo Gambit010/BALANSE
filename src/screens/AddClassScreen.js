@@ -176,7 +176,7 @@ export default function AddClassScreen({ navigation }) {
 
   const [conflictSummary, setConflictSummary] = useState({ total: 0, high: 0, sessions: 0 });
 
-  const saveSchedule = async () => {
+  const saveSchedule = async (summary) => {
     setIsLoading(true);
     try {
       const currentUser = auth.currentUser;
@@ -206,10 +206,10 @@ export default function AddClassScreen({ navigation }) {
 
       const count = await addClassSchedule(scheduleData);
 
-      if (count > 0 && conflictSummary.total > 0) {
+      if (count > 0 && summary?.total > 0) {
         await createNotification(
           currentUser.uid,
-          `"${className.trim()}" created with ${conflictSummary.total} scheduling conflict${conflictSummary.total > 1 ? 's' : ''} across ${count} sessions.`,
+          `"${className.trim()}" created with ${summary.total} scheduling conflict${summary.total > 1 ? 's' : ''} across ${count} sessions.`,
           'conflict'
         );
       }
@@ -269,7 +269,10 @@ export default function AddClassScreen({ navigation }) {
       }
     }
 
-    setConflictSummary({ total: totalConflicts, high: highConflictCount, sessions: conflictSessionCount });
+    // Passed to saveSchedule directly: state set here isn't visible yet inside
+    // the saveSchedule that the alert button calls.
+    const summary = { total: totalConflicts, high: highConflictCount, sessions: conflictSessionCount };
+    setConflictSummary(summary);
 
     if (conflictSessionCount > 0) {
       Alert.alert(
@@ -277,13 +280,13 @@ export default function AddClassScreen({ navigation }) {
         `${conflictSessionCount} of ${sessions.length} sessions conflict with existing tasks${highConflictCount > 0 ? ` (${highConflictCount} direct time overlaps)` : ''}.\n\nCreate anyway?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Create Anyway', style: 'destructive', onPress: saveSchedule },
+          { text: 'Create Anyway', style: 'destructive', onPress: () => saveSchedule(summary) },
         ]
       );
       return;
     }
 
-    await saveSchedule();
+    await saveSchedule(summary);
   };
 
   const sessionCount = useMemo(
