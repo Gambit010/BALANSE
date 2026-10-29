@@ -1,17 +1,8 @@
-import {
-  doc,
-  setDoc,
-  getDocs,
-  collection,
-  query,
-  where,
-  limit,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 
-// Upsert the current user's profile so they can be found by email for team invites.
-// Called on every login/auth state change. Uses merge so it never wipes existing data.
+// Saves the current user's own profile (name and email). Called on every
+// login/auth state change. Uses merge so it never wipes existing data.
 export const upsertUserProfile = async (user) => {
   if (!user) return;
   try {
@@ -30,24 +21,5 @@ export const upsertUserProfile = async (user) => {
     );
   } catch (error) {
     console.error('Error upserting user profile:', error);
-  }
-};
-
-// Find a user by email (for inviting to a team).
-// Returns { uid, email, displayName } or null if not found.
-export const findUserByEmail = async (email) => {
-  try {
-    const q = query(
-      collection(db, 'users'),
-      where('emailLower', '==', email.trim().toLowerCase()),
-      limit(1) // the rules only allow looking up one user at a time
-    );
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) return null;
-    const d = snapshot.docs[0].data();
-    return { uid: d.uid, email: d.email, displayName: d.displayName };
-  } catch (error) {
-    console.error('Error finding user by email:', error);
-    return null;
   }
 };

@@ -18,10 +18,11 @@ import { useTeams } from '../hooks/useTeams';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 
 export default function TeamsScreen({ navigation }) {
-  const { teams, loading, create, refetch } = useTeams();
+  const { teams, invites, loading, create, accept, decline, refetch } = useTeams();
   const [modalVisible, setModalVisible] = useState(false);
   const [teamName, setTeamName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [busyInviteId, setBusyInviteId] = useState(null); // invitation being answered
   const { theme, isDarkMode } = useTheme(); // for dark mode
 
   const myUid = auth.currentUser?.uid;
@@ -47,6 +48,41 @@ export default function TeamsScreen({ navigation }) {
     } else {
       Alert.alert('Error', 'Could not create the team. Please try again.');
     }
+  };
+
+  const handleAccept = async (invite) => {
+    setBusyInviteId(invite.id);
+    const res = await accept(invite);
+    setBusyInviteId(null);
+    if (res.success) {
+      Alert.alert('Joined', `You joined "${invite.teamName}".`, [
+        { text: 'Later' },
+        {
+          text: 'Open Team',
+          onPress: () => navigation.navigate('TeamBoard', { teamId: invite.teamId, teamName: invite.teamName }),
+        },
+      ]);
+    } else if (res.reason === 'team-gone') {
+      Alert.alert('Team not found', 'This team no longer exists, so the invitation was removed.');
+      await decline(invite);
+    } else {
+      Alert.alert('Could not join', 'Something went wrong. Please try again.');
+    }
+  };
+
+  const handleDecline = (invite) => {
+    Alert.alert('Decline invitation?', `You won’t join "${invite.teamName}". They can invite you again later.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline',
+        style: 'destructive',
+        onPress: async () => {
+          setBusyInviteId(invite.id);
+          await decline(invite);
+          setBusyInviteId(null);
+        },
+      },
+    ]);
   };
 
   return (
@@ -83,6 +119,40 @@ export default function TeamsScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
+        {/* INVITATIONS */}
+        {!loading && invites.length > 0 && (
+          <View style={styles.invitesSection}>
+            <Text style={[styles.sectionLabel, { color: theme.subtext }]}>Invitations</Text>
+            {invites.map((invite) => {
+              const busy = busyInviteId === invite.id;
+              return (
+                <View key={invite.id} style={[styles.inviteCard, { backgroundColor: theme.card, borderColor: theme.accent }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.teamName, { color: theme.text }]} numberOfLines={1}>{invite.teamName}</Text>
+                    <Text style={[styles.teamMeta, { color: theme.subtext }]} numberOfLines={1}>
+                      Invited by {invite.invitedByName}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.inviteBtn, { borderColor: theme.border }]}
+                    onPress={() => handleDecline(invite)}
+                    disabled={busy}
+                  >
+                    <Text style={[styles.inviteBtnText, { color: theme.subtext }]}>Decline</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.inviteBtn, { backgroundColor: theme.accent, borderColor: theme.accent }]}
+                    onPress={() => handleAccept(invite)}
+                    disabled={busy}
+                  >
+                    <Text style={[styles.inviteBtnText, { color: '#ffffff' }]}>{busy ? '...' : 'Accept'}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {loading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : teams.length === 0 ? (
@@ -90,7 +160,7 @@ export default function TeamsScreen({ navigation }) {
             <Ionicons name="people-outline" size={56} color={theme.accent} />
             <Text style={[styles.emptyTitle, {color:theme.text}]}>No teams yet</Text>
             <Text style={[styles.emptyText, {color:theme.subtext}]}>
-              Create a team to assign tasks, track progress, and collaborate with your org.
+              Create a team to assign tasks, track progress, and collaborate with your org. If someone invites you, the invitation shows up here.
             </Text>
             <TouchableOpacity style={[styles.emptyButton, {backgroundColor:theme.accent}]} onPress={() => setModalVisible(true)}>
               <Text style={styles.emptyButtonText}>Create your first team</Text>
@@ -273,6 +343,31 @@ const styles = StyleSheet.create({
   modalCancelText: { color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   modalConfirm: { backgroundColor: '#7c3aed' },
   modalConfirmText: { color: '#ffffff', fontWeight: '700' },
+
+  invitesSection: { marginBottom: 20 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1.5,
+  },
+  inviteBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  inviteBtnText: { fontSize: 13, fontWeight: '600' },
 
   iconButton: {
     width: 40,

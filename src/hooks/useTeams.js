@@ -4,8 +4,13 @@ import {
   createTeam,
   getUserTeams,
   getTeam,
-  addTeamMember,
   deleteTeam,
+  createInvite,
+  getMyInvites,
+  getTeamInvites,
+  acceptInvite,
+  deleteInvite,
+  removeTeamMember,
   createBoardTask,
   getBoardTasks,
   updateBoardTaskProgress,
@@ -13,26 +18,32 @@ import {
   deleteBoardTask,
   statusFromProgress,
 } from '../services/teamService';
-import { findUserByEmail } from '../services/userService';
+import { getInviteError } from '../utils/inviteUtils';
 import { getUserTasks } from '../services/taskService';
 import { detectConflicts } from '../services/conflictService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 
-// ─── Hook: list of the current user's teams ───
+// ─── Hook: list of the current user's teams and invitations ───
 export const useTeams = () => {
   const [teams, setTeams] = useState([]);
+  const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchTeams = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) {
       setTeams([]);
+      setInvites([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const result = await getUserTeams(user.uid);
+    const [result, myInvites] = await Promise.all([
+      getUserTeams(user.uid),
+      getMyInvites(user.email),
+    ]);
     setTeams(result);
+    setInvites(myInvites);
     setLoading(false);
   }, []);
 
@@ -48,13 +59,28 @@ export const useTeams = () => {
     return id;
   };
 
-  return { teams, loading, create, refetch: fetchTeams };
+  const accept = async (invite) => {
+    const user = auth.currentUser;
+    if (!user) return { success: false, reason: 'error' };
+    const res = await acceptInvite(invite, user);
+    await fetchTeams();
+    return res;
+  };
+
+  const decline = async (invite) => {
+    const ok = await deleteInvite(invite.id);
+    await fetchTeams();
+    return ok;
+  };
+
+  return { teams, invites, loading, create, accept, decline, refetch: fetchTeams };
 };
 
 // ─── Hook: a single team + its board ───
 export const useTeamBoard = (teamId) => {
   const [team, setTeam] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [teamTaskConflicts, setTeamTaskConflicts] = useState({}); // { [boardTaskId]: conflict[] }
 
@@ -68,8 +94,9 @@ export const useTeamBoard = (teamId) => {
   const fetchBoard = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
-    const [t, bt] = await Promise.all([getTeam(teamId), getBoardTasks(teamId)]);
+    const [t, bt, inv] = await Promise.all([getTeam(teamId), getBoardTasks(teamId), getTeamInvites(teamId)]);
     setTeam(t);
+    setPendingInvites(inv);
 
     // Recompute priority score fresh on every fetch — same as personal tasks
     // in useTasks.js. Deadline proximity changes daily, so a score stored once
@@ -131,16 +158,23 @@ export const useTeamBoard = (teamId) => {
 
   // ─── Actions ───
 
-  const addMemberByEmail = async (email) => {
-    if (!team || !email?.trim()) return { success: false, reason: 'invalid' };
-    if (actor && email.trim().toLowerCase() === (actor.email || '').toLowerCase()) {
-      return { success: false, reason: 'self' };
-    }
-    const found = await findUserByEmail(email);
-    if (!found) return { success: false, reason: 'not-found' };
-    const res = await addTeamMember(team, found);
-    if (res.success) await fetchBoard();
-    return res;
+  const inviteByEmail = async (email) => {
+    if (!team || !actor) return { success: false, reason: 'error' };
+    const reason = getInviteError(email, {
+      myEmail: actor.email,
+      members: team.members,
+      pendingEmails: pendingInvites.map((i) => i.emailLower),
+    });
+    if (reason) return { success: false, reason };
+    const ok = await createInvite(team, email, actor);
+    if (ok) await fetchBoard();
+    return ok ? { success: true } : { success: false, reason: 'error' };
+  };
+
+  const cancelInvite = async (invite) => {
+    const ok = await deleteInvite(invite.id);
+    if (ok) await fetchBoard();
+    return ok;
   };
 
   const addTask = async (taskData) => {
@@ -175,6 +209,23 @@ export const useTeamBoard = (teamId) => {
     return await deleteTeam(team.id);
   };
 
+  // Any member except the owner can leave. The screen goes back afterwards,
+  // so there's no board to reload.
+  const leave = async () => {
+    if (!team || !actor) return false;
+    const me = (team.members || []).find((m) => m.uid === actor.uid);
+    if (!me) return false;
+    return await removeTeamMember(team, me, actor);
+  };
+
+  // Owner only (checked in the screen and the rules)
+  const removeMember = async (member) => {
+    if (!team || !actor) return false;
+    const ok = await removeTeamMember(team, member, actor);
+    if (ok) await fetchBoard();
+    return ok;
+  };
+
   return {
     team,
     tasks,
@@ -183,12 +234,16 @@ export const useTeamBoard = (teamId) => {
     isOwner,
     actor,
     teamTaskConflicts,
-    addMemberByEmail,
+    pendingInvites,
+    inviteByEmail,
+    cancelInvite,
     addTask,
     updateProgress,
     assign,
     removeTask,
     removeTeam,
+    leave,
+    removeMember,
     refetch: fetchBoard,
   };
 };
