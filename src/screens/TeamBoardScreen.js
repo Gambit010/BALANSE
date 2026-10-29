@@ -74,6 +74,7 @@ export default function TeamBoardScreen({ route, navigation }) {
   // Modals
   const [taskModal, setTaskModal] = useState(false);
   const [memberModal, setMemberModal] = useState(false);
+  const [membersListModal, setMembersListModal] = useState(false);
   const [assignModal, setAssignModal] = useState(null); // holds the task being reassigned
 
   // Add-task form
@@ -159,7 +160,7 @@ export default function TeamBoardScreen({ route, navigation }) {
   const canModify = (task) =>
     isOwner || task.assigneeId === actor?.uid || task.assignedById === actor?.uid;
 
-    const handleInvite = async () => {
+  const handleInvite = async () => {
     if (!memberEmail.trim()) {
       Alert.alert('Email required', 'Enter the teammate’s email.');
       return;
@@ -413,10 +414,13 @@ export default function TeamBoardScreen({ route, navigation }) {
           <Text style={[styles.headerTitle, {color:theme.text}]} numberOfLines={1}>
             {team?.name || teamName}
           </Text>
-          <Text style={[styles.headerMeta, {color:theme.subtext}]}>
-            {members.length} member{members.length !== 1 ? 's' : ''}
-            {pendingInvites.length > 0 ? ` · ${pendingInvites.length} invited` : ''}
-          </Text>
+          <TouchableOpacity style={styles.headerMetaRow} onPress={() => setMembersListModal(true)} activeOpacity={0.6}>
+            <Text style={[styles.headerMeta, {color:theme.subtext}]}>
+              {members.length} member{members.length !== 1 ? 's' : ''}
+              {pendingInvites.length > 0 ? ` · ${pendingInvites.length} invited` : ''}
+            </Text>
+            <Ionicons name="chevron-forward" size={12} color={theme.subtext} style={{ marginTop: 2 }} />
+          </TouchableOpacity>
         </View>
         {isOwner && (
           <TouchableOpacity onPress={confirmDeleteTeam} style={styles.headerIcon}>
@@ -589,7 +593,74 @@ export default function TeamBoardScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* ADD MEMBER MODAL */}
+      {/* MEMBERS LIST */}
+      <Modal visible={membersListModal} transparent animationType="fade" onRequestClose={() => setMembersListModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+            <Text style={[styles.modalTitle, {color:theme.text}]}>Members</Text>
+            <Text style={[styles.modalHint, {color:theme.subtext}]}>
+              {members.length} member{members.length !== 1 ? 's' : ''} in {team?.name || teamName}
+            </Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {members.map((m) => (
+                <View key={m.uid} style={[styles.memberRow, { borderBottomColor: theme.border }]}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberAvatarText}>{(m.name || '?').charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.memberName, {color:theme.text}]} numberOfLines={1}>
+                      {m.name}{m.uid === actor?.uid ? ' (You)' : ''}
+                    </Text>
+                    {!!m.email && (
+                      <Text style={[styles.memberEmail, {color:theme.subtext}]} numberOfLines={1}>{m.email}</Text>
+                    )}
+                  </View>
+                  {m.uid === team?.ownerId && (
+                    <View style={styles.ownerBadge}>
+                      <Text style={styles.ownerBadgeText}>Owner</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+
+              {pendingInvites.length > 0 && (
+                <>
+                  <Text style={[styles.modalLabel, {color:theme.text}]}>Invited</Text>
+                  {pendingInvites.map((invite) => (
+                    <View key={invite.id} style={[styles.memberRow, { borderBottomColor: theme.border }]}>
+                      <Ionicons name="mail-outline" size={18} color={theme.subtext} />
+                      <Text style={[styles.memberName, {color:theme.subtext}]} numberOfLines={1}>
+                        {invite.emailLower}
+                      </Text>
+                      <Text style={[styles.pendingTag, {color:theme.subtext}]}>Pending</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancel, {backgroundColor:theme.border}]}
+                onPress={() => setMembersListModal(false)}
+              >
+                <Text style={[styles.modalCancelText, {color:theme.text}]}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalConfirm]}
+                onPress={() => {
+                  setMembersListModal(false);
+                  setMemberModal(true);
+                }}
+              >
+                <Text style={styles.modalConfirmText}>Invite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* INVITE MEMBER MODAL */}
       <Modal visible={memberModal} transparent animationType="fade" onRequestClose={() => setMemberModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border, borderWidth:1,}]}>
@@ -777,6 +848,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, marginRight: 4 },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#ffffff' },
   headerMeta: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  headerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
   headerIcon: { padding: 8 },
   actionBar: {
     flexDirection: 'row',
@@ -1015,6 +1087,15 @@ const styles = StyleSheet.create({
   memberAvatarText: { color: '#a78bfa', fontWeight: '700' },
   memberName: { flex: 1, color: '#ffffff', fontSize: 15, fontWeight: '500' },
   cancelInviteText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
+  memberEmail: { fontSize: 12, marginTop: 2 },
+  ownerBadge: {
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  ownerBadgeText: { color: '#a78bfa', fontSize: 11, fontWeight: '700' },
+  pendingTag: { fontSize: 12, fontStyle: 'italic' },
    statusSelector: {
     flexDirection: 'row',
     gap: 6,
