@@ -16,29 +16,39 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerificati
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { handleGoogleSignIn } from '../services/authService'; // google signIn
-import { areLoginFieldsFilled } from '../constants/validation';
+import { areLoginFieldsFilled, isValidEmailFormat } from '../constants/validation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { normalizeEmail } from '../utils/inviteUtils';
 import {
-  LOCK_MINUTES,
   lockLogin,
   recordFailedLogin,
   getLockRemainingMs,
+  getLockMinutes,
   attemptsLeft,
   formatCountdown,
 } from '../utils/loginLimit';
 
-// Wrong-password counts per email on this phone (see loginLimit.js). Saved, so
-// closing and reopening the app doesn't reset the limit.
-const LOGIN_ATTEMPTS_KEY = 'balanse_login_attempts';
-const WRONG_LOGIN_CODES = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'];
+// Failed tries on this phone (see loginLimit.js). Saved, so closing and
+// reopening the app doesn't reset the limit.
+const LOGIN_LIMIT_KEY = 'balanse_login_limit';
+const FAILED_LOGIN_CODES = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'];
+
+// The error message, plus how many tries are left or how long the pause is
+const withLimitNote = (message, entry) => {
+  if (entry.lockedUntil) {
+    const minutes = getLockMinutes(entry);
+    return `${message} Too many failed tries, so logging in is paused for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  }
+  const left = attemptsLeft(entry);
+  if (left > 2) return message;
+  return `${message} ${left} ${left === 1 ? 'try' : 'tries'} left before logging in is paused.`;
+};
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [attempts, setAttempts] = useState({}); // { [email]: { count, lastFailedAt, lockedUntil } }
+  const [limit, setLimit] = useState(null); // { count, lastFailedAt, lockedUntil, locks }
   const [now, setNow] = useState(Date.now());
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -52,28 +62,35 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(LOGIN_ATTEMPTS_KEY)
+    AsyncStorage.getItem(LOGIN_LIMIT_KEY)
       .then((raw) => {
-        if (raw) setAttempts(JSON.parse(raw));
+        if (raw) setLimit(JSON.parse(raw));
       })
       .catch(() => {});
   }, []);
 
-  const emailKey = normalizeEmail(email);
-  const lockMs = getLockRemainingMs(attempts[emailKey], now);
+  const lockMs = getLockRemainingMs(limit, now);
   const locked = lockMs > 0;
 
-  // Tick the countdown once a second while this email is locked
+  // Tick the countdown once a second while logging in is paused
   useEffect(() => {
     if (!locked) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [locked]);
 
-  const saveAttempts = (next) => {
-    setAttempts(next);
+  const saveLimit = (next) => {
+    setLimit(next);
     setNow(Date.now());
-    AsyncStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(next)).catch(() => {});
+    if (next) AsyncStorage.setItem(LOGIN_LIMIT_KEY, JSON.stringify(next)).catch(() => {});
+    else AsyncStorage.removeItem(LOGIN_LIMIT_KEY).catch(() => {});
+  };
+
+  // Counts a failed try and returns the message to show
+  const failTry = (message) => {
+    const entry = recordFailedLogin(limit);
+    saveLimit(entry);
+    return withLimitNote(message, entry);
   };
 
   const handleLogin = async () => {
@@ -82,16 +99,19 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    if (getLockRemainingMs(attempts[emailKey]) > 0) return;
+    if (getLockRemainingMs(limit) > 0) return;
+
+    // A badly formatted email counts as a failed try too, without asking Firebase
+    if (!isValidEmailFormat(email.trim())) {
+      Alert.alert('Login Failed', failTry('Please enter a valid email address.'));
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const { user } = await signInWithEmailAndPassword(auth, email, password);
-      // Right password: start the count again for this email
-      if (attempts[emailKey]) {
-        const { [emailKey]: _cleared, ...rest } = attempts;
-        saveAttempts(rest);
-      }
+      const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // Logged in: start the count again
+      if (limit) saveLimit(null);
       if (!user.emailVerified) {
         // Keep them signed in only long enough to resend the link.
         Alert.alert(
@@ -108,23 +128,17 @@ export default function LoginScreen({ navigation }) {
       let message = 'Something went wrong. Please try again.';
       //if (error.code === 'auth/user-not-found') message = 'No user found with this email.';
       //if (error.code === 'auth/wrong-password') message = 'Incorrect password. Please try again.';
-      if (WRONG_LOGIN_CODES.includes(error.code)) {
-        const entry = recordFailedLogin(attempts[emailKey]);
-        saveAttempts({ ...attempts, [emailKey]: entry });
-        const left = attemptsLeft(entry);
-        if (entry.lockedUntil) {
-          message = `Too many wrong tries. Logging in with this email is paused for ${LOCK_MINUTES} minutes.`;
-        } else if (left <= 2) {
-          message = `Invalid email or password. ${left} ${left === 1 ? 'try' : 'tries'} left before logging in is paused for ${LOCK_MINUTES} minutes.`;
-        } else {
-          message = 'Invalid email or password.';
-        }
+      if (FAILED_LOGIN_CODES.includes(error.code)) {
+        message = failTry(
+          error.code === 'auth/invalid-email' ? 'Please enter a valid email address.' : 'Invalid email or password.'
+        );
       }
-      if (error.code === 'auth/invalid-email') message = 'Please enter a valid email address.';
-      // Firebase's own server limit was reached: show the same lock here
+      // Firebase's own server limit was reached: show the same pause here
       if (error.code === 'auth/too-many-requests') {
-        saveAttempts({ ...attempts, [emailKey]: lockLogin() });
-        message = `Too many attempts. Logging in with this email is paused for ${LOCK_MINUTES} minutes.`;
+        const entry = lockLogin(limit);
+        saveLimit(entry);
+        const minutes = getLockMinutes(entry);
+        message = `Too many attempts. Logging in is paused for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
       }
       Alert.alert('Login Failed', message);
     } finally {
@@ -238,7 +252,7 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
             {locked && (
               <Text style={styles.lockNote}>
-                Too many wrong passwords for this email. Wait for the timer, or tap Forgot Password? to reset it.
+                Too many failed tries on this phone. Wait for the timer, or tap Forgot Password? to reset your password.
               </Text>
             )}
 
