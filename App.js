@@ -1,5 +1,6 @@
 // Eto yung root ng app
 import React, { useState, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -20,7 +21,13 @@ import AddClassScreen from './src/screens/AddClassScreen';
 import TeamBoardScreen from './src/screens/TeamBoardScreen';
 import { upsertUserProfile } from './src/services/userService';
 import * as Notifications from 'expo-notifications';
-import { setupPushNotifications } from './src/services/pushNotificationServices';
+import {
+  setupPushNotifications,
+  registerTaskNotificationActions,
+  snoozeTaskReminder,
+  TASK_ACTIONS,
+} from './src/services/pushNotificationServices';
+import { updateTaskProgress, rescheduleTaskReminders } from './src/services/taskService';
 
 const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
@@ -42,6 +49,27 @@ const goToNotificationTarget = (data) => {
   }
 };
 
+
+// A button on a task reminder was pressed (Done, In Progress or Snooze).
+// The app is open and signed in by now; make the change and say what happened.
+const runReminderAction = async ({ action, notification }) => {
+  const content = notification.request.content;
+  const { taskId, title } = content.data;
+  const name = title ? `"${title}"` : 'The task';
+  Notifications.dismissNotificationAsync(notification.request.identifier).catch(() => {});
+
+  if (action === TASK_ACTIONS.SNOOZE) {
+    const ok = await snoozeTaskReminder(taskId, content);
+    if (ok) Alert.alert('Snoozed', `We'll remind you about ${name} again in 1 hour.`);
+    else Alert.alert('Could not snooze', 'Please try again.');
+    return;
+  }
+
+  const done = action === TASK_ACTIONS.DONE;
+  const ok = await updateTaskProgress(taskId, done ? 100 : 50);
+  if (ok) Alert.alert(done ? 'Marked as done' : 'Marked as in progress', `${name} is now ${done ? 'Done' : 'In Progress'}.`);
+  else Alert.alert('Could not update the task', 'It may have been deleted. Please check your Tasks.');
+};
 
 // Email/password accounts must open the link sent to their inbox first.
 // Google accounts are already verified by Google.
@@ -77,8 +105,17 @@ export default function App() {
   }, []);
 
   // A tapped notification is kept here until the app is ready to open it:
-  // signed in, and with the navigation set up.
+  // signed in, and with the navigation set up. A pressed reminder button
+  // waits the same way, until the student is signed in.
   const pendingNotificationRef = useRef(null);
+  const pendingActionRef = useRef(null);
+
+  const runPendingAction = () => {
+    const pending = pendingActionRef.current;
+    if (!pending || !canEnterApp(auth.currentUser)) return Promise.resolve();
+    pendingActionRef.current = null;
+    return runReminderAction(pending).catch((error) => console.error('Could not run reminder action:', error));
+  };
 
   const openPendingNotification = () => {
     const data = pendingNotificationRef.current;
@@ -100,9 +137,18 @@ export default function App() {
       // Some Android phones report a normal app launch as a notification tap,
       // with unrelated launch data. Only BALANSE's own notifications have a type.
       if (!NOTIFICATION_TYPES.includes(data?.type)) return;
+      // A button (Done, In Progress, Snooze) rather than the notification itself
+      if (response.actionIdentifier && response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        if (!data.taskId || !Object.values(TASK_ACTIONS).includes(response.actionIdentifier)) return;
+        pendingActionRef.current = { action: response.actionIdentifier, notification: response.notification };
+        runPendingAction();
+        return;
+      }
       pendingNotificationRef.current = data;
       openPendingNotification();
     };
+
+    registerTaskNotificationActions();
 
     // The app was closed and opened by tapping a notification
     handleResponse(Notifications.getLastNotificationResponse());
@@ -114,7 +160,13 @@ export default function App() {
 
   // Open a waiting notification once the user is signed in and the screens exist
   useEffect(() => {
-    if (!loading && user) openPendingNotification();
+    if (!loading && user) {
+      openPendingNotification();
+      // Set this phone's reminders again after login (see rescheduleTaskReminders).
+      // A pressed button goes first, so a task just marked Done isn't given
+      // its reminders back.
+      runPendingAction().finally(() => rescheduleTaskReminders(user.uid));
+    }
   }, [loading, user]);
 
   if (loading) return null;
