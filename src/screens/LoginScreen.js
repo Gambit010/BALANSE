@@ -120,6 +120,7 @@ export default function LoginScreen({ navigation }) {
           message = 'Invalid email or password.';
         }
       }
+      if (error.code === 'auth/invalid-email') message = 'Please enter a valid email address.';
       // Firebase's own server limit was reached: show the same lock here
       if (error.code === 'auth/too-many-requests') {
         saveAttempts({ ...attempts, [emailKey]: lockLogin() });

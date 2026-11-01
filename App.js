@@ -1,6 +1,6 @@
 // Eto yung root ng app
 import React, { useState, useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
+import { Alert, DeviceEventEmitter } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -28,6 +28,7 @@ import {
   TASK_ACTIONS,
 } from './src/services/pushNotificationServices';
 import { updateTaskProgress, rescheduleTaskReminders } from './src/services/taskService';
+import { TASKS_CHANGED_EVENT } from './src/hooks/useTasks';
 
 const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
@@ -67,6 +68,8 @@ const runReminderAction = async ({ action, notification }) => {
 
   const done = action === TASK_ACTIONS.DONE;
   const ok = await updateTaskProgress(taskId, done ? 100 : 50);
+  // Screens already open (Home, Tasks, Calendar) reload to show the new status
+  if (ok) DeviceEventEmitter.emit(TASKS_CHANGED_EVENT);
   if (ok) Alert.alert(done ? 'Marked as done' : 'Marked as in progress', `${name} is now ${done ? 'Done' : 'In Progress'}.`);
   else Alert.alert('Could not update the task', 'It may have been deleted. Please check your Tasks.');
 };

@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, DeviceEventEmitter } from 'react-native';
 import { auth } from '../../firebase';
 import { getUserTasks } from '../services/taskService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
+
+// Sent when a task changes outside a screen (a Done or In Progress button on a
+// reminder), so screens that are already open reload their list.
+export const TASKS_CHANGED_EVENT = 'balanse:tasks-changed';
 
 // Several screens load tasks at once, so the alert is shown at most once a minute.
 let lastLoadAlert = 0;
@@ -73,6 +77,8 @@ export const useTasks = () => {
 
   useEffect(() => {
     fetchTasks();
+    const subscription = DeviceEventEmitter.addListener(TASKS_CHANGED_EVENT, fetchTasks);
+    return () => subscription.remove();
   }, []);
 
   return { tasks, loading, error, refetch: fetchTasks };
