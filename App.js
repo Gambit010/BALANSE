@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Alert, DeviceEventEmitter } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createStackNavigator } from '@react-navigation/stack';
 import { onAuthStateChanged } from 'firebase/auth'; // Eto yung naghahandle pag mga nag log-in or log-out
 import { auth } from './firebase';
@@ -175,6 +176,7 @@ export default function App() {
   if (loading) return null;
 
   return (
+    <SafeAreaProvider>
     <GestureHandlerRootView style={{ flex: 1 }}>
     <ThemeProvider> 
     <NavigationContainer ref={navigationRef} onReady={openPendingNotification}>
@@ -202,5 +204,6 @@ export default function App() {
     </NavigationContainer>
     </ThemeProvider>
     </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
