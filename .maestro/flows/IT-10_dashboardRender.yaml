@@ -1,0 +1,24 @@
+appId: com.balanseapp.app
+---
+
+- evalScript: ${output.startTime = Date.now()}
+
+- launchApp:
+    clearState: false
+
+# Capture time immediately after launchApp
+- evalScript: ${output.launchEndTime = Date.now()}
+
+# Check dashboard visibility
+- assertVisible: "Overall Progress"
+- assertVisible: "Today's Focus"
+
+# Capture time after assertions
+- evalScript: ${output.assertEndTime = Date.now()}
+
+# Calculate timings
+- evalScript: '${console.log("Launch command time: " + (output.launchEndTime - output.startTime) + " ms")}'
+
+- evalScript: '${console.log("Dashboard visibility time: " + (output.assertEndTime - output.startTime) + " ms")}'
+
+- evalScript: '${console.log("Assertion overhead: " + (output.assertEndTime - output.launchEndTime) + " ms")}'
