@@ -3,6 +3,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack'; // Make sure this is imported
 import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import TasksScreen from '../screens/TasksScreen';
@@ -42,15 +44,29 @@ function ProfileStackScreen() {
 }
 
 export default function AppNavigator() {
+  const { theme, isDarkMode } = useTheme();
+  // Space taken by the phone's own navigation (the back/home buttons or the
+  // gesture line). The app draws edge to edge, so the tab bar sits above it.
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: theme.tabBar,
+            borderTopColor: theme.border,
+            borderTopWidth: isDarkMode ? 0 : 1,
+            height: TAB_BAR_HEIGHT + insets.bottom,
+            paddingBottom: TAB_BAR_PADDING + insets.bottom,
+          },
+        ],
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarActiveTintColor: '#a78bfa',
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
+        tabBarActiveTintColor: theme.accent,
+        tabBarInactiveTintColor: isDarkMode ? 'rgba(255,255,255,0.55)' : '#64748b',
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
 
@@ -62,7 +78,7 @@ export default function AppNavigator() {
             iconName = focused ? 'calendar' : 'calendar-outline';
           } else if (route.name === 'Wellness') {
             iconName = focused ? 'heart' : 'heart-outline';
-          } else if (route.name === 'Teams') { // Now points to the Stack
+          } else if (route.name === 'Teams') {
             iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
@@ -76,26 +92,20 @@ export default function AppNavigator() {
       <Tab.Screen name="Tasks" component={TasksScreen}/>
       <Tab.Screen name="Calendar" component={CalendarScreen}/>
       <Tab.Screen name="Wellness" component={WellnessScreen}/>
-      
-      {/* REPLACE THE OLD TEAMS SCREEN WITH THE STACK */}
       <Tab.Screen name="Teams" component={TeamsStack}/>
-      
       <Tab.Screen name="Profile" component={ProfileStackScreen}/>
-      
-      {/* REMOVE THIS LINE COMPLETELY - MyAssignments is now inside TeamsStack */}
-      {/* <Tab.Screen name="MyAssignments" ... /> */}
     </Tab.Navigator>
   );
 
 }
 
+// Height of the tab bar itself, not counting the phone's navigation below it
+const TAB_BAR_HEIGHT = 65;
+const TAB_BAR_PADDING = 8;
+
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#1a1a2e',
-    borderTopWidth: 0,
-    height: 65,
-    paddingBottom: 8,
-    paddingTop: 8,
+    paddingTop: TAB_BAR_PADDING,
   },
   tabLabel: {
     fontSize: 10,

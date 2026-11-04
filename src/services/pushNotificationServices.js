@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { getDueTime, getReminderTime, getOverdueTime, SNOOZE_MINUTES } from '../utils/reminderUtils';
 
 // ---------------------------------------------------------------------------
 // Notification presentation while app is foregrounded
@@ -18,7 +19,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const SCHEDULED_MAP_KEY = 'balanse_scheduled_notifications'; // { [taskId]: notificationId }
+const SCHEDULED_MAP_KEY = 'balanse_scheduled_notifications'; // { [key]: notificationId }, see OVERDUE_KEY
 const NOTIFICATIONS_ENABLED_KEY = 'balanse_notifications_enabled';
 
 /** Whether this device should fire local notifications. Defaults to enabled. */
@@ -97,10 +98,8 @@ export const registerForPushNotificationsAsync = async () => {
 export const savePushTokenToFirestore = async (userId, token) => {
   if (!userId || !token) return false;
   try {
-    // Stored in a private subcollection, not on the main user doc, since
-    // users/{uid} is broadly readable (needed for team-invite email lookup)
-    // but a push token is a capability — anyone holding it can send fake
-    // notifications to that user's device via Expo's public push API.
+    // Kept in its own document under private/. Teammates need to read it to
+    // send team pushes, so the rules open this one document and nothing else.
     await setDoc(doc(db, 'users', userId, 'private', 'pushToken'), { token }, { merge: true });
     return true;
   } catch (error) {
@@ -116,16 +115,22 @@ export const savePushTokenToFirestore = async (userId, token) => {
  */
 export const clearDeviceNotifications = async (userId) => {
   try {
-    if (userId) await deleteDoc(doc(db, 'users', userId, 'private', 'pushToken'));
-  } catch (error) {
-    console.error('Error removing push token:', error);
-  }
-  try {
     await Notifications.cancelAllScheduledNotificationsAsync();
     await Notifications.dismissAllNotificationsAsync();
     await AsyncStorage.removeItem(SCHEDULED_MAP_KEY);
   } catch (error) {
     console.error('Error clearing notifications on this phone:', error);
+  }
+  if (!userId) return;
+  // With no internet, a Firestore delete only finishes once the phone is back
+  // online, so stop waiting after a few seconds instead of blocking logout.
+  try {
+    await Promise.race([
+      deleteDoc(doc(db, 'users', userId, 'private', 'pushToken')),
+      new Promise((resolve) => setTimeout(resolve, 4000)),
+    ]);
+  } catch (error) {
+    console.error('Error removing push token:', error);
   }
 };
 
@@ -217,77 +222,145 @@ const setScheduledMap = async (map) => {
   }
 };
 
-// Fixed time of day (24h clock) that reminders fire at, the evening before the
-// deadline — easier to demo predictably than an exact "24 hours before" offset,
-// which can land at odd hours (e.g. 6 AM) depending on the task's deadline time.
-const REMINDER_HOUR = 20; // 8:00 PM
-const REMINDER_MINUTE = 0;
-
-/**
- * Schedules a local deadline reminder for a task, fired at REMINDER_HOUR:REMINDER_MINUTE
- * on the day before its deadline (or immediately if that time has already passed but
- * the deadline itself hasn't). Cancels any previous reminder for the same task first,
- * so this is safe to call on both create and edit.
- */
-export const scheduleDeadlineReminder = async (task) => {
-  if (!task?.id || !task?.deadline) return null;
-  if (!(await getNotificationsEnabled())) return null;
-
-  await cancelDeadlineReminder(task.id);
-
-  const deadline = new Date(task.deadline);
-  if (isNaN(deadline.getTime())) return null;
-
-  const now = new Date();
-  const reminderTime = new Date(deadline);
-  reminderTime.setDate(reminderTime.getDate() - 1);
-  reminderTime.setHours(REMINDER_HOUR, REMINDER_MINUTE, 0, 0);
-
-  // If reminder time already passed but deadline hasn't, fire in 5s (edge case:
-  // task created/edited close to its deadline). If deadline itself already passed, skip.
-  let trigger;
-if (deadline <= now) {
-  return null;
-} else if (reminderTime <= now) {
-  trigger = { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 };
-} else {
-  trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminderTime };
-}
-
-  try {
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Deadline approaching',
-        body: `"${task.title}" is due soon.`,
-        data: { taskId: task.id, type: 'deadline' },
-        sound: true,
-      },
-      trigger,
-    });
-
+// Changes to the saved map run one at a time. Reminders are rescheduled for
+// every task right after login, and a snooze can happen at the same moment;
+// without this, one save could overwrite the other.
+let mapQueue = Promise.resolve();
+const updateScheduledMap = (change) => {
+  const run = mapQueue.then(async () => {
     const map = await getScheduledMap();
-    map[task.id] = notificationId;
+    const result = await change(map);
     await setScheduledMap(map);
+    return result;
+  });
+  mapQueue = run.catch(() => {});
+  return run;
+};
 
-    return notificationId;
-  } catch (error) {
-    console.error('Error scheduling deadline reminder:', error);
-    return null;
+// Each task can have up to three scheduled notifications, saved in the map as
+// "<taskId>" (evening before), "<taskId>:overdue" and "<taskId>:snooze".
+const OVERDUE_KEY = (taskId) => `${taskId}:overdue`;
+const SNOOZE_KEY = (taskId) => `${taskId}:snooze`;
+
+const cancelKeys = async (map, keys) => {
+  for (const key of keys) {
+    if (!map[key]) continue;
+    try {
+      await Notifications.cancelScheduledNotificationAsync(map[key]);
+    } catch (error) {
+      console.error('Error cancelling scheduled notification:', error);
+    }
+    delete map[key];
   }
 };
 
-/** Cancels a previously scheduled deadline reminder for a task, if one exists. */
+// Buttons shown on task reminders. Each one opens the app, which then makes
+// the change and confirms it; that works even when the app was fully closed.
+export const TASK_CATEGORY = 'balanse_task';
+export const TASK_ACTIONS = { DONE: 'done', IN_PROGRESS: 'in-progress', SNOOZE: 'snooze' };
+
+/** Call once when the app starts, so reminders show their buttons. */
+export const registerTaskNotificationActions = async () => {
+  try {
+    await Notifications.setNotificationCategoryAsync(TASK_CATEGORY, [
+      { identifier: TASK_ACTIONS.DONE, buttonTitle: 'Done', options: { opensAppToForeground: true } },
+      { identifier: TASK_ACTIONS.IN_PROGRESS, buttonTitle: 'In Progress', options: { opensAppToForeground: true } },
+      { identifier: TASK_ACTIONS.SNOOZE, buttonTitle: `Snooze ${SNOOZE_MINUTES / 60} hr`, options: { opensAppToForeground: true } },
+    ]);
+  } catch (error) {
+    console.error('Error setting up notification buttons:', error);
+  }
+};
+
+const taskContent = (task, title, body) => ({
+  title,
+  body,
+  data: { taskId: task.id, type: 'deadline', title: task.title },
+  categoryIdentifier: TASK_CATEGORY,
+  sound: true,
+});
+
+/**
+ * Schedules a task's two reminders: "Deadline approaching" at 8:00 PM the
+ * evening before, and "Task overdue" once the deadline passes (see
+ * reminderUtils). Replaces any earlier ones for the task, so it's safe to call
+ * on create, edit and status change. If the evening-before time has already
+ * passed but the task isn't due yet, the first reminder fires in 5 seconds,
+ * unless allowImmediate is false (used when reminders are set again in bulk).
+ */
+export const scheduleDeadlineReminder = async (task, { allowImmediate = true } = {}) => {
+  if (!task?.id || !task?.deadline) return null;
+  if (!(await getNotificationsEnabled())) return null;
+
+  const due = getDueTime(task.deadline);
+  if (!due) return null;
+
+  return updateScheduledMap(async (map) => {
+    await cancelKeys(map, [task.id, OVERDUE_KEY(task.id)]);
+    const now = new Date();
+    let reminderId = null;
+
+    try {
+      if (due > now) {
+        const reminderTime = getReminderTime(task.deadline);
+        let trigger = null;
+        if (reminderTime > now) {
+          trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminderTime };
+        } else if (allowImmediate) {
+          trigger = { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 };
+        }
+        if (trigger) {
+          reminderId = await Notifications.scheduleNotificationAsync({
+            content: taskContent(task, 'Deadline approaching', `"${task.title}" is due soon.`),
+            trigger,
+          });
+          map[task.id] = reminderId;
+        }
+      }
+
+      const overdueTime = getOverdueTime(task.deadline);
+      if (overdueTime > now) {
+        map[OVERDUE_KEY(task.id)] = await Notifications.scheduleNotificationAsync({
+          content: taskContent(task, 'Task overdue', `"${task.title}" is past its deadline and isn't done yet.`),
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: overdueTime },
+        });
+      }
+    } catch (error) {
+      console.error('Error scheduling deadline reminder:', error);
+    }
+    return reminderId;
+  });
+};
+
+/**
+ * "Snooze" on a reminder: shows the same reminder again in SNOOZE_MINUTES.
+ * The deadline stays the same; Push Deadline +1 Day in the app changes that.
+ */
+export const snoozeTaskReminder = async (taskId, content) => {
+  if (!taskId || !content) return false;
+  return updateScheduledMap(async (map) => {
+    await cancelKeys(map, [SNOOZE_KEY(taskId)]);
+    try {
+      map[SNOOZE_KEY(taskId)] = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: content.title,
+          body: content.body,
+          data: content.data,
+          categoryIdentifier: TASK_CATEGORY,
+          sound: true,
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: SNOOZE_MINUTES * 60 },
+      });
+      return true;
+    } catch (error) {
+      console.error('Error snoozing reminder:', error);
+      return false;
+    }
+  });
+};
+
+/** Cancels every scheduled reminder for a task (done or deleted). */
 export const cancelDeadlineReminder = async (taskId) => {
   if (!taskId) return;
-  const map = await getScheduledMap();
-  const notificationId = map[taskId];
-  if (notificationId) {
-    try {
-      await Notifications.cancelScheduledNotificationAsync(notificationId);
-    } catch (error) {
-      console.error('Error cancelling deadline reminder:', error);
-    }
-    delete map[taskId];
-    await setScheduledMap(map);
-  }
+  await updateScheduledMap((map) => cancelKeys(map, [taskId, OVERDUE_KEY(taskId), SNOOZE_KEY(taskId)]));
 };

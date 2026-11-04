@@ -100,10 +100,11 @@ export const updateTaskProgress = async (taskId, progress) => {
       await cancelDeadlineReminder(taskId);
       recordActiveDay(auth.currentUser?.uid, taskId); // not awaited; never blocks the status change
     } else {
-      // A task reopened from Done gets its reminder back
+      // A task reopened from Done gets its reminders back. Nothing fires right
+      // away: changing the status isn't a reason to remind about it.
       const snap = await getDoc(taskRef);
       if (snap.exists() && !snap.data().recurrence?.isClassSchedule) {
-        await scheduleDeadlineReminder({ id: taskId, ...snap.data() });
+        await scheduleDeadlineReminder({ id: taskId, ...snap.data() }, { allowImmediate: false });
       }
     }
 
@@ -111,6 +112,19 @@ export const updateTaskProgress = async (taskId, progress) => {
   } catch (error) {
     console.error('Error updating task:', error);
     return false;
+  }
+};
+
+// Logging out clears this phone's reminders, and tasks saved before the
+// overdue reminder existed only have the evening-before one. So after login,
+// set every unfinished task's reminders again. Only future reminders are set;
+// nothing fires right away.
+export const rescheduleTaskReminders = async (userId) => {
+  if (!userId) return;
+  const tasks = await getUserTasks(userId);
+  for (const task of tasks) {
+    if (!task.deadline || task.progress >= 100 || task.recurrence?.isClassSchedule) continue;
+    await scheduleDeadlineReminder(task, { allowImmediate: false });
   }
 };
 
