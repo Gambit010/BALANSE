@@ -16,13 +16,40 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerificati
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { handleGoogleSignIn } from '../services/authService'; // google signIn
-import { areLoginFieldsFilled } from '../constants/validation';
+import { areLoginFieldsFilled, isValidEmailFormat } from '../constants/validation';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  lockLogin,
+  recordFailedLogin,
+  getLockRemainingMs,
+  getLockMinutes,
+  attemptsLeft,
+  formatCountdown,
+} from '../utils/loginLimit';
+
+// Failed tries on this phone (see loginLimit.js). Saved, so closing and
+// reopening the app doesn't reset the limit.
+const LOGIN_LIMIT_KEY = 'balanse_login_limit';
+const FAILED_LOGIN_CODES = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'];
+
+// The error message, plus how many tries are left or how long the pause is
+const withLimitNote = (message, entry) => {
+  if (entry.lockedUntil) {
+    const minutes = getLockMinutes(entry);
+    return `${message} Too many failed tries, so logging in is paused for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  }
+  const left = attemptsLeft(entry);
+  if (left > 2) return message;
+  return `${message} ${left} ${left === 1 ? 'try' : 'tries'} left before logging in is paused.`;
+};
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [limit, setLimit] = useState(null); // { count, lastFailedAt, lockedUntil, locks }
+  const [now, setNow] = useState(Date.now());
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -34,15 +61,57 @@ export default function LoginScreen({ navigation }) {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    AsyncStorage.getItem(LOGIN_LIMIT_KEY)
+      .then((raw) => {
+        if (raw) setLimit(JSON.parse(raw));
+      })
+      .catch(() => {});
+  }, []);
+
+  const lockMs = getLockRemainingMs(limit, now);
+  const locked = lockMs > 0;
+
+  // Tick the countdown once a second while logging in is paused
+  useEffect(() => {
+    if (!locked) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [locked]);
+
+  const saveLimit = (next) => {
+    setLimit(next);
+    setNow(Date.now());
+    if (next) AsyncStorage.setItem(LOGIN_LIMIT_KEY, JSON.stringify(next)).catch(() => {});
+    else AsyncStorage.removeItem(LOGIN_LIMIT_KEY).catch(() => {});
+  };
+
+  // Counts a failed try and returns the message to show
+  const failTry = (message) => {
+    const entry = recordFailedLogin(limit);
+    saveLimit(entry);
+    return withLimitNote(message, entry);
+  };
+
   const handleLogin = async () => {
     if (!areLoginFieldsFilled(email, password)) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
+    if (getLockRemainingMs(limit) > 0) return;
+
+    // A badly formatted email counts as a failed try too, without asking Firebase
+    if (!isValidEmailFormat(email.trim())) {
+      Alert.alert('Login Failed', failTry('Please enter a valid email address.'));
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // Logged in: start the count again
+      if (limit) saveLimit(null);
       if (!user.emailVerified) {
         // Keep them signed in only long enough to resend the link.
         Alert.alert(
@@ -59,8 +128,18 @@ export default function LoginScreen({ navigation }) {
       let message = 'Something went wrong. Please try again.';
       //if (error.code === 'auth/user-not-found') message = 'No user found with this email.';
       //if (error.code === 'auth/wrong-password') message = 'Incorrect password. Please try again.';
-      if (error.code === 'auth/invalid-credential') message = 'Invalid email or password.';
-      if (error.code === 'auth/too-many-requests') message = 'Too many attempts. Please try again later.';
+      if (FAILED_LOGIN_CODES.includes(error.code)) {
+        message = failTry(
+          error.code === 'auth/invalid-email' ? 'Please enter a valid email address.' : 'Invalid email or password.'
+        );
+      }
+      // Firebase's own server limit was reached: show the same pause here
+      if (error.code === 'auth/too-many-requests') {
+        const entry = lockLogin(limit);
+        saveLimit(entry);
+        const minutes = getLockMinutes(entry);
+        message = `Too many attempts. Logging in is paused for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+      }
       Alert.alert('Login Failed', message);
     } finally {
       setIsLoading(false);
@@ -163,14 +242,19 @@ export default function LoginScreen({ navigation }) {
 
             {/* Log In Button */}
             <TouchableOpacity 
-              style={[styles.loginButton, isLoading && styles.buttonDisabled]}
+              style={[styles.loginButton, (isLoading || locked) && styles.buttonDisabled]}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={isLoading || locked}
             >
               <Text style={styles.loginButtonText}>
-                {isLoading ? 'Logging in...' : 'Log In'}
+                {isLoading ? 'Logging in...' : locked ? `Try again in ${formatCountdown(lockMs)}` : 'Log In'}
               </Text>
             </TouchableOpacity>
+            {locked && (
+              <Text style={styles.lockNote}>
+                Too many failed tries on this phone. Wait for the timer, or tap Forgot Password? to reset your password.
+              </Text>
+            )}
 
             {/* Divider */}
             <View style={styles.divider}>
@@ -307,6 +391,14 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  lockNote: {
+    color: '#ffffff',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: -8,
+    marginBottom: 20,
   },
   loginButtonText: {
     color: '#7c3aed',
