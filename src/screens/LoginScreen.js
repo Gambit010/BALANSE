@@ -26,6 +26,12 @@ import {
   attemptsLeft,
   formatCountdown,
 } from '../utils/loginLimit';
+import {
+  VERIFY_SENT_KEY,
+  recordVerificationSent,
+  getResendRemainingMs,
+  parseSentTimes,
+} from '../utils/verifyCooldown';
 
 // Failed tries on this phone (see loginLimit.js). Saved, so closing and
 // reopening the app doesn't reset the limit.
@@ -114,15 +120,28 @@ export default function LoginScreen({ navigation }) {
       if (limit) saveLimit(null);
       if (!user.emailVerified) {
         // Keep them signed in only long enough to resend the link.
-        Alert.alert(
-          'Verify your email',
-          `Open the link we sent to ${user.email}, then log in again. Check your spam folder if you can't find it.`,
-          [
-            { text: 'Resend link', onPress: () => resendVerification(user) },
-            { text: 'OK', onPress: () => signOut(auth) },
-          ],
-          { cancelable: false }
-        );
+        const sentTimes = await loadSentTimes();
+        const waitMs = getResendRemainingMs(sentTimes, user.email);
+        const message = `Open the link we sent to ${user.email}, then log in again. Check your spam folder if you can't find it.`;
+        if (waitMs > 0) {
+          // A link was sent less than a minute ago: no new one yet
+          Alert.alert(
+            'Verify your email',
+            `${message}\n\nYou can ask for a new link in ${formatCountdown(waitMs)}.`,
+            [{ text: 'OK', onPress: () => signOut(auth) }],
+            { cancelable: false }
+          );
+        } else {
+          Alert.alert(
+            'Verify your email',
+            message,
+            [
+              { text: 'Resend link', onPress: () => resendVerification(user) },
+              { text: 'OK', onPress: () => signOut(auth) },
+            ],
+            { cancelable: false }
+          );
+        }
       }
     } catch (error) {
       let message = 'Something went wrong. Please try again.';
@@ -146,11 +165,27 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // When verification links were last sent from this phone (see verifyCooldown.js)
+  const loadSentTimes = async () => {
+    try {
+      return parseSentTimes(await AsyncStorage.getItem(VERIFY_SENT_KEY));
+    } catch {
+      return {};
+    }
+  };
+
+  const markLinkSent = async (userEmail) => {
+    const next = recordVerificationSent(await loadSentTimes(), userEmail);
+    AsyncStorage.setItem(VERIFY_SENT_KEY, JSON.stringify(next)).catch(() => {});
+  };
+
   const resendVerification = async (user) => {
     try {
       await sendEmailVerification(user);
-      Alert.alert('Link sent', `We sent a new link to ${user.email}.`);
+      await markLinkSent(user.email);
+      Alert.alert('Link sent', `We sent a new link to ${user.email}. You can ask for another one after 1 minute.`);
     } catch (error) {
+      if (error.code === 'auth/too-many-requests') await markLinkSent(user.email);
       const message = error.code === 'auth/too-many-requests'
         ? 'Please wait a few minutes before asking for another link.'
         : 'Could not send the link. Please try again later.';

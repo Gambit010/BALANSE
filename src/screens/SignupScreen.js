@@ -11,30 +11,51 @@ import {
   ScrollView,
   Animated,
 } from 'react-native';
-import {
-  isValidEmailFormat,
-  isAllowedDomain,
-  isValidName,
-  isValidPasswordLength,
-  isValidMiddleName,
-  areSignupFieldsFilled,
-  doPasswordsMatch,
-} from '../constants/validation';
 import { LinearGradient } from 'expo-linear-gradient';
-import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
-import { handleGoogleSignIn } from '../services/authService'; // for react native google sign in
+import { handleGoogleSignIn } from '../services/authService'; // google signIn
+import { areLoginFieldsFilled, isValidEmailFormat } from '../constants/validation';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  lockLogin,
+  recordFailedLogin,
+  getLockRemainingMs,
+  getLockMinutes,
+  attemptsLeft,
+  formatCountdown,
+} from '../utils/loginLimit';
+import {
+  VERIFY_SENT_KEY,
+  recordVerificationSent,
+  getResendRemainingMs,
+  parseSentTimes,
+} from '../utils/verifyCooldown';
 
-export default function SignupScreen({ navigation }) {
-  const [firstName, setFirstName] = useState('');
-  const [middleName, setMiddleName] = useState('');
-  const [lastName, setLastName] = useState('');
+// Failed tries on this phone (see loginLimit.js). Saved, so closing and
+// reopening the app doesn't reset the limit.
+const LOGIN_LIMIT_KEY = 'balanse_login_limit';
+const FAILED_LOGIN_CODES = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'];
+
+// The error message, plus how many tries are left or how long the pause is
+const withLimitNote = (message, entry) => {
+  if (entry.lockedUntil) {
+    const minutes = getLockMinutes(entry);
+    return `${message} Too many failed tries, so logging in is paused for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  }
+  const left = attemptsLeft(entry);
+  if (left > 2) return message;
+  return `${message} ${left} ${left === 1 ? 'try' : 'tries'} left before logging in is paused.`;
+};
+
+export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [limit, setLimit] = useState(null); // { count, lastFailedAt, lockedUntil, locks }
+  const [now, setNow] = useState(Date.now());
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -46,83 +67,153 @@ export default function SignupScreen({ navigation }) {
     ]).start();
   }, []);
 
-  const handleSignup = async () => {
-    if (!areSignupFieldsFilled(firstName, lastName, email, password)) {
-      Alert.alert('Error', 'Please fill in all required fields');
+  useEffect(() => {
+    AsyncStorage.getItem(LOGIN_LIMIT_KEY)
+      .then((raw) => {
+        if (raw) setLimit(JSON.parse(raw));
+      })
+      .catch(() => {});
+  }, []);
+
+  const lockMs = getLockRemainingMs(limit, now);
+  const locked = lockMs > 0;
+
+  // Tick the countdown once a second while logging in is paused
+  useEffect(() => {
+    if (!locked) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [locked]);
+
+  const saveLimit = (next) => {
+    setLimit(next);
+    setNow(Date.now());
+    if (next) AsyncStorage.setItem(LOGIN_LIMIT_KEY, JSON.stringify(next)).catch(() => {});
+    else AsyncStorage.removeItem(LOGIN_LIMIT_KEY).catch(() => {});
+  };
+
+  // Counts a failed try and returns the message to show
+  const failTry = (message) => {
+    const entry = recordFailedLogin(limit);
+    saveLimit(entry);
+    return withLimitNote(message, entry);
+  };
+
+  const handleLogin = async () => {
+    if (!areLoginFieldsFilled(email, password)) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    if (!isValidName(firstName)) {
-      Alert.alert('Error', 'First name should only contain letters');
+    if (getLockRemainingMs(limit) > 0) return;
+
+    // A badly formatted email counts as a failed try too, without asking Firebase
+    if (!isValidEmailFormat(email.trim())) {
+      Alert.alert('Login Failed', failTry('Please enter a valid email address.'));
       return;
     }
-
-    if (!isValidMiddleName(middleName)) {
-      Alert.alert('Error', 'Middle name should only contain letters');
-      return;
-    }
-
-    if (!isValidName(lastName)) {
-      Alert.alert('Error', 'Last name should only contain letters');
-      return;
-    }
-
-    if (!isValidEmailFormat(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    if (!isAllowedDomain(email)) {
-      Alert.alert(
-        'Error',
-        'Please use a Gmail, Yahoo, Outlook, or STI email'
-      );
-      return;
-    }
-
-    if (!isValidPasswordLength(password)) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    if (!doPasswordsMatch(password, confirmPassword)) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-    
-
-    const fullName = middleName
-    ? `${firstName} ${middleName} ${lastName}`
-    : `${firstName} ${lastName}`;
 
     setIsLoading(true);
-      try {
-      // await createUserWithEmailAndPassword(auth, email, password);
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(userCredential.user, {
-        displayName: fullName,
-      });
-
-      await sendEmailVerification(userCredential.user);
-
-      await auth.signOut();
-
-      Alert.alert(
-        'Verify your email',
-        `Welcome, ${firstName}! We sent a link to ${email}. Open it to verify your account, then log in. Check your spam folder if you can't find it.`,
-        [{ text: 'Go to Login', onPress: () => navigation.navigate('Login') }]
-      );
-
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // Logged in: start the count again
+      if (limit) saveLimit(null);
+      if (!user.emailVerified) {
+        // Keep them signed in only long enough to resend the link.
+        const sentTimes = await loadSentTimes();
+        const waitMs = getResendRemainingMs(sentTimes, user.email);
+        const message = `Open the link we sent to ${user.email}, then log in again. Check your spam folder if you can't find it.`;
+        if (waitMs > 0) {
+          // A link was sent less than a minute ago: no new one yet
+          Alert.alert(
+            'Verify your email',
+            `${message}\n\nYou can ask for a new link in ${formatCountdown(waitMs)}.`,
+            [{ text: 'OK', onPress: () => signOut(auth) }],
+            { cancelable: false }
+          );
+        } else {
+          Alert.alert(
+            'Verify your email',
+            message,
+            [
+              { text: 'Resend link', onPress: () => resendVerification(user) },
+              { text: 'OK', onPress: () => signOut(auth) },
+            ],
+            { cancelable: false }
+          );
+        }
+      }
     } catch (error) {
-      let message = 'Something went wrong. Please try again';
-      if (error.code === 'auth/email-already-in-use') message = 'This email is registered';
-      if (error.code === 'auth/invalid-email') message = 'Please enter a valid email address';
-      Alert.alert('Signup Failed', message);
+      let message = 'Something went wrong. Please try again.';
+      //if (error.code === 'auth/user-not-found') message = 'No user found with this email.';
+      //if (error.code === 'auth/wrong-password') message = 'Incorrect password. Please try again.';
+      if (FAILED_LOGIN_CODES.includes(error.code)) {
+        message = failTry(
+          error.code === 'auth/invalid-email' ? 'Please enter a valid email address.' : 'Invalid email or password.'
+        );
+      }
+      // Firebase's own server limit was reached: show the same pause here
+      if (error.code === 'auth/too-many-requests') {
+        const entry = lockLogin(limit);
+        saveLimit(entry);
+        const minutes = getLockMinutes(entry);
+        message = `Too many attempts. Logging in is paused for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+      }
+      Alert.alert('Login Failed', message);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // When verification links were last sent from this phone (see verifyCooldown.js)
+  const loadSentTimes = async () => {
+    try {
+      return parseSentTimes(await AsyncStorage.getItem(VERIFY_SENT_KEY));
+    } catch {
+      return {};
+    }
+  };
+
+  const markLinkSent = async (userEmail) => {
+    const next = recordVerificationSent(await loadSentTimes(), userEmail);
+    AsyncStorage.setItem(VERIFY_SENT_KEY, JSON.stringify(next)).catch(() => {});
+  };
+
+  const resendVerification = async (user) => {
+    try {
+      await sendEmailVerification(user);
+      await markLinkSent(user.email);
+      Alert.alert('Link sent', `We sent a new link to ${user.email}. You can ask for another one after 1 minute.`);
+    } catch (error) {
+      if (error.code === 'auth/too-many-requests') await markLinkSent(user.email);
+      const message = error.code === 'auth/too-many-requests'
+        ? 'Please wait a few minutes before asking for another link.'
+        : 'Could not send the link. Please try again later.';
+      Alert.alert('Resend Failed', message);
+    } finally {
+      signOut(auth);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert('Reset Password', 'Please enter your email address first, then tap "Forgot Password?"');
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert(
+        'Email Sent',
+        `A password reset link has been sent to your email ${email}. Please check your inbox.`
+      );
+    } catch (error) {
+      let message = 'Something went wrong. Please try again.';
+      if (error.code === 'auth/user-not-found') message = 'No account found with this email.';
+      if (error.code === 'auth/invalid-email') message = 'Please enter a valid email address.';
+      Alert.alert('Reset Failed', message);
+    }
+  };
 
   return (
     <LinearGradient
@@ -137,48 +228,12 @@ export default function SignupScreen({ navigation }) {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.brandName}>BALANSE</Text>
-            <Text style={styles.welcomeText}>Start your journey to productivity</Text>
+            <Text style={styles.welcomeText}>Welcome back!</Text>
           </View>
 
           {/* Glass Card */}
           <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <Text style={styles.cardTitle}>Create Account</Text>
-
-            {/* First Name */}
-            <Text style={styles.label}>First Name <Text style={styles.required}>*</Text></Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your first name"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={firstName}
-                onChangeText={setFirstName}
-              />
-            </View>
-
-            {/* Middle Name */}
-            <Text style={styles.label}>Middle Name <Text style={styles.optional}>(Optional)</Text></Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your middle name"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={middleName}
-                onChangeText={setMiddleName}
-              />
-            </View>
-
-            {/* Last Name */}
-            <Text style={styles.label}>Last Name <Text style={styles.required}>*</Text></Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your last name"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={lastName}
-                onChangeText={setLastName}
-              />
-            </View>
+            <Text style={styles.cardTitle}>Log In</Text>
 
             {/* Email */}
             <Text style={styles.label}>Email</Text>
@@ -195,48 +250,46 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Password */}
-            <Text style={styles.label}>Password<Text style={styles.required}>*</Text></Text>
+            <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="Create a strong password"
+                placeholder="Enter your password"
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons
-                  name={showPassword ? 'eye' : 'eye-off'}
-                  size={20}
-                  color="rgba(255, 255, 255, 0.7)"
-                />
+                {/*<Text style={styles.showText}>{showPassword ? '🙈' : '👁'}</Text>*/}
+                 <Ionicons
+                    name={showPassword ? 'eye' : 'eye-off'}
+                    size={20}
+                    color="rgba(255, 255, 255, 0.7)"
+                  />
               </TouchableOpacity>
             </View>
 
-            {/* Confirm Password */}
-            <Text style={styles.label}>Confirm Password<Text style={styles.required}>*</Text></Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="Type your password again"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showPassword}
-              />
-            </View>
+            {/* Forgot Password */}
+            <TouchableOpacity style={styles.forgotLink} onPress={handleForgotPassword}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
 
-            {/* Create Account Button */}
+            {/* Log In Button */}
             <TouchableOpacity 
-              style={[styles.createButton, isLoading && styles.buttonDisabled]}
-              onPress={handleSignup}
-              disabled={isLoading}
+              style={[styles.loginButton, (isLoading || locked) && styles.buttonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading || locked}
             >
-              <Text style={styles.createButtonText}>
-                {isLoading ? 'Creating...' : 'Create Account'}
+              <Text style={styles.loginButtonText}>
+                {isLoading ? 'Logging in...' : locked ? `Try again in ${formatCountdown(lockMs)}` : 'Log In'}
               </Text>
             </TouchableOpacity>
+            {locked && (
+              <Text style={styles.lockNote}>
+                Too many failed tries on this phone. Wait for the timer, or tap Forgot Password? to reset your password.
+              </Text>
+            )}
 
             {/* Divider */}
             <View style={styles.divider}>
@@ -250,14 +303,9 @@ export default function SignupScreen({ navigation }) {
                style={styles.socialButton}
                onPress={async () => {
                  try {
-                   const userCredential = await handleGoogleSignIn();
-                   Alert.alert (
-                    'Account Created',
-                    `Signed in as ${userCredential.user.displayName || 'User'}`
-                   );
+                   await handleGoogleSignIn();
                  } catch (error) {
-                   console.log('Google Error:', error);
-                   Alert.alert('Error', error.message || 'Google sign-in failed');
+                   Alert.alert('Google Sign-In Failed', error.message);
                  }
                }}
             >
@@ -269,10 +317,10 @@ export default function SignupScreen({ navigation }) {
           {/* Bottom Link */}
           <TouchableOpacity 
             style={styles.bottomLink}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => navigation.navigate('Signup')}
           >
             <Text style={styles.bottomText}>
-              Already have an account? <Text style={styles.bottomBold}>Log In</Text>
+              Don't have an account? <Text style={styles.bottomBold}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
 
@@ -289,12 +337,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 50,
+    paddingTop: 60,
     paddingBottom: 30,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 30,
   },
   brandName: {
     fontSize: 36,
@@ -319,7 +367,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   label: {
     fontSize: 13,
@@ -329,17 +377,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-
-  required:{
-    color: '#f87171',
-    textTransform: 'none',
-  },
-  optional:{
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontWeight: '400',
-    textTransform: 'none',
-    fontSize: 11,
-  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -347,7 +384,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    marginBottom: 14,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -366,7 +403,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.7,
   },
-  createButton: {
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+  },
+  forgotText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  loginButton: {
     backgroundColor: '#ffffff',
     paddingVertical: 16,
     borderRadius: 16,
@@ -381,7 +427,15 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.7,
   },
-  createButtonText: {
+  lockNote: {
+    color: '#ffffff',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: -8,
+    marginBottom: 20,
+  },
+  loginButtonText: {
     color: '#7c3aed',
     fontSize: 16,
     fontWeight: '700',
