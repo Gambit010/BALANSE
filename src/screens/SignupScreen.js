@@ -25,6 +25,8 @@ import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } 
 import { auth } from '../../firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { handleGoogleSignIn } from '../services/authService'; // for react native google sign in
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { VERIFY_SENT_KEY, recordVerificationSent, parseSentTimes } from '../utils/verifyCooldown';
 
 export default function SignupScreen({ navigation }) {
   const [firstName, setFirstName] = useState('');
@@ -104,6 +106,12 @@ export default function SignupScreen({ navigation }) {
       });
 
       await sendEmailVerification(userCredential.user);
+
+      // Start the 1-minute wait before another link can be requested
+      try {
+        const saved = parseSentTimes(await AsyncStorage.getItem(VERIFY_SENT_KEY));
+        await AsyncStorage.setItem(VERIFY_SENT_KEY, JSON.stringify(recordVerificationSent(saved, email)));
+      } catch {}
 
       await auth.signOut();
 
