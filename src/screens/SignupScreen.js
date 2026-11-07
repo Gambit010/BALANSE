@@ -189,7 +189,7 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Email */}
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email <Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
@@ -203,7 +203,7 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Password */}
-            <Text style={styles.label}>Password<Text style={styles.required}>*</Text></Text>
+            <Text style={styles.label}>Password <Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
@@ -223,7 +223,7 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* Confirm Password */}
-            <Text style={styles.label}>Confirm Password<Text style={styles.required}>*</Text></Text>
+            <Text style={styles.label}>Confirm Password <Text style={styles.required}>*</Text></Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
@@ -436,4 +436,4 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
   },
-});
+}); 
