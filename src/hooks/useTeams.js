@@ -51,12 +51,14 @@ export const useTeams = () => {
     fetchTeams();
   }, [fetchTeams]);
 
-  const create = async (name) => {
+  // names: { acronym, fullName }
+  // Returns { success: true, id } or { success: false, reason, field }
+  const create = async (names) => {
     const user = auth.currentUser;
-    if (!user || !name?.trim()) return null;
-    const id = await createTeam(user, name);
-    await fetchTeams();
-    return id;
+    if (!user) return { success: false, reason: 'error' };
+    const res = await createTeam(user, names);
+    if (res.success) await fetchTeams();
+    return res;
   };
 
   const accept = async (invite) => {
@@ -206,7 +208,7 @@ export const useTeamBoard = (teamId) => {
 
   const removeTeam = async () => {
     if (!team) return false;
-    return await deleteTeam(team.id);
+    return await deleteTeam(team);
   };
 
   // Any member except the owner can leave. The screen goes back afterwards,

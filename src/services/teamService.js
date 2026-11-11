@@ -20,6 +20,7 @@ import { sendPushToToken } from './pushNotificationServices';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { recordActiveDay } from './activityService';
 import { inviteIdFor, normalizeEmail } from '../utils/inviteUtils';
+import { teamNameKey, teamDisplayName, getTeamNameError } from '../utils/teamName';
 
 // ─── Helpers ───
 
@@ -57,22 +58,71 @@ const safeName = (user) =>
 
 // ─── Teams ───
 
-// Create a team with the creator as owner + first member
-export const createTeam = async (owner, name) => {
+// Is this acronym or full name already used by another team?
+const isNameKeyTaken = async (key) => {
+  const snap = await getDoc(doc(db, 'teamNames', key));
+  return snap.exists();
+};
+
+// Which of the two names is already used, or null if neither is
+const findTakenName = async (fullKey, acronymKey) => {
+  if (await isNameKeyTaken(fullKey)) return 'fullName';
+  if (acronymKey && (await isNameKeyTaken(acronymKey))) return 'acronym';
+  return null;
+};
+
+// Create a team with the creator as owner + first member.
+// The team and its names are saved together in one batch. If another team
+// already uses the acronym or full name, the rules reject the whole batch, so
+// two teams can never end up with the same name.
+// Returns { success: true, id } or { success: false, reason, field }
+// (reason: 'empty' | 'too-long' | 'no-letters' | 'taken' | 'error';
+//  field: 'acronym' | 'fullName')
+export const createTeam = async (owner, { acronym, fullName }) => {
+  const cleanAcronym = typeof acronym === 'string' ? acronym.trim() : '';
+  const cleanFullName = typeof fullName === 'string' ? fullName.trim() : '';
+  const invalid = getTeamNameError(cleanAcronym, cleanFullName);
+  if (invalid) return { success: false, ...invalid };
+
+  const fullKey = teamNameKey(cleanFullName);
+  const acronymKey = cleanAcronym ? teamNameKey(cleanAcronym) : '';
   try {
+    const taken = await findTakenName(fullKey, acronymKey);
+    if (taken) return { success: false, reason: 'taken', field: taken };
+
     const member = { uid: owner.uid, email: owner.email || '', name: safeName(owner) };
-    const docRef = await addDoc(collection(db, 'teams'), {
-      name: name.trim(),
+    const teamRef = doc(collection(db, 'teams'));
+    const batch = writeBatch(db);
+    batch.set(teamRef, {
+      name: teamDisplayName(cleanAcronym, cleanFullName),
+      acronym: cleanAcronym,
+      fullName: cleanFullName,
+      nameKey: fullKey,
+      acronymKey,
       ownerId: owner.uid,
       ownerName: safeName(owner),
       memberIds: [owner.uid],
       members: [member],
       createdAt: serverTimestamp(),
     });
-    return docRef.id;
+    const nameRecord = { teamId: teamRef.id, ownerId: owner.uid };
+    batch.set(doc(db, 'teamNames', fullKey), nameRecord);
+    // "ComSoc" / "Com Soc" give the same key, so it's only saved once
+    if (acronymKey && acronymKey !== fullKey) {
+      batch.set(doc(db, 'teamNames', acronymKey), nameRecord);
+    }
+    await batch.commit();
+    return { success: true, id: teamRef.id };
   } catch (error) {
+    // Another team may have taken the name a moment before us
+    try {
+      const taken = await findTakenName(fullKey, acronymKey);
+      if (taken) return { success: false, reason: 'taken', field: taken };
+    } catch {
+      // ignore, report the original error
+    }
     console.error('Error creating team:', error);
-    return null;
+    return { success: false, reason: 'error' };
   }
 };
 
@@ -244,8 +294,9 @@ export const removeTeamMember = async (team, member, actor) => {
 // Delete a team, its board tasks and its pending invitations (owner only —
 // enforced in the UI and rules). These go first: once the team is gone, the
 // rules can no longer tell who owns them.
-export const deleteTeam = async (teamId) => {
+export const deleteTeam = async (team) => {
   try {
+    const teamId = team.id;
     const [tasks, invites] = await Promise.all([
       getDocs(query(collection(db, 'boardTasks'), where('teamId', '==', teamId))),
       getDocs(query(collection(db, 'invites'), where('teamId', '==', teamId))),
@@ -257,7 +308,18 @@ export const deleteTeam = async (teamId) => {
       refs.slice(i, i + 450).forEach((ref) => batch.delete(ref));
       await batch.commit();
     }
-    await deleteDoc(doc(db, 'teams', teamId));
+
+    // Free the team's acronym and full name so they can be used again.
+    // Teams made before names were checked have none saved.
+    const batch = writeBatch(db);
+    const keys = [...new Set([team.nameKey, team.acronymKey].filter(Boolean))];
+    for (const key of keys) {
+      const nameRef = doc(db, 'teamNames', key);
+      const nameSnap = await getDoc(nameRef);
+      if (nameSnap.exists() && nameSnap.data().teamId === teamId) batch.delete(nameRef);
+    }
+    batch.delete(doc(db, 'teams', teamId));
+    await batch.commit();
     return true;
   } catch (error) {
     console.error('Error deleting team:', error);

@@ -16,11 +16,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { auth } from '../../firebase';
 import { useTeams } from '../hooks/useTeams';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
+import { MAX_ACRONYM_LENGTH, MAX_FULL_NAME_LENGTH } from '../utils/teamName';
 
 export default function TeamsScreen({ navigation }) {
   const { teams, invites, loading, create, accept, decline, refetch } = useTeams();
   const [modalVisible, setModalVisible] = useState(false);
-  const [teamName, setTeamName] = useState('');
+  const [acronym, setAcronym] = useState('');
+  const [fullName, setFullName] = useState('');
   const [creating, setCreating] = useState(false);
   const [busyInviteId, setBusyInviteId] = useState(null); // invitation being answered
   const { theme, isDarkMode } = useTheme(); // for dark mode
@@ -34,20 +36,32 @@ export default function TeamsScreen({ navigation }) {
     }, [refetch])
   );
 
+  const closeCreateModal = () => {
+    setModalVisible(false);
+    setAcronym('');
+    setFullName('');
+  };
+
   const handleCreate = async () => {
-    if (!teamName.trim()) {
-      Alert.alert('Team name required', 'Please enter a name for your team.');
+    setCreating(true);
+    const res = await create({ acronym, fullName });
+    setCreating(false);
+    if (res.success) {
+      closeCreateModal();
       return;
     }
-    setCreating(true);
-    const id = await create(teamName.trim());
-    setCreating(false);
-    if (id) {
-      setTeamName('');
-      setModalVisible(false);
-    } else {
-      Alert.alert('Error', 'Could not create the team. Please try again.');
-    }
+    const used = res.field === 'acronym' ? acronym.trim() : fullName.trim();
+    const messages = {
+      'fullName:empty': ['Full name required', 'Please enter the full name of your team.'],
+      'fullName:too-long': ['Name too long', `Please keep the full name to ${MAX_FULL_NAME_LENGTH} characters or fewer.`],
+      'fullName:no-letters': ['Invalid full name', 'Please enter a full name with real words, not only symbols or words like "of" and "the".'],
+      'acronym:too-long': ['Acronym too long', `Please keep the acronym to ${MAX_ACRONYM_LENGTH} characters or fewer.`],
+      'acronym:no-letters': ['Invalid acronym', 'The acronym needs at least one letter or number.'],
+      'fullName:taken': ['Name already used', `Another team already uses "${used}" as its name or acronym. Please use a different full name.`],
+      'acronym:taken': ['Acronym already used', `Another team already uses "${used}" as its acronym or name. Please use a different acronym.`],
+    };
+    const [title, message] = messages[`${res.field}:${res.reason}`] || ['Error', 'Could not create the team. Please try again.'];
+    Alert.alert(title, message);
   };
 
   const handleAccept = async (invite) => {
@@ -184,7 +198,7 @@ export default function TeamsScreen({ navigation }) {
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.teamName, {color:theme.text}]}>{team.name}</Text>
+                  <Text style={[styles.teamName, {color:theme.text}]} numberOfLines={2}>{team.name}</Text>
                   <Text style={[styles.teamMeta, {color:theme.subtext}]}>
                     {memberCount} member{memberCount !== 1 ? 's' : ''}
                     {isOwner ? '  •  Owner' : ''}
@@ -198,22 +212,37 @@ export default function TeamsScreen({ navigation }) {
       </ScrollView>
 
       {/* CREATE TEAM MODAL */}
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
+      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeCreateModal}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
             <Text style={[styles.modalTitle, {color:theme.text}]}>New Team</Text>
-            <Text style={[styles.modalLabel, {color:theme.text}]}>Team Name</Text>
+            <Text style={[styles.modalLabel, {color:theme.text}]}>Acronym (optional)</Text>
             <TextInput
               style={[styles.modalInput, {
                 backgroundColor: theme.background,
                 color: theme.text,
                 borderColor: theme.border
               }]}
-              placeholder="e.g. Student Council, CS Org"
+              placeholder="e.g. JPIA, ComSoc"
               placeholderTextColor={theme.subtext}
-              value={teamName}
-              onChangeText={setTeamName}
+              value={acronym}
+              onChangeText={setAcronym}
+              maxLength={MAX_ACRONYM_LENGTH}
+              autoCapitalize="characters"
               autoFocus
+            />
+            <Text style={[styles.modalLabel, styles.modalLabelSpaced, {color:theme.text}]}>Full Name *</Text>
+            <TextInput
+              style={[styles.modalInput, {
+                backgroundColor: theme.background,
+                color: theme.text,
+                borderColor: theme.border
+              }]}
+              placeholder="e.g. Computer Society"
+              placeholderTextColor={theme.subtext}
+              value={fullName}
+              onChangeText={setFullName}
+              maxLength={MAX_FULL_NAME_LENGTH}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -222,10 +251,7 @@ export default function TeamsScreen({ navigation }) {
                   borderColor: theme.border,
                   borderWidth: 1,
                 }]}
-                onPress={() => {
-                  setModalVisible(false);
-                  setTeamName('');
-                }}
+                onPress={closeCreateModal}
               >
                 <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
               </TouchableOpacity>
@@ -327,6 +353,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  modalLabelSpaced: { marginTop: 14 },
   modalInput: {
     backgroundColor: 'rgba(0,0,0,0.25)',
     borderRadius: 12,
