@@ -21,6 +21,7 @@ import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
 import { recordActiveDay } from './activityService';
 import { inviteIdFor, normalizeEmail } from '../utils/inviteUtils';
 import { teamNameKey, teamDisplayName, getTeamNameError } from '../utils/teamName';
+import { cleanPosition, getPositionError } from '../utils/teamPosition';
 
 // ─── Helpers ───
 
@@ -264,6 +265,8 @@ export const removeTeamMember = async (team, member, actor) => {
       memberIds: arrayRemove(member.uid),
       members: arrayRemove(member),
     });
+    // Their position in this team goes too
+    batch.delete(doc(db, 'teams', team.id, 'positions', member.uid));
 
     // Leaving tells the owner; being removed tells the person removed
     const notifyUid = leaving ? team.ownerId : member.uid;
@@ -297,11 +300,12 @@ export const removeTeamMember = async (team, member, actor) => {
 export const deleteTeam = async (team) => {
   try {
     const teamId = team.id;
-    const [tasks, invites] = await Promise.all([
+    const [tasks, invites, positions] = await Promise.all([
       getDocs(query(collection(db, 'boardTasks'), where('teamId', '==', teamId))),
       getDocs(query(collection(db, 'invites'), where('teamId', '==', teamId))),
+      getDocs(collection(db, 'teams', teamId, 'positions')),
     ]);
-    const refs = [...tasks.docs, ...invites.docs].map((d) => d.ref);
+    const refs = [...tasks.docs, ...invites.docs, ...positions.docs].map((d) => d.ref);
     // Firestore batches are capped at 500 writes.
     for (let i = 0; i < refs.length; i += 450) {
       const batch = writeBatch(db);
@@ -323,6 +327,40 @@ export const deleteTeam = async (team) => {
     return true;
   } catch (error) {
     console.error('Error deleting team:', error);
+    return false;
+  }
+};
+
+// ─── Positions ───
+
+// Every member's position in a team: { [uid]: 'President', ... }
+export const getTeamPositions = async (teamId) => {
+  try {
+    const snap = await getDocs(collection(db, 'teams', teamId, 'positions'));
+    const positions = {};
+    snap.forEach((d) => {
+      const title = d.data().title;
+      if (typeof title === 'string' && title) positions[d.id] = title;
+    });
+    return positions;
+  } catch (error) {
+    console.error('Error getting team positions:', error);
+    return {};
+  }
+};
+
+// Set a member's position (team owner only, checked in the screen and the
+// rules). An empty position removes it.
+export const setMemberPosition = async (teamId, uid, title) => {
+  if (getPositionError(title)) return false;
+  const clean = cleanPosition(title);
+  const ref = doc(db, 'teams', teamId, 'positions', uid);
+  try {
+    if (clean) await setDoc(ref, { title: clean });
+    else await deleteDoc(ref);
+    return true;
+  } catch (error) {
+    console.error('Error setting member position:', error);
     return false;
   }
 };

@@ -11,6 +11,8 @@ import {
   acceptInvite,
   deleteInvite,
   removeTeamMember,
+  getTeamPositions,
+  setMemberPosition,
   createBoardTask,
   getBoardTasks,
   updateBoardTaskProgress,
@@ -19,6 +21,7 @@ import {
   statusFromProgress,
 } from '../services/teamService';
 import { getInviteError } from '../utils/inviteUtils';
+import { cleanPosition } from '../utils/teamPosition';
 import { getUserTasks } from '../services/taskService';
 import { detectConflicts } from '../services/conflictService';
 import { computePriorityScore, getPriorityLabel } from '../constants/scoring';
@@ -83,6 +86,7 @@ export const useTeamBoard = (teamId) => {
   const [team, setTeam] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [pendingInvites, setPendingInvites] = useState([]);
+  const [positions, setPositions] = useState({}); // { [uid]: 'President' }
   const [loading, setLoading] = useState(true);
   const [teamTaskConflicts, setTeamTaskConflicts] = useState({}); // { [boardTaskId]: conflict[] }
 
@@ -96,9 +100,15 @@ export const useTeamBoard = (teamId) => {
   const fetchBoard = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
-    const [t, bt, inv] = await Promise.all([getTeam(teamId), getBoardTasks(teamId), getTeamInvites(teamId)]);
+    const [t, bt, inv, pos] = await Promise.all([
+      getTeam(teamId),
+      getBoardTasks(teamId),
+      getTeamInvites(teamId),
+      getTeamPositions(teamId),
+    ]);
     setTeam(t);
     setPendingInvites(inv);
+    setPositions(pos);
 
     // Recompute priority score fresh on every fetch — same as personal tasks
     // in useTasks.js. Deadline proximity changes daily, so a score stored once
@@ -228,9 +238,28 @@ export const useTeamBoard = (teamId) => {
     return ok;
   };
 
+  // Owner only (checked in the screen and the rules). Updates the list right
+  // away instead of reloading the whole board.
+  const setPosition = async (member, title) => {
+    if (!team) return false;
+    const ok = await setMemberPosition(team.id, member.uid, title);
+    if (ok) {
+      setPositions((prev) => {
+        const next = { ...prev };
+        const clean = cleanPosition(title);
+        if (clean) next[member.uid] = clean;
+        else delete next[member.uid];
+        return next;
+      });
+    }
+    return ok;
+  };
+
   return {
     team,
     tasks,
+    positions,
+    setPosition,
     columns,
     loading,
     isOwner,

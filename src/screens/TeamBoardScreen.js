@@ -18,6 +18,7 @@ import { useTeamBoard } from '../hooks/useTeams';
 import { statusFromProgress } from '../services/teamService';
 import { useTheme } from '../context/ThemeContext'; // for dark mode
 import { toLocalDateKey } from '../utils/dateUtils';
+import { POSITION_SUGGESTIONS, MAX_POSITION_LENGTH, getPositionError } from '../utils/teamPosition';
 
 // Remembered per phone, like the dark mode setting.
 const VIEW_MODE_KEY = 'balanse_teamboard_view';
@@ -70,6 +71,8 @@ export default function TeamBoardScreen({ route, navigation }) {
     removeTeam,
     leave,
     removeMember,
+    positions,
+    setPosition,
     refetch,
   } = useTeamBoard(teamId);
 
@@ -78,6 +81,9 @@ export default function TeamBoardScreen({ route, navigation }) {
   const [memberModal, setMemberModal] = useState(false);
   const [membersListModal, setMembersListModal] = useState(false);
   const [assignModal, setAssignModal] = useState(null); // holds the task being reassigned
+  const [positionMember, setPositionMember] = useState(null); // member whose position is being set
+  const [positionText, setPositionText] = useState('');
+  const [savingPosition, setSavingPosition] = useState(false);
 
   // Add-task form
   const [title, setTitle] = useState('');
@@ -218,6 +224,33 @@ export default function TeamBoardScreen({ route, navigation }) {
       await assign(assignModal, { uid: member.uid, name: member.name });
       setAssignModal(null);
     }
+  };
+
+  // ─── Positions (owner only) ───
+  // The members list closes while the position is edited, then opens again.
+  const openPositionEditor = (member) => {
+    setMembersListModal(false);
+    setPositionMember(member);
+    setPositionText(positions[member.uid] || '');
+  };
+
+  const closePositionEditor = () => {
+    setPositionMember(null);
+    setPositionText('');
+    setMembersListModal(true);
+  };
+
+  const savePosition = async (title) => {
+    if (!positionMember) return;
+    if (getPositionError(title)) {
+      Alert.alert('Position too long', `Please keep the position to ${MAX_POSITION_LENGTH} characters or fewer.`);
+      return;
+    }
+    setSavingPosition(true);
+    const ok = await setPosition(positionMember, title);
+    setSavingPosition(false);
+    if (ok) closePositionEditor();
+    else Alert.alert('Error', 'Could not save the position. Please try again.');
   };
 
   const confirmDeleteTask = (task) => {
@@ -652,6 +685,7 @@ export default function TeamBoardScreen({ route, navigation }) {
             <Text style={[styles.modalTitle, {color:theme.text}]}>Members</Text>
             <Text style={[styles.modalHint, {color:theme.subtext}]}>
               {members.length} member{members.length !== 1 ? 's' : ''} in {team?.name || teamName}
+              {isOwner ? '\nTap a member to set their position.' : ''}
             </Text>
             <ScrollView style={{ maxHeight: 360 }}>
               {members.map((m) => (
@@ -659,14 +693,27 @@ export default function TeamBoardScreen({ route, navigation }) {
                   <View style={styles.memberAvatar}>
                     <Text style={styles.memberAvatarText}>{(m.name || '?').charAt(0).toUpperCase()}</Text>
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1 }}
+                    disabled={!isOwner}
+                    onPress={() => openPositionEditor(m)}
+                    activeOpacity={0.6}
+                    accessibilityLabel={isOwner ? `Set position of ${m.name}` : undefined}
+                  >
                     <Text style={[styles.memberName, {color:theme.text}]} numberOfLines={1}>
                       {m.name}{m.uid === actor?.uid ? ' (You)' : ''}
                     </Text>
+                    {positions[m.uid] ? (
+                      <Text style={styles.memberPosition} numberOfLines={1}>
+                        {positions[m.uid]}
+                      </Text>
+                    ) : isOwner ? (
+                      <Text style={[styles.memberPositionAdd, {color:theme.subtext}]}>+ Add position</Text>
+                    ) : null}
                     {!!m.email && (
                       <Text style={[styles.memberEmail, {color:theme.subtext}]} numberOfLines={1}>{m.email}</Text>
                     )}
-                  </View>
+                  </TouchableOpacity>
                   {m.uid === team?.ownerId ? (
                     <View style={styles.ownerBadge}>
                       <Text style={styles.ownerBadgeText}>Owner</Text>
@@ -710,6 +757,63 @@ export default function TeamBoardScreen({ route, navigation }) {
                 }}
               >
                 <Text style={styles.modalConfirmText}>Invite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* POSITION MODAL (owner only) */}
+      <Modal visible={!!positionMember} transparent animationType="fade" onRequestClose={closePositionEditor}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, {backgroundColor:theme.card, borderColor:theme.border}]}>
+            <Text style={[styles.modalTitle, {color:theme.text}]}>Position</Text>
+            <Text style={[styles.modalHint, {color:theme.subtext}]} numberOfLines={1}>
+              {positionMember?.name} in {team?.name || teamName}
+            </Text>
+            <TextInput
+              style={[styles.modalInput, {
+                backgroundColor: theme.background,
+                color: theme.text,
+                borderColor: theme.border
+              }]}
+              placeholder="e.g. VP for External Affairs"
+              placeholderTextColor={theme.subtext}
+              value={positionText}
+              onChangeText={setPositionText}
+              maxLength={MAX_POSITION_LENGTH}
+            />
+            <Text style={[styles.modalLabel, {color:theme.text}]}>Suggestions</Text>
+            <View style={styles.chipRow}>
+              {POSITION_SUGGESTIONS.map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.chip, {backgroundColor:theme.card, borderColor:theme.border},
+                  positionText === p && styles.chipActive]}
+                  onPress={() => setPositionText(p)}
+                >
+                  <Text style={[styles.chipText, {color: positionText === p ? theme.text : theme.subtext}]}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!!positions[positionMember?.uid] && (
+              <TouchableOpacity onPress={() => savePosition('')} disabled={savingPosition} style={{ marginTop: 16 }}>
+                <Text style={styles.dangerLinkText}>Remove position</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancel, {backgroundColor:theme.border}]}
+                onPress={closePositionEditor}
+              >
+                <Text style={[styles.modalCancelText, {color:theme.text}]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalConfirm]}
+                onPress={() => savePosition(positionText)}
+                disabled={savingPosition}
+              >
+                <Text style={styles.modalConfirmText}>{savingPosition ? 'Saving...' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -873,7 +977,12 @@ export default function TeamBoardScreen({ route, navigation }) {
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberAvatarText}>{m.name.charAt(0).toUpperCase()}</Text>
                 </View>
-                <Text style={styles.memberName}>{m.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.memberName}>{m.name}</Text>
+                  {!!positions[m.uid] && (
+                    <Text style={styles.memberPosition} numberOfLines={1}>{positions[m.uid]}</Text>
+                  )}
+                </View>
                 {assignModal?.assigneeId === m.uid && (
                   <Ionicons name="checkmark-circle" size={18} color="#34d399" />
                 )}
@@ -1144,6 +1253,8 @@ const styles = StyleSheet.create({
   memberName: { flex: 1, color: '#ffffff', fontSize: 15, fontWeight: '500' },
   dangerLinkText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
   memberEmail: { fontSize: 12, marginTop: 2 },
+  memberPosition: { color: '#a78bfa', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  memberPositionAdd: { fontSize: 12, marginTop: 2 },
   ownerBadge: {
     backgroundColor: 'rgba(167,139,250,0.15)',
     paddingHorizontal: 8,
